@@ -1,45 +1,54 @@
-# [Project name]
+# Volleyball Team Manager
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A local-first volleyball roster and match setup app for managing player positions, ELO ratings, and upcoming team rosters.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
+- `pnpm --filter @workspace/volleyball-manager run dev` — run the web app
+- `uv run python main.py` — run the Flask API from the project root
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `pnpm run typecheck:libs` — typecheck generated and shared libraries
+- `pnpm --filter @workspace/volleyball-manager run typecheck` — typecheck the web app
+- The API listens on `PORT` (8080 in its managed service).
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Web: React + Vite with the generated API client
+- API: Python 3.11 + Flask
+- Database: SQLite at `artifacts/api-server/data/volleyball.sqlite3`
+- API contract: OpenAPI 3.1 with Orval-generated client types and hooks
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/volleyball-manager/src/App.tsx` — player, leaderboard, and match roster screens
+- `artifacts/volleyball-manager/src/index.css` — web app styles
+- `artifacts/api-server/app.py` — Flask routes, validation, and SQLite schema
+- `lib/api-spec/openapi.yaml` — source of truth for API routes and response types
+- `main.py` — project-root entry point for the Flask service
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- SQLite is intentional; do not replace it with the workspace PostgreSQL database.
+- Match rosters save player details as snapshots so later player edits or deletions do not rewrite a saved roster.
+- Team assignments are manual in the first build. Position-first and ELO-aware automatic balancing is Phase 3; match result entry and rating changes are Phase 4.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Phase 1: create, view, edit, and delete players; positions are multi-select and new players start at ELO 1000; leaderboard sorts by ELO.
+- Phase 2: create upcoming matches from 12, 13, or 14 selected players, with 6 or 7 on each side. For 13, only the seven-player side may include a Libero-capable player.
+- Scores are stored as null and are not editable until result entry is built.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Keep the backend in Flask and the database in SQLite.
+- Build the requested phases in order.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- The API artifact runs from its service directory, so its managed command changes to the project root before invoking `uv`.
+- Validate and replace artifact manifests through the artifact workflow; do not edit them directly.
 
 ## Pointers
 
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- See the `artifacts` skill for artifact registration and workflow lifecycle.
+- See the `pnpm-workspace` skill for workspace and API contract conventions.

@@ -3,13 +3,17 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Volleyball player and match management API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: players
+    description: Player records and leaderboard
+  - name: matches
+    description: Match setup and rosters
 paths:
   /healthz:
     get:
@@ -24,6 +28,157 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /players:
+    get:
+      operationId: listPlayers
+      tags: [players]
+      summary: List all players
+      responses:
+        "200":
+          description: Players ordered by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Player"
+    post:
+      operationId: createPlayer
+      tags: [players]
+      summary: Create a player
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlayerInput"
+      responses:
+        "201":
+          description: Created player
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Player"
+        "400":
+          description: Invalid player details
+  /players/{playerId}:
+    parameters:
+      - name: playerId
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getPlayer
+      tags: [players]
+      summary: Get a player
+      responses:
+        "200":
+          description: Player record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Player"
+        "404":
+          description: Player not found
+    patch:
+      operationId: updatePlayer
+      tags: [players]
+      summary: Update a player
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlayerUpdate"
+      responses:
+        "200":
+          description: Updated player
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Player"
+        "400":
+          description: Invalid player details
+        "404":
+          description: Player not found
+    delete:
+      operationId: deletePlayer
+      tags: [players]
+      summary: Delete a player
+      responses:
+        "204":
+          description: Player deleted
+        "404":
+          description: Player not found
+  /leaderboard:
+    get:
+      operationId: getLeaderboard
+      tags: [players]
+      summary: List players ranked by ELO
+      responses:
+        "200":
+          description: Players ordered from highest ELO to lowest
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Player"
+  /matches:
+    get:
+      operationId: listMatches
+      tags: [matches]
+      summary: List matches and team rosters
+      responses:
+        "200":
+          description: Matches ordered by creation time
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Match"
+    post:
+      operationId: createMatch
+      tags: [matches]
+      summary: Create an upcoming match
+      description: Requires 12, 13, or 14 distinct players split into valid 6 or 7 player teams. A 13-player match requires the seven-player team to contain a Libero-capable player and the six-player team to have none.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MatchInput"
+      responses:
+        "201":
+          description: Created match
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Match"
+        "400":
+          description: Invalid match rosters
+  /matches/{matchId}:
+    parameters:
+      - name: matchId
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getMatch
+      tags: [matches]
+      summary: Get a match and its rosters
+      responses:
+        "200":
+          description: Match
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Match"
+        "404":
+          description: Match not found
 components:
   schemas:
     HealthStatus:
@@ -33,4 +188,108 @@ components:
           type: string
       required:
         - status
+    Position:
+      type: string
+      enum:
+        - Setter
+        - Outside Hitter
+        - Middle Blocker
+        - Opposite
+        - Libero
+    Player:
+      type: object
+      required: [id, name, positions, elo, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        positions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Position"
+        elo:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+    PlayerInput:
+      type: object
+      required: [name, positions]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        positions:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/Position"
+        elo:
+          type: integer
+          default: 1000
+          minimum: 0
+    PlayerUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        positions:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/Position"
+        elo:
+          type: integer
+          minimum: 0
+    MatchStatus:
+      type: string
+      enum: [upcoming, completed]
+    Match:
+      type: object
+      required: [id, teamA, teamB, scoreA, scoreB, status, createdAt]
+      properties:
+        id:
+          type: integer
+        teamA:
+          type: array
+          items:
+            $ref: "#/components/schemas/Player"
+        teamB:
+          type: array
+          items:
+            $ref: "#/components/schemas/Player"
+        scoreA:
+          type: ["integer", "null"]
+        scoreB:
+          type: ["integer", "null"]
+        status:
+          $ref: "#/components/schemas/MatchStatus"
+        createdAt:
+          type: string
+          format: date-time
+    MatchInput:
+      type: object
+      required: [teamAPlayerIds, teamBPlayerIds]
+      properties:
+        teamAPlayerIds:
+          type: array
+          minItems: 6
+          maxItems: 7
+          uniqueItems: true
+          items:
+            type: integer
+        teamBPlayerIds:
+          type: array
+          minItems: 6
+          maxItems: 7
+          uniqueItems: true
+          items:
+            type: integer
 

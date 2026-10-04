@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Volleyball Team Manager"
+description = "A local-first volleyball team management app for maintaining player positions and ELO ratings, viewing a leaderboard, and setting up matches with selectable player pools and valid team sizes."
+version = "1.0.0"
+id = "artifacts/volleyball-manager"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25476
+
+[services.development]
+run = "pnpm --filter @workspace/volleyball-manager run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/volleyball-manager", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/volleyball-manager/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25476"
+BASE_PATH = "/"
