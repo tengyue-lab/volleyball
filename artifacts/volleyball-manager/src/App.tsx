@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { FormEvent, ReactNode } from 'react';
+import type { DragEvent as ReactDragEvent, FormEvent, ReactNode } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import {
   Position,
@@ -19,11 +19,12 @@ import {
   getListPlayersQueryKey,
 } from '@workspace/api-client-react';
 import type { Match, Player, PlayerInput, PlayerUpdate, Position as PositionType } from '@workspace/api-client-react';
-import { CalendarDays, Check, ChevronDown, Pencil, Plus, Search, Trophy, Trash2, Users, X } from 'lucide-react';
+import { ArrowLeftRight, CalendarDays, Check, ChevronDown, Pencil, Plus, Search, Trophy, Trash2, Users, WandSparkles, X } from 'lucide-react';
 import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { balanceMatchTeams, type MatchBalanceResult } from '@/match-balancing';
 import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient();
@@ -279,8 +280,60 @@ function LeaderboardPage() {
   </main></Shell>;
 }
 
-function AssignedPlayer({ player, team, remove }: { player: Player; team: 'A' | 'B'; remove: (id: number) => void }) {
-  return <div className="assigned-player" data-testid={`assigned-player-${player.id}`}><span>{player.name}<small>{player.positions.join(' · ')}</small></span><button className="remove-player" aria-label={`Remove ${player.name} from Team ${team}`} onClick={() => remove(player.id)} data-testid={`button-unassign-${player.id}`}><X size={14} /></button></div>;
+function AssignedPlayer({
+  player,
+  team,
+  swapSelectionId,
+  swapSelectionTeam,
+  onSelectSwap,
+  onRemove,
+  onDragStart,
+  onDrop,
+}: {
+  player: Player;
+  team: 'A' | 'B';
+  swapSelectionId: number | null;
+  swapSelectionTeam: 'A' | 'B' | null;
+  onSelectSwap: (id: number) => void;
+  onRemove: (id: number) => void;
+  onDragStart: (event: ReactDragEvent<HTMLDivElement>, id: number) => void;
+  onDrop: (event: ReactDragEvent<HTMLDivElement>, targetId: number) => void;
+}) {
+  const isSelectedForSwap = swapSelectionId === player.id;
+  const isSwapTarget = swapSelectionId !== null && swapSelectionTeam !== team;
+  const swapLabel = isSelectedForSwap ? 'Cancel' : isSwapTarget ? 'Swap' : 'Choose';
+  return <div
+    className="assigned-player"
+    draggable
+    onDragStart={(event) => onDragStart(event, player.id)}
+    onDragOver={(event) => event.preventDefault()}
+    onDrop={(event) => onDrop(event, player.id)}
+    data-testid={`assigned-player-${player.id}`}
+  >
+    <div className="assigned-player-copy">
+      <strong>{player.name}</strong>
+      <small>{player.positions.join(' · ')}</small>
+      <span className="assigned-elo">ELO {player.elo.toLocaleString()}</span>
+    </div>
+    <div className="assigned-player-actions">
+      <button
+        className={`swap-player ${isSelectedForSwap ? 'selected' : ''}`}
+        aria-label={isSelectedForSwap ? `Cancel swap for ${player.name}` : isSwapTarget ? `Swap ${player.name} with selected player` : `Choose ${player.name} for swap`}
+        aria-pressed={isSelectedForSwap}
+        onClick={() => onSelectSwap(player.id)}
+        data-testid={`button-swap-player-${player.id}`}
+      ><ArrowLeftRight size={12} />{swapLabel}</button>
+      <button className="remove-player" aria-label={`Remove ${player.name} from Team ${team}`} onClick={() => onRemove(player.id)} data-testid={`button-unassign-${player.id}`}><X size={14} /></button>
+    </div>
+  </div>;
+}
+
+function TeamMetrics({ team, players, total }: { team: 'A' | 'B'; players: Player[]; total: number }) {
+  const average = players.length ? (total / players.length).toFixed(1) : '—';
+  return <div className="team-metrics" data-testid={`summary-team-${team.toLowerCase()}`}>
+    <div><span>Total ELO</span><strong data-testid={`text-team-total-elo-${team.toLowerCase()}`}>{total.toLocaleString()}</strong></div>
+    <div><span>Average ELO</span><strong data-testid={`text-team-average-elo-${team.toLowerCase()}`}>{average}</strong></div>
+  </div>;
 }
 
 function MatchDetail({ matchId }: { matchId: number }) {
@@ -308,48 +361,166 @@ function MatchesPage() {
   const createMatch = useCreateMatch();
   const queryClient = useQueryClient();
   const { notice, setNotice } = useNotice();
+  const [mode, setMode] = useState<'auto' | 'manual'>('auto');
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<number[]>([]);
   const [teamA, setTeamA] = useState<number[]>([]);
   const [teamB, setTeamB] = useState<number[]>([]);
+  const [balanceResult, setBalanceResult] = useState<MatchBalanceResult | null>(null);
+  const [swapSelectionId, setSwapSelectionId] = useState<number | null>(null);
   const [expandedMatch, setExpandedMatch] = useState<number | null>(null);
   const [createError, setCreateError] = useState('');
   const players = playersQuery.data ?? [];
+  const selectedIds = new Set(selectedPlayerIds);
+  const selectedPlayers = players.filter((player) => selectedIds.has(player.id));
   const assigned = new Set([...teamA, ...teamB]);
-  const available = players.filter((player) => !assigned.has(player.id));
-  const teamAPlayers = players.filter((player) => teamA.includes(player.id));
-  const teamBPlayers = players.filter((player) => teamB.includes(player.id));
+  const unassignedSelected = selectedPlayers.filter((player) => !assigned.has(player.id));
+  const teamAPlayers = selectedPlayers.filter((player) => teamA.includes(player.id));
+  const teamBPlayers = selectedPlayers.filter((player) => teamB.includes(player.id));
   const total = teamA.length + teamB.length;
+  const poolCount = selectedPlayerIds.length;
+  const allSelectedAssigned = poolCount === total && selectedPlayerIds.every((id) => assigned.has(id));
+  const teamAElo = teamAPlayers.reduce((sum, player) => sum + player.elo, 0);
+  const teamBElo = teamBPlayers.reduce((sum, player) => sum + player.elo, 0);
+  const eloGap = Math.abs(teamAElo - teamBElo);
   const liberoA = teamAPlayers.some((player) => player.positions.includes(Position.Libero));
   const liberoB = teamBPlayers.some((player) => player.positions.includes(Position.Libero));
   const teamSizesValid = [6, 7].includes(teamA.length) && [6, 7].includes(teamB.length);
-  let validation = 'Build two teams of six or seven players to save this roster.';
+  let underdogCoreGetsLibero: boolean | null = null;
+  if (poolCount === 13 && teamSizesValid) {
+    const largerTeam = teamA.length === 7 ? teamAPlayers : teamBPlayers;
+    const smallerTeam = teamA.length === 6 ? teamAPlayers : teamBPlayers;
+    const smallerElo = smallerTeam.reduce((sum, player) => sum + player.elo, 0);
+    underdogCoreGetsLibero = largerTeam.some((player) =>
+      player.positions.includes(Position.Libero) &&
+      largerTeam.reduce((sum, member) => sum + member.elo, 0) - player.elo <= smallerElo,
+    );
+  }
+  let validation = 'Select a pool of 12 to 14 players to begin.';
   let isRosterValid = false;
-  if (teamSizesValid && (total === 12 || total === 14)) {
-    validation = `${total} players selected. Ready to save this match roster.`;
+  if (poolCount < 12 || poolCount > 14) {
+    validation = `Select 12 to 14 players (${poolCount} selected).`;
+  } else if (!allSelectedAssigned) {
+    validation = `Assign all ${poolCount} selected players to Team A or Team B.`;
+  } else if (!teamSizesValid) {
+    validation = 'Each team must have six or seven players.';
+  } else if (poolCount === 12) {
+    validation = '12-player roster is ready. A Libero is optional.';
     isRosterValid = true;
-  } else if (teamA.length === 6 && teamB.length === 7) {
-    if (liberoB && !liberoA) { validation = '13-player roster checks out: the seven-player side has a Libero.'; isRosterValid = true; }
-    else validation = 'For 13 players, Team B’s seven must include a Libero; Team A’s six must not.';
-  } else if (teamA.length === 7 && teamB.length === 6) {
-    if (liberoA && !liberoB) { validation = '13-player roster checks out: the seven-player side has a Libero.'; isRosterValid = true; }
-    else validation = 'For 13 players, Team A’s seven must include a Libero; Team B’s six must not.';
+  } else if (poolCount === 13) {
+    const largerTeamHasLibero = teamA.length === 7 ? liberoA : liberoB;
+    const smallerTeamHasLibero = teamA.length === 6 ? liberoA : liberoB;
+    if (!largerTeamHasLibero || smallerTeamHasLibero) {
+      validation = 'For 13 players, the seven-player team needs a Libero and the six-player team must not have one.';
+    } else if (balanceResult && !balanceResult.underdogCoreGetsLibero) {
+      validation = 'No position-valid auto split could give the extra Libero to the lower-ELO six-player core. Try a different pool or switch to Manual Assign.';
+    } else {
+      validation = underdogCoreGetsLibero === false
+        ? 'Roster rules pass, but the lower-ELO six-player core does not get the extra Libero.'
+        : '13-player roster is ready: the lower-ELO six-player core gets the extra Libero.';
+      isRosterValid = true;
+    }
+  } else if (poolCount === 14) {
+    if (!liberoA || !liberoB) {
+      validation = 'For 14 players, both seven-player teams need a Libero-capable player.';
+    } else {
+      validation = '14-player roster is ready: both teams have a Libero.';
+      isRosterValid = true;
+    }
+  }
+
+  function togglePoolPlayer(playerId: number, checked: boolean) {
+    setSelectedPlayerIds((current) => {
+      if (checked) {
+        if (current.length >= 14 || current.includes(playerId)) return current;
+        return [...current, playerId];
+      }
+      return current.filter((id) => id !== playerId);
+    });
+    if (!checked) {
+      setTeamA((current) => current.filter((id) => id !== playerId));
+      setTeamB((current) => current.filter((id) => id !== playerId));
+    }
+    setBalanceResult(null);
+    setSwapSelectionId(null);
+    setCreateError('');
   }
 
   function assign(playerId: number, side: 'A' | 'B') {
+    if (!selectedIds.has(playerId) || assigned.has(playerId)) return;
+    if (side === 'A' && teamA.length >= 7) return;
+    if (side === 'B' && teamB.length >= 7) return;
     if (side === 'A') setTeamA((current) => [...current, playerId]);
     else setTeamB((current) => [...current, playerId]);
+    setBalanceResult(null);
+    setSwapSelectionId(null);
   }
+
   function unassign(playerId: number) {
     setTeamA((current) => current.filter((id) => id !== playerId));
     setTeamB((current) => current.filter((id) => id !== playerId));
+    setBalanceResult(null);
+    setSwapSelectionId(null);
   }
+
+  function swapPlayers(firstId: number, secondId: number) {
+    if (firstId === secondId) return;
+    const firstIsA = teamA.includes(firstId);
+    const secondIsA = teamA.includes(secondId);
+    const firstIsB = teamB.includes(firstId);
+    const secondIsB = teamB.includes(secondId);
+    if (!(firstIsA && secondIsB) && !(firstIsB && secondIsA)) return;
+    setTeamA((current) => current.map((id) => id === firstId ? secondId : id === secondId ? firstId : id));
+    setTeamB((current) => current.map((id) => id === firstId ? secondId : id === secondId ? firstId : id));
+    setBalanceResult(null);
+    setSwapSelectionId(null);
+  }
+
+  function selectPlayerForSwap(playerId: number) {
+    if (swapSelectionId === null || swapSelectionId === playerId) {
+      setSwapSelectionId(swapSelectionId === playerId ? null : playerId);
+      return;
+    }
+    const firstSide = teamA.includes(swapSelectionId) ? 'A' : 'B';
+    const secondSide = teamA.includes(playerId) ? 'A' : 'B';
+    if (firstSide !== secondSide) {
+      swapPlayers(swapSelectionId, playerId);
+    } else {
+      setSwapSelectionId(playerId);
+    }
+  }
+
+  function handleDragStart(event: ReactDragEvent<HTMLDivElement>, playerId: number) {
+    event.dataTransfer.setData('text/plain', String(playerId));
+    event.dataTransfer.effectAllowed = 'move';
+  }
+
+  function handleDrop(event: ReactDragEvent<HTMLDivElement>, targetId: number) {
+    event.preventDefault();
+    const draggedId = Number(event.dataTransfer.getData('text/plain'));
+    if (Number.isInteger(draggedId)) swapPlayers(draggedId, targetId);
+  }
+
+  function autoBalance() {
+    if (poolCount < 12 || poolCount > 14) return;
+    const result = balanceMatchTeams(selectedPlayers);
+    setTeamA(result.teamAIds);
+    setTeamB(result.teamBIds);
+    setBalanceResult(result);
+    setSwapSelectionId(null);
+    setCreateError('');
+  }
+
   function saveMatch() {
-    if (!isRosterValid) return;
+    if (!isRosterValid || (poolCount === 13 && balanceResult && !balanceResult.underdogCoreGetsLibero)) return;
     setCreateError('');
     createMatch.mutate({ data: { teamAPlayerIds: teamA, teamBPlayerIds: teamB } }, {
       onSuccess: async () => {
         await queryClient.invalidateQueries({ queryKey: getListMatchesQueryKey() });
+        setSelectedPlayerIds([]);
         setTeamA([]);
         setTeamB([]);
+        setBalanceResult(null);
+        setSwapSelectionId(null);
         setNotice('Upcoming match roster saved.');
       },
       onError: (error) => setCreateError(messageFor(error)),
@@ -357,31 +528,95 @@ function MatchesPage() {
   }
 
   return <Shell><main className="content">
-    <PageHeader eyebrow="Match day / roster builder" title="Match rosters" description="Set the sides before you head to the court. Roster rules keep every upcoming match ready to play." />
+    <PageHeader eyebrow="Match day / roster builder" title="Match rosters" description="Choose your player pool, then auto-balance by position and ELO or assign each side yourself." />
     <div className="summary-strip"><span className="summary-num">{matchesQuery.data?.length ?? '—'}</span> saved match rosters <span aria-hidden="true">/</span> assign between 12 and 14 players</div>
     <div className="match-layout">
       <section className="panel builder-panel" aria-label="Build a match roster">
-        <div className="panel-head"><div><h2 className="panel-title">Build a match</h2><div className="panel-note">Assign available players to either side</div></div><span className="count-chip">{total} / 14 selected</span></div>
-        <div className="builder-intro"><strong>Roster check</strong><p>Teams must each have 6 or 7 players. A 13-player roster needs a Libero on the seven-player side only.</p></div>
+        <div className="panel-head"><div><h2 className="panel-title">Build a match</h2><div className="panel-note">Select a pool first; team assignments can be automatic or manual</div></div><span className="count-chip">{poolCount} / 14 selected</span></div>
+        <div className="builder-intro"><strong>Position-first team balancing</strong><p>Auto-balance aims for one Setter, two Outside Hitters, two Middle Blockers, and one Opposite per team before it optimizes ELO. The 13-player Libero goes to the lower-ELO six-player core.</p></div>
         {playersQuery.isLoading ? <LoadingState lines={3} /> : playersQuery.isError ? <ErrorState error={playersQuery.error} retry={() => void playersQuery.refetch()} /> :
           <>
+            <div className="match-mode-switch" role="group" aria-label="Choose match assignment mode">
+              <button className={`mode-button ${mode === 'auto' ? 'active' : ''}`} aria-pressed={mode === 'auto'} onClick={() => setMode('auto')} data-testid="button-mode-auto"><WandSparkles size={14} />Auto-Balance</button>
+              <button className={`mode-button ${mode === 'manual' ? 'active' : ''}`} aria-pressed={mode === 'manual'} onClick={() => setMode('manual')} data-testid="button-mode-manual"><Users size={14} />Manual Assign</button>
+            </div>
+            <div className="pool-selection">
+              <div className="pool-selection-head">
+                <div><h3>Select the player pool</h3><p>Choose 12 to 14 players. You can select no more than 14.</p></div>
+                <span className="count-chip">{poolCount} selected</span>
+              </div>
+              {players.length === 0 ? <div className="field-hint pool-empty">No players are on the roster yet. <Link href="/players" className="text-button">Add players first</Link>.</div> :
+                <div className="pool-player-list">
+                  {players.map((player) => {
+                    const checked = selectedIds.has(player.id);
+                    return <label className={`pool-player ${checked ? 'selected' : ''}`} key={player.id} data-testid={`pool-player-${player.id}`}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={!checked && poolCount >= 14}
+                        onChange={(event) => togglePoolPlayer(player.id, event.currentTarget.checked)}
+                        data-testid={`checkbox-pool-player-${player.id}`}
+                      />
+                      <span className="pool-player-info"><strong>{player.name}</strong><small>{player.positions.join(' · ')}</small></span>
+                      <span className="pool-player-elo">ELO {player.elo.toLocaleString()}</span>
+                    </label>;
+                  })}
+                </div>}
+              {mode === 'auto' && <div className="pool-actions">
+                <button className="button button-primary" onClick={autoBalance} disabled={poolCount < 12 || poolCount > 14} data-testid="button-auto-balance"><WandSparkles size={14} />Auto-Balance Teams</button>
+                <button className="button button-quiet" onClick={() => { setSelectedPlayerIds([]); setTeamA([]); setTeamB([]); setBalanceResult(null); setSwapSelectionId(null); }} disabled={poolCount === 0} data-testid="button-clear-pool">Clear selection</button>
+              </div>}
+            </div>
+            {mode === 'manual' && <div className="manual-assign-head"><strong>Manual assignment</strong><span>Use + A or + B for each selected player.</span></div>}
             <div className="team-columns">
               <section className="team-column" aria-label="Team A">
                 <div className="team-header"><span className="team-label a">Team A</span><span className={`count-chip ${teamA.length >= 6 && teamA.length <= 7 ? 'ready' : ''}`}>{teamA.length} / 6–7</span></div>
-                <div className="assigned-list">{teamAPlayers.length ? teamAPlayers.map((player) => <AssignedPlayer key={player.id} player={player} team="A" remove={unassign} />) : <div className="field-hint">Add players below</div>}</div>
+                <TeamMetrics team="A" players={teamAPlayers} total={teamAElo} />
+                <div className="assigned-list">{teamAPlayers.length ? teamAPlayers.map((player) => <AssignedPlayer
+                  key={player.id}
+                  player={player}
+                  team="A"
+                  swapSelectionId={swapSelectionId}
+                  swapSelectionTeam={swapSelectionId === null ? null : teamA.includes(swapSelectionId) ? 'A' : 'B'}
+                  onSelectSwap={selectPlayerForSwap}
+                  onRemove={unassign}
+                  onDragStart={handleDragStart}
+                  onDrop={handleDrop}
+                />) : <div className="field-hint">{mode === 'manual' ? 'Assign selected players here' : 'Run Auto-Balance Teams to build this side'}</div>}</div>
               </section>
               <section className="team-column" aria-label="Team B">
                 <div className="team-header"><span className="team-label b">Team B</span><span className={`count-chip ${teamB.length >= 6 && teamB.length <= 7 ? 'ready' : ''}`}>{teamB.length} / 6–7</span></div>
-                <div className="assigned-list">{teamBPlayers.length ? teamBPlayers.map((player) => <AssignedPlayer key={player.id} player={player} team="B" remove={unassign} />) : <div className="field-hint">Add players below</div>}</div>
+                <TeamMetrics team="B" players={teamBPlayers} total={teamBElo} />
+                <div className="assigned-list">{teamBPlayers.length ? teamBPlayers.map((player) => <AssignedPlayer
+                  key={player.id}
+                  player={player}
+                  team="B"
+                  swapSelectionId={swapSelectionId}
+                  swapSelectionTeam={swapSelectionId === null ? null : teamA.includes(swapSelectionId) ? 'A' : 'B'}
+                  onSelectSwap={selectPlayerForSwap}
+                  onRemove={unassign}
+                  onDragStart={handleDragStart}
+                  onDrop={handleDrop}
+                />) : <div className="field-hint">{mode === 'manual' ? 'Assign selected players here' : 'Run Auto-Balance Teams to build this side'}</div>}</div>
               </section>
             </div>
-            <div className="available-list">
-              <div className="available-head"><span>Available players</span><span>{available.length} unassigned</span></div>
-              {available.length === 0 ? <div className="field-hint" style={{ padding: 12 }} data-testid="text-available-player-state">{players.length === 0 ? <>No players are on the roster yet. <Link href="/players" className="text-button">Add players first</Link>.</> : 'All available players are assigned to a side.'}</div> : available.map((player) => <div className="available-row" key={player.id} data-testid={`available-player-${player.id}`}>
-                <div className="available-info"><strong>{player.name}</strong><span>{player.positions.join(' · ')}{player.positions.includes(Position.Libero) ? ' · Libero eligible' : ''}</span></div>
-                <div className="assign-actions"><button className="assign-button" onClick={() => assign(player.id, 'A')} disabled={teamA.length >= 7 || total >= 14} data-testid={`button-assign-a-${player.id}`}>+ A</button><button className="assign-button b" onClick={() => assign(player.id, 'B')} disabled={teamB.length >= 7 || total >= 14} data-testid={`button-assign-b-${player.id}`}>+ B</button></div>
-              </div>)}
+            <div className="balance-summary" data-testid="summary-elo-gap">
+              <span>Team ELO difference</span><strong>{eloGap.toLocaleString()}</strong>
+              <small>Team A total {teamAElo.toLocaleString()} · Team B total {teamBElo.toLocaleString()}</small>
             </div>
+            {balanceResult && <div className={`balance-feedback ${balanceResult.formationComplete && balanceResult.liberoRuleSatisfied ? 'complete' : 'warning'}`} role="status" data-testid="status-auto-balance">
+              <strong>{balanceResult.formationComplete ? 'Required positions covered' : `Best available position coverage: ${balanceResult.positionCoverage} / 12`}</strong>
+              <span>{balanceResult.setterOverload === 0 ? 'Setters are split between teams where possible.' : `${balanceResult.setterOverload} setter overlap${balanceResult.setterOverload === 1 ? '' : 's'} remain because no better formation was available.`}</span>
+              {!balanceResult.liberoRuleSatisfied && <span>There are not enough Libero-capable players in this pool to meet the selected match size rules.</span>}
+              {poolCount === 13 && balanceResult.underdogCoreGetsLibero === false && <span>The lower-ELO six-player core could not receive the extra Libero while preserving the best available position split.</span>}
+            </div>}
+            {mode === 'manual' && <div className="available-list">
+              <div className="available-head"><span>Selected, unassigned players</span><span>{unassignedSelected.length} unassigned</span></div>
+              {unassignedSelected.length === 0 ? <div className="field-hint" style={{ padding: 12 }} data-testid="text-unassigned-state">{poolCount === 0 ? 'Choose a player pool above.' : 'All selected players are assigned to a side.'}</div> : unassignedSelected.map((player) => <div className="available-row" key={player.id} data-testid={`available-player-${player.id}`}>
+                <div className="available-info"><strong>{player.name}</strong><span>{player.positions.join(' · ')}{player.positions.includes(Position.Libero) ? ' · Libero eligible' : ''} · ELO {player.elo.toLocaleString()}</span></div>
+                <div className="assign-actions"><button className="assign-button" onClick={() => assign(player.id, 'A')} disabled={teamA.length >= 7} data-testid={`button-assign-a-${player.id}`}>+ A</button><button className="assign-button b" onClick={() => assign(player.id, 'B')} disabled={teamB.length >= 7} data-testid={`button-assign-b-${player.id}`}>+ B</button></div>
+              </div>)}
+            </div>}
             {createError && <div className="form-error" style={{ margin: '0 18px 12px' }} role="alert">{createError}</div>}
             <div className="builder-footer"><div className={`validation-note ${isRosterValid ? 'valid' : ''}`} role="status" data-testid="status-roster-validation">{isRosterValid && <Check size={12} style={{ verticalAlign: 'middle', marginRight: 5 }} />}{validation}</div><button className="button button-primary" onClick={saveMatch} disabled={!isRosterValid || createMatch.isPending} data-testid="button-create-match">{createMatch.isPending ? 'Saving roster…' : 'Save upcoming match'}</button></div>
           </>}

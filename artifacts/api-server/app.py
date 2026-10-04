@@ -308,13 +308,9 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             team_a = [players_by_id[player_id] for player_id in team_a_ids]
             team_b = [players_by_id[player_id] for player_id in team_b_ids]
 
-            # Phase 2 enforces the odd-roster rule: for 13 players, the 7-player
-            # roster must contain a Libero-capable player and the 6-player side
-            # must not. Phase 3 should automate assignments by covering each
-            # team's Setter / 2 Outside Hitters / 2 Middle Blockers / Opposite
-            # first, then swapping equal-position players to reduce the total
-            # ELO gap. For 13 players, the lower-ELO side should receive the
-            # seventh player (the Libero); the other side stays at six.
+            # Match creation enforces the Libero rules for 13-player and
+            # 14-player pools; position coverage and ELO balancing happen in
+            # the match builder before this roster is submitted.
             #
             # Phase 4 ELO updates should use both pre-match team averages:
             # expected_A = 1 / (1 + 10 ** ((average_B - average_A) / 400)).
@@ -336,6 +332,16 @@ def create_app(database_path: str | Path | None = None) -> Flask:
                     return jsonify(
                         {
                             "error": "For 13 players, assign a Libero-capable player to the 7-player team and none to the 6-player team."
+                        }
+                    ), 400
+            elif len(all_ids) == 14:
+                if not all(
+                    any("Libero" in player["positions"] for player in team)
+                    for team in (team_a, team_b)
+                ):
+                    return jsonify(
+                        {
+                            "error": "For 14 players, each 7-player team must include a Libero-capable player."
                         }
                     ), 400
 

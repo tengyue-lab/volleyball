@@ -152,7 +152,7 @@ export const ListMatchesResponse = zod.array(ListMatchesResponseItem)
 
 
 /**
- * Requires 12, 13, or 14 distinct players split into valid 6 or 7 player teams. A 13-player match requires the seven-player team to contain a Libero-capable player and the six-player team to have none.
+ * Requires 12, 13, or 14 distinct players split into valid 6 or 7 player teams. A 13-player match requires a Libero-capable player on the seven-player team only. A 14-player match requires at least one Libero-capable player on each seven-player team.
  * @summary Create an upcoming match
  */
 export const createMatchBodyTeamAPlayerIdsMin = 6;
