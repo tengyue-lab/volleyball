@@ -5,13 +5,13 @@
  * Volleyball player and match management API
  * OpenAPI spec version: 0.1.0
  */
+import type { MatchPlayerSnapshot } from './matchPlayerSnapshot';
 import type { MatchStatus } from './matchStatus';
-import type { Player } from './player';
 
 export interface Match {
   id: number;
-  teamA: Player[];
-  teamB: Player[];
+  teamA: MatchPlayerSnapshot[];
+  teamB: MatchPlayerSnapshot[];
   /** @nullable */
   scoreA: number | null;
   /** @nullable */

@@ -135,14 +135,18 @@ export const ListMatchesResponseItem = zod.object({
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int(),
   "createdAt": zod.coerce.date()
-})),
+}).and(zod.object({
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional()
+}))),
   "teamB": zod.array(zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int(),
   "createdAt": zod.coerce.date()
-})),
+}).and(zod.object({
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional()
+}))),
   "scoreA": zod.number().int().nullable(),
   "scoreB": zod.number().int().nullable(),
   "status": zod.enum(['upcoming', 'completed']),
@@ -152,7 +156,7 @@ export const ListMatchesResponse = zod.array(ListMatchesResponseItem)
 
 
 /**
- * Requires 12, 13, or 14 distinct players split into valid 6 or 7 player teams. A 13-player match requires a Libero-capable player on the seven-player team only. A 14-player match requires at least one Libero-capable player on each seven-player team.
+ * Requires 12, 13, or 14 distinct players with exact assigned roles. Six-player teams have 1 Setter, 2 Outside Hitters, 2 Middle Blockers, and 1 Opposite. Seven-player teams have that formation plus 1 Libero. Assigned roles may be Preferred or Filled when the player's profile does not include the role.
  * @summary Create an upcoming match
  */
 export const createMatchBodyTeamAPlayerIdsMin = 6;
@@ -161,11 +165,25 @@ export const createMatchBodyTeamAPlayerIdsMax = 7;
 export const createMatchBodyTeamBPlayerIdsMin = 6;
 export const createMatchBodyTeamBPlayerIdsMax = 7;
 
+export const createMatchBodyTeamAAssignmentsMin = 6;
+export const createMatchBodyTeamAAssignmentsMax = 7;
+
+export const createMatchBodyTeamBAssignmentsMin = 6;
+export const createMatchBodyTeamBAssignmentsMax = 7;
+
 
 
 export const CreateMatchBody = zod.object({
   "teamAPlayerIds": zod.array(zod.number().int()).min(createMatchBodyTeamAPlayerIdsMin).max(createMatchBodyTeamAPlayerIdsMax),
-  "teamBPlayerIds": zod.array(zod.number().int()).min(createMatchBodyTeamBPlayerIdsMin).max(createMatchBodyTeamBPlayerIdsMax)
+  "teamBPlayerIds": zod.array(zod.number().int()).min(createMatchBodyTeamBPlayerIdsMin).max(createMatchBodyTeamBPlayerIdsMax),
+  "teamAAssignments": zod.array(zod.object({
+  "playerId": zod.number().int(),
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])
+})).min(createMatchBodyTeamAAssignmentsMin).max(createMatchBodyTeamAAssignmentsMax),
+  "teamBAssignments": zod.array(zod.object({
+  "playerId": zod.number().int(),
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])
+})).min(createMatchBodyTeamBAssignmentsMin).max(createMatchBodyTeamBAssignmentsMax)
 })
 
 export const CreateMatchResponse = zod.object({
@@ -176,14 +194,18 @@ export const CreateMatchResponse = zod.object({
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int(),
   "createdAt": zod.coerce.date()
-})),
+}).and(zod.object({
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional()
+}))),
   "teamB": zod.array(zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int(),
   "createdAt": zod.coerce.date()
-})),
+}).and(zod.object({
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional()
+}))),
   "scoreA": zod.number().int().nullable(),
   "scoreB": zod.number().int().nullable(),
   "status": zod.enum(['upcoming', 'completed']),
@@ -206,14 +228,18 @@ export const GetMatchResponse = zod.object({
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int(),
   "createdAt": zod.coerce.date()
-})),
+}).and(zod.object({
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional()
+}))),
   "teamB": zod.array(zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int(),
   "createdAt": zod.coerce.date()
-})),
+}).and(zod.object({
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional()
+}))),
   "scoreA": zod.number().int().nullable(),
   "scoreB": zod.number().int().nullable(),
   "status": zod.enum(['upcoming', 'completed']),

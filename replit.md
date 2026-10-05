@@ -21,7 +21,7 @@ A local-first volleyball roster and match setup app for managing player position
 ## Where things live
 
 - `artifacts/volleyball-manager/src/App.tsx` — player, leaderboard, and match roster screens
-- `artifacts/volleyball-manager/src/match-balancing.ts` — position-first, same-position ELO team balancing
+- `artifacts/volleyball-manager/src/match-balancing.ts` — role assignment and same-role ELO team balancing
 - `artifacts/volleyball-manager/src/index.css` — web app styles
 - `artifacts/api-server/app.py` — Flask routes, validation, and SQLite schema
 - `lib/api-spec/openapi.yaml` — source of truth for API routes and response types
@@ -30,15 +30,15 @@ A local-first volleyball roster and match setup app for managing player position
 ## Architecture decisions
 
 - SQLite is intentional; do not replace it with the workspace PostgreSQL database.
-- Match rosters save player details as snapshots so later player edits or deletions do not rewrite a saved roster.
-- The match builder supports manual assignment and position-first, same-position ELO balancing with post-balance swaps.
+- Match rosters save player details and the assigned role as snapshots so later player edits or deletions do not rewrite a saved roster.
+- The match builder supports manual assignment and exact role-first, same-role ELO balancing with post-balance swaps. Roles not listed on a profile may be Filled by the best available ELO player and are reported by role.
 - Match result entry and rating changes remain deferred until Phase 4.
 
 ## Product
 
 - Phase 1: create, view, edit, and delete players; positions are multi-select and new players start at ELO 1000; leaderboard sorts by ELO.
-- Phase 2: create upcoming matches from 12, 13, or 14 selected players, with 6 or 7 on each side. For 13, only the seven-player side may include a Libero-capable player.
-- Match creation supports a selected player pool, auto-balancing or manual assignment, live team ELO totals/averages, and player swaps. For 14 players, each team must include a Libero-capable player.
+- Phase 2: create upcoming matches from 12, 13, or 14 selected players, with exact six-player roles (1 Setter, 2 Outside Hitters, 2 Middle Blockers, 1 Opposite). Seven-player sides add 1 assigned Libero role.
+- Match creation supports a selected player pool, auto-balancing or manual assignment, Preferred/Filled role badges and shortage warnings, live team ELO totals/averages, and player swaps. For 13, auto-balance gives the Libero to the lower-ELO six-player core when possible.
 - Scores are stored as null and are not editable until result entry is built.
 
 ## User preferences

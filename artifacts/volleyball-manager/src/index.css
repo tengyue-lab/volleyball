@@ -522,6 +522,26 @@ button:focus-visible,input:focus-visible{outline:3px solid hsl(var(--accent)/.55
 .balance-feedback.complete{background:#edf4eb;border:1px solid #d6e4d6}
 .balance-feedback.warning{background:#fbf1e6;border:1px solid #eddfc8}
 .balance-feedback.warning span{color:#7d6241}
+.role-legend{display:flex;align-items:center;flex-wrap:wrap;gap:7px;padding:11px 18px;border-bottom:1px solid hsl(var(--border));background:#fafaf5}
+.role-legend>strong{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:hsl(var(--muted-foreground));margin-right:2px}
+.role-legend>span:last-child{font-size:9px;color:hsl(var(--muted-foreground));line-height:1.45}
+.assignment-badge{display:inline-flex;align-items:center;gap:4px;width:max-content;border-radius:999px;padding:3px 7px;font-size:8px;font-weight:800;white-space:nowrap}
+.assignment-badge.preferred{background:#e0eee3;color:#2d654d}
+.assignment-badge.filled{background:#fae8d3;color:#965b20}
+.assigned-role-line{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:4px}
+.assigned-player-copy .assigned-role-name{font-size:10px;color:#263b32;white-space:normal}
+.assigned-player-copy .role-pending{margin-top:3px;color:hsl(var(--muted-foreground));font-style:italic}
+.position-warning{display:grid;gap:4px;margin:0 0 15px;padding:12px 14px;border-radius:7px;background:#fbf1e6;border:1px solid #eddfc8;color:#765a39}
+.position-warning strong{font-size:11px}
+.position-warning span{font-size:10px;font-weight:700;line-height:1.5}
+.position-warning small{font-size:9px;line-height:1.5}
+.saved-roster-player{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid hsl(var(--border))}
+.saved-roster-player:last-child{border-bottom:0}
+.saved-roster-player>div:first-child{min-width:0}
+.saved-roster-player>div:first-child strong{display:block;font-size:10px;color:hsl(var(--foreground))}
+.saved-roster-player small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px;font-size:8px;color:hsl(var(--muted-foreground))}
+.saved-role-info{display:grid;justify-items:end;gap:3px;flex-shrink:0}
+.saved-role-info>strong{font-size:9px}
 .team-column+.team-column{min-width:0}
 .team-column .assigned-list{min-width:0}
 @media(max-width:600px){

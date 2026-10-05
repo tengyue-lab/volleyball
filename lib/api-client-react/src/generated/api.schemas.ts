@@ -60,16 +60,25 @@ export const MatchStatus = {
   completed: 'completed',
 } as const;
 
+export type MatchPlayerSnapshot = Player & {
+  assignedPosition?: Position;
+};
+
 export interface Match {
   id: number;
-  teamA: Player[];
-  teamB: Player[];
+  teamA: MatchPlayerSnapshot[];
+  teamB: MatchPlayerSnapshot[];
   /** @nullable */
   scoreA: number | null;
   /** @nullable */
   scoreB: number | null;
   status: MatchStatus;
   createdAt: string;
+}
+
+export interface MatchPlayerAssignment {
+  playerId: number;
+  assignedPosition: Position;
 }
 
 export interface MatchInput {
@@ -83,5 +92,15 @@ export interface MatchInput {
      * @maxItems 7
      */
   teamBPlayerIds: number[];
+  /**
+     * @minItems 6
+     * @maxItems 7
+     */
+  teamAAssignments: MatchPlayerAssignment[];
+  /**
+     * @minItems 6
+     * @maxItems 7
+     */
+  teamBAssignments: MatchPlayerAssignment[];
 }
 

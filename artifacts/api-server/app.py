@@ -5,6 +5,7 @@ external database requirement.
 """
 
 from contextlib import contextmanager
+from collections import Counter
 from datetime import datetime, timezone
 import json
 import os
@@ -22,6 +23,17 @@ POSITIONS = (
     "Opposite",
     "Libero",
 )
+SIX_PLAYER_ROLE_COUNTS = Counter(
+    {
+        "Setter": 1,
+        "Outside Hitter": 2,
+        "Middle Blocker": 2,
+        "Opposite": 1,
+        "Libero": 0,
+    }
+)
+SEVEN_PLAYER_ROLE_COUNTS = SIX_PLAYER_ROLE_COUNTS.copy()
+SEVEN_PLAYER_ROLE_COUNTS["Libero"] = 1
 DEFAULT_DATABASE = Path(__file__).resolve().parent / "data" / "volleyball.sqlite3"
 
 
@@ -104,6 +116,42 @@ def validate_positions(value: Any) -> tuple[list[str] | None, str | None]:
     if len(set(value)) != len(value):
         return None, "Positions must not be repeated."
     return value, None
+
+
+def validate_match_assignments(
+    value: Any, player_ids: list[int]
+) -> dict[int, str] | None:
+    if not isinstance(value, list) or len(value) != len(player_ids):
+        return None
+
+    assignments: dict[int, str] = {}
+    for assignment in value:
+        if not isinstance(assignment, dict) or set(assignment) != {
+            "playerId",
+            "assignedPosition",
+        }:
+            return None
+        player_id = assignment["playerId"]
+        position = assignment["assignedPosition"]
+        if (
+            isinstance(player_id, bool)
+            or not isinstance(player_id, int)
+            or player_id < 1
+            or not isinstance(position, str)
+            or position not in POSITIONS
+            or player_id in assignments
+        ):
+            return None
+        assignments[player_id] = position
+
+    if set(assignments) != set(player_ids):
+        return None
+    expected = (
+        SEVEN_PLAYER_ROLE_COUNTS if len(player_ids) == 7 else SIX_PLAYER_ROLE_COUNTS
+    )
+    if Counter(assignments.values()) != expected:
+        return None
+    return assignments
 
 
 def validate_player_fields(
@@ -263,13 +311,20 @@ def create_app(database_path: str | Path | None = None) -> Flask:
         body = request.get_json(silent=True)
         if not isinstance(body, dict):
             return jsonify({"error": "Send match rosters as a JSON object."}), 400
-        if set(body) != {"teamAPlayerIds", "teamBPlayerIds"}:
+        if set(body) != {
+            "teamAPlayerIds",
+            "teamBPlayerIds",
+            "teamAAssignments",
+            "teamBAssignments",
+        }:
             return jsonify(
-                {"error": "A match must include Team A and Team B player IDs."}
+                {"error": "A match must include both team rosters and role assignments."}
             ), 400
 
         team_a_ids = body["teamAPlayerIds"]
         team_b_ids = body["teamBPlayerIds"]
+        team_a_assignments = body["teamAAssignments"]
+        team_b_assignments = body["teamBAssignments"]
         if not isinstance(team_a_ids, list) or not isinstance(team_b_ids, list):
             return jsonify({"error": "Both teams must be lists of player IDs."}), 400
         if any(
@@ -291,6 +346,18 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             return jsonify(
                 {"error": "A match needs 12, 13, or 14 selected players."}
             ), 400
+        team_a_roles = validate_match_assignments(team_a_assignments, team_a_ids)
+        team_b_roles = validate_match_assignments(team_b_assignments, team_b_ids)
+        if team_a_roles is None or team_b_roles is None:
+            return jsonify(
+                {
+                    "error": (
+                        "Assign each player exactly one role: six-player teams need "
+                        "1 Setter, 2 Outside Hitters, 2 Middle Blockers, and 1 Opposite; "
+                        "seven-player teams also need 1 Libero."
+                    )
+                }
+            ), 400
 
         all_ids = team_a_ids + team_b_ids
         placeholders = ",".join("?" for _ in all_ids)
@@ -305,12 +372,23 @@ def create_app(database_path: str | Path | None = None) -> Flask:
                     {"error": "One or more selected players no longer exist."}
                 ), 400
 
-            team_a = [players_by_id[player_id] for player_id in team_a_ids]
-            team_b = [players_by_id[player_id] for player_id in team_b_ids]
+            team_a = [
+                {
+                    **players_by_id[player_id],
+                    "assignedPosition": team_a_roles[player_id],
+                }
+                for player_id in team_a_ids
+            ]
+            team_b = [
+                {
+                    **players_by_id[player_id],
+                    "assignedPosition": team_b_roles[player_id],
+                }
+                for player_id in team_b_ids
+            ]
 
-            # Match creation enforces the Libero rules for 13-player and
-            # 14-player pools; position coverage and ELO balancing happen in
-            # the match builder before this roster is submitted.
+            # Assigned positions are stored in the match snapshot, separate
+            # from the player's preferred-position profile.
             #
             # Phase 4 ELO updates should use both pre-match team averages:
             # expected_A = 1 / (1 + 10 ** ((average_B - average_A) / 400)).
@@ -318,33 +396,6 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             # is round(32 * (actual_A - expected_A)). Team B uses the inverse
             # expectation and result. This makes upsets worth more and keeps
             # roster creation from changing ratings before a result is entered.
-            if len(all_ids) == 13:
-                larger_team, smaller_team = (
-                    (team_a, team_b) if len(team_a) == 7 else (team_b, team_a)
-                )
-                larger_has_libero = any(
-                    "Libero" in player["positions"] for player in larger_team
-                )
-                smaller_has_libero = any(
-                    "Libero" in player["positions"] for player in smaller_team
-                )
-                if not larger_has_libero or smaller_has_libero:
-                    return jsonify(
-                        {
-                            "error": "For 13 players, assign a Libero-capable player to the 7-player team and none to the 6-player team."
-                        }
-                    ), 400
-            elif len(all_ids) == 14:
-                if not all(
-                    any("Libero" in player["positions"] for player in team)
-                    for team in (team_a, team_b)
-                ):
-                    return jsonify(
-                        {
-                            "error": "For 14 players, each 7-player team must include a Libero-capable player."
-                        }
-                    ), 400
-
             created_at = utc_now()
             cursor = connection.execute(
                 """

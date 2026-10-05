@@ -5,6 +5,7 @@
  * Volleyball player and match management API
  * OpenAPI spec version: 0.1.0
  */
+import type { MatchPlayerAssignment } from './matchPlayerAssignment';
 
 export interface MatchInput {
   /**
@@ -17,4 +18,14 @@ export interface MatchInput {
      * @maxItems 7
      */
   teamBPlayerIds: number[];
+  /**
+     * @minItems 6
+     * @maxItems 7
+     */
+  teamAAssignments: MatchPlayerAssignment[];
+  /**
+     * @minItems 6
+     * @maxItems 7
+     */
+  teamBAssignments: MatchPlayerAssignment[];
 }

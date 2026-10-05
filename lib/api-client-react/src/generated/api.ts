@@ -701,7 +701,7 @@ export const getCreateMatchUrl = () => {
 }
 
 /**
- * Requires 12, 13, or 14 distinct players split into valid 6 or 7 player teams. A 13-player match requires a Libero-capable player on the seven-player team only. A 14-player match requires at least one Libero-capable player on each seven-player team.
+ * Requires 12, 13, or 14 distinct players with exact assigned roles. Six-player teams have 1 Setter, 2 Outside Hitters, 2 Middle Blockers, and 1 Opposite. Seven-player teams have that formation plus 1 Libero. Assigned roles may be Preferred or Filled when the player's profile does not include the role.
  * @summary Create an upcoming match
  */
 export const createMatch = async (matchInput: MatchInput, options?: Parameters<typeof customFetch>[1]): Promise<Match> => {

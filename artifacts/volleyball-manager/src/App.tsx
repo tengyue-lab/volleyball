@@ -24,7 +24,13 @@ import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { balanceMatchTeams, type MatchBalanceResult } from '@/match-balancing';
+import {
+  assignMatchRoles,
+  balanceMatchTeams,
+  type MatchBalanceResult,
+  type MatchPosition,
+  type MatchPositionAssignment,
+} from '@/match-balancing';
 import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient();
@@ -35,6 +41,13 @@ const positions: PositionType[] = [
   Position.Opposite,
   Position.Libero,
 ];
+const apiPositionByRole: Record<MatchPosition, PositionType> = {
+  Setter: Position.Setter,
+  'Outside Hitter': Position.Outside_Hitter,
+  'Middle Blocker': Position.Middle_Blocker,
+  Opposite: Position.Opposite,
+  Libero: Position.Libero,
+};
 
 function messageFor(error: unknown) {
   if (error instanceof Error) return error.message;
@@ -282,6 +295,7 @@ function LeaderboardPage() {
 
 function AssignedPlayer({
   player,
+  roleAssignment,
   team,
   swapSelectionId,
   swapSelectionTeam,
@@ -291,6 +305,7 @@ function AssignedPlayer({
   onDrop,
 }: {
   player: Player;
+  roleAssignment?: MatchPositionAssignment;
   team: 'A' | 'B';
   swapSelectionId: number | null;
   swapSelectionTeam: 'A' | 'B' | null;
@@ -312,7 +327,11 @@ function AssignedPlayer({
   >
     <div className="assigned-player-copy">
       <strong>{player.name}</strong>
-      <small>{player.positions.join(' · ')}</small>
+      {roleAssignment ? <div className="assigned-role-line">
+        <strong className="assigned-role-name">{roleAssignment.assignedPosition}</strong>
+        <RoleBadge assignedPosition={roleAssignment.assignedPosition} status={roleAssignment.assignmentStatus} />
+      </div> : <small className="role-pending">Role assigned when both sides are complete</small>}
+      <small>Profile: {player.positions.join(' · ')}</small>
       <span className="assigned-elo">ELO {player.elo.toLocaleString()}</span>
     </div>
     <div className="assigned-player-actions">
@@ -328,6 +347,13 @@ function AssignedPlayer({
   </div>;
 }
 
+function RoleBadge({ assignedPosition, status }: { assignedPosition: MatchPosition; status: 'preferred' | 'filled' }) {
+  return <span className={`assignment-badge ${status}`} aria-label={`${assignedPosition}: ${status}`}>
+    <span aria-hidden="true">{status === 'preferred' ? '✓' : '!'}</span>
+    {status === 'preferred' ? 'Preferred' : 'Filled'}
+  </span>;
+}
+
 function TeamMetrics({ team, players, total }: { team: 'A' | 'B'; players: Player[]; total: number }) {
   const average = players.length ? (total / players.length).toFixed(1) : '—';
   return <div className="team-metrics" data-testid={`summary-team-${team.toLowerCase()}`}>
@@ -338,11 +364,38 @@ function TeamMetrics({ team, players, total }: { team: 'A' | 'B'; players: Playe
 
 function MatchDetail({ matchId }: { matchId: number }) {
   const query = useGetMatch(matchId, { query: { queryKey: getGetMatchQueryKey(matchId) } });
+  const legacyRoleAssignments = useMemo(() => {
+    if (!query.data) return new Map<number, MatchPositionAssignment>();
+    try {
+      const derived = assignMatchRoles(
+        [...query.data.teamA, ...query.data.teamB],
+        query.data.teamA.map((player) => player.id),
+        query.data.teamB.map((player) => player.id),
+      );
+      return new Map(
+        [...derived.teamAAssignments, ...derived.teamBAssignments]
+          .map((assignment) => [assignment.playerId, assignment]),
+      );
+    } catch {
+      return new Map<number, MatchPositionAssignment>();
+    }
+  }, [query.data]);
+
   if (query.isLoading) return <div className="state-card">Loading saved roster…</div>;
   if (query.isError || !query.data) return <div className="state-card" role="alert">Roster details could not be loaded. <button className="text-button" onClick={() => void query.refetch()}>Try again</button></div>;
+  const renderPlayer = (player: Match['teamA'][number]) => {
+    const assignedPosition = player.assignedPosition ?? legacyRoleAssignments.get(player.id)?.assignedPosition;
+    if (!assignedPosition) return <p key={player.id}>{player.name} <span>· {player.positions.join(', ')}</span></p>;
+    const position = assignedPosition as MatchPosition;
+    const status = player.positions.includes(assignedPosition) ? 'preferred' : 'filled';
+    return <div className="saved-roster-player" key={player.id}>
+      <div><strong>{player.name}</strong><small>Profile: {player.positions.join(' · ')}</small></div>
+      <div className="saved-role-info"><strong>{position}</strong><RoleBadge assignedPosition={position} status={status} /></div>
+    </div>;
+  };
   return <div className="roster-detail">
-    <section><h4>Team A · {query.data.teamA.length} players</h4>{query.data.teamA.map((player) => <p key={player.id}>{player.name} <span>· {player.positions.join(', ')}</span></p>)}</section>
-    <section><h4>Team B · {query.data.teamB.length} players</h4>{query.data.teamB.map((player) => <p key={player.id}>{player.name} <span>· {player.positions.join(', ')}</span></p>)}</section>
+    <section><h4>Team A · {query.data.teamA.length} players</h4>{query.data.teamA.map(renderPlayer)}</section>
+    <section><h4>Team B · {query.data.teamB.length} players</h4>{query.data.teamB.map(renderPlayer)}</section>
   </div>;
 }
 
@@ -376,25 +429,29 @@ function MatchesPage() {
   const unassignedSelected = selectedPlayers.filter((player) => !assigned.has(player.id));
   const teamAPlayers = selectedPlayers.filter((player) => teamA.includes(player.id));
   const teamBPlayers = selectedPlayers.filter((player) => teamB.includes(player.id));
+  const roleAssignments = useMemo(() => {
+    const selected = players.filter((player) => selectedPlayerIds.includes(player.id));
+    if (![12, 13, 14].includes(selected.length)) return null;
+    try {
+      return assignMatchRoles(selected, teamA, teamB);
+    } catch {
+      return null;
+    }
+  }, [players, selectedPlayerIds, teamA, teamB]);
+  const roleAssignmentById = new Map(
+    roleAssignments
+      ? [...roleAssignments.teamAAssignments, ...roleAssignments.teamBAssignments]
+        .map((assignment) => [assignment.playerId, assignment])
+      : [],
+  );
   const total = teamA.length + teamB.length;
   const poolCount = selectedPlayerIds.length;
   const allSelectedAssigned = poolCount === total && selectedPlayerIds.every((id) => assigned.has(id));
   const teamAElo = teamAPlayers.reduce((sum, player) => sum + player.elo, 0);
   const teamBElo = teamBPlayers.reduce((sum, player) => sum + player.elo, 0);
   const eloGap = Math.abs(teamAElo - teamBElo);
-  const liberoA = teamAPlayers.some((player) => player.positions.includes(Position.Libero));
-  const liberoB = teamBPlayers.some((player) => player.positions.includes(Position.Libero));
   const teamSizesValid = [6, 7].includes(teamA.length) && [6, 7].includes(teamB.length);
-  let underdogCoreGetsLibero: boolean | null = null;
-  if (poolCount === 13 && teamSizesValid) {
-    const largerTeam = teamA.length === 7 ? teamAPlayers : teamBPlayers;
-    const smallerTeam = teamA.length === 6 ? teamAPlayers : teamBPlayers;
-    const smallerElo = smallerTeam.reduce((sum, player) => sum + player.elo, 0);
-    underdogCoreGetsLibero = largerTeam.some((player) =>
-      player.positions.includes(Position.Libero) &&
-      largerTeam.reduce((sum, member) => sum + member.elo, 0) - player.elo <= smallerElo,
-    );
-  }
+  const underdogCoreGetsLibero = roleAssignments?.underdogCoreGetsLibero ?? null;
   let validation = 'Select a pool of 12 to 14 players to begin.';
   let isRosterValid = false;
   if (poolCount < 12 || poolCount > 14) {
@@ -403,29 +460,16 @@ function MatchesPage() {
     validation = `Assign all ${poolCount} selected players to Team A or Team B.`;
   } else if (!teamSizesValid) {
     validation = 'Each team must have six or seven players.';
-  } else if (poolCount === 12) {
-    validation = '12-player roster is ready. A Libero is optional.';
+  } else if (!roleAssignments) {
+    validation = 'Assign all selected players to teams in a 6/6, 7/6, or 7/7 split.';
+  } else if (poolCount === 13 && balanceResult && !underdogCoreGetsLibero) {
+    validation = 'Auto-balance could not give the extra Libero role to the lower-ELO six-player core.';
+  } else if (poolCount === 13 && !underdogCoreGetsLibero) {
+    validation = '13-player roster has the exact role formation, but the seven-player core is not lower ELO.';
     isRosterValid = true;
-  } else if (poolCount === 13) {
-    const largerTeamHasLibero = teamA.length === 7 ? liberoA : liberoB;
-    const smallerTeamHasLibero = teamA.length === 6 ? liberoA : liberoB;
-    if (!largerTeamHasLibero || smallerTeamHasLibero) {
-      validation = 'For 13 players, the seven-player team needs a Libero and the six-player team must not have one.';
-    } else if (balanceResult && !balanceResult.underdogCoreGetsLibero) {
-      validation = 'No position-valid auto split could give the extra Libero to the lower-ELO six-player core. Try a different pool or switch to Manual Assign.';
-    } else {
-      validation = underdogCoreGetsLibero === false
-        ? 'Roster rules pass, but the lower-ELO six-player core does not get the extra Libero.'
-        : '13-player roster is ready: the lower-ELO six-player core gets the extra Libero.';
-      isRosterValid = true;
-    }
-  } else if (poolCount === 14) {
-    if (!liberoA || !liberoB) {
-      validation = 'For 14 players, both seven-player teams need a Libero-capable player.';
-    } else {
-      validation = '14-player roster is ready: both teams have a Libero.';
-      isRosterValid = true;
-    }
+  } else {
+    validation = `${poolCount}-player roster is ready with the exact required role formation.`;
+    isRosterValid = true;
   }
 
   function togglePoolPlayer(playerId: number, checked: boolean) {
@@ -511,9 +555,21 @@ function MatchesPage() {
   }
 
   function saveMatch() {
-    if (!isRosterValid || (poolCount === 13 && balanceResult && !balanceResult.underdogCoreGetsLibero)) return;
+    if (!isRosterValid || !roleAssignments ||
+      (poolCount === 13 && balanceResult && !balanceResult.underdogCoreGetsLibero)) return;
     setCreateError('');
-    createMatch.mutate({ data: { teamAPlayerIds: teamA, teamBPlayerIds: teamB } }, {
+    createMatch.mutate({ data: {
+      teamAPlayerIds: teamA,
+      teamBPlayerIds: teamB,
+      teamAAssignments: roleAssignments.teamAAssignments.map((assignment) => ({
+        playerId: assignment.playerId,
+        assignedPosition: apiPositionByRole[assignment.assignedPosition],
+      })),
+      teamBAssignments: roleAssignments.teamBAssignments.map((assignment) => ({
+        playerId: assignment.playerId,
+        assignedPosition: apiPositionByRole[assignment.assignedPosition],
+      })),
+    } }, {
       onSuccess: async () => {
         await queryClient.invalidateQueries({ queryKey: getListMatchesQueryKey() });
         setSelectedPlayerIds([]);
@@ -528,17 +584,30 @@ function MatchesPage() {
   }
 
   return <Shell><main className="content">
-    <PageHeader eyebrow="Match day / roster builder" title="Match rosters" description="Choose your player pool, then auto-balance by position and ELO or assign each side yourself." />
+    <PageHeader eyebrow="Match day / roster builder" title="Match rosters" description="Choose 12–14 players, assign the exact court roles, then balance teams by ELO or build each side manually." />
     <div className="summary-strip"><span className="summary-num">{matchesQuery.data?.length ?? '—'}</span> saved match rosters <span aria-hidden="true">/</span> assign between 12 and 14 players</div>
+    {roleAssignments?.positionShortages.length ? <div className="position-warning" role="alert" data-testid="warning-position-shortage">
+      <strong>Some positions were short in this pool</strong>
+      <span>{roleAssignments.positionShortages.map((shortage) =>
+        `${shortage.position}: ${shortage.filledCount} Filled player${shortage.filledCount === 1 ? '' : 's'}`,
+      ).join(' · ')}</span>
+      <small>Those slots are still assigned to the highest-ELO available players.</small>
+    </div> : null}
     <div className="match-layout">
       <section className="panel builder-panel" aria-label="Build a match roster">
         <div className="panel-head"><div><h2 className="panel-title">Build a match</h2><div className="panel-note">Select a pool first; team assignments can be automatic or manual</div></div><span className="count-chip">{poolCount} / 14 selected</span></div>
-        <div className="builder-intro"><strong>Position-first team balancing</strong><p>Auto-balance aims for one Setter, two Outside Hitters, two Middle Blockers, and one Opposite per team before it optimizes ELO. The 13-player Libero goes to the lower-ELO six-player core.</p></div>
+        <div className="builder-intro"><strong>Exact role formation</strong><p>Every side gets 1 Setter, 2 Outside Hitters, 2 Middle Blockers, and 1 Opposite. Seven-player sides add 1 Libero. Auto-Balance preserves these roles while reducing the team ELO gap.</p></div>
+        <div className="role-legend" aria-label="Role assignment legend">
+          <strong>Role badges</strong>
+          <RoleBadge assignedPosition="Setter" status="preferred" />
+          <RoleBadge assignedPosition="Middle Blocker" status="filled" />
+          <span>Preferred means the role is on the player profile; Filled means they covered a role no preferred player could fill.</span>
+        </div>
         {playersQuery.isLoading ? <LoadingState lines={3} /> : playersQuery.isError ? <ErrorState error={playersQuery.error} retry={() => void playersQuery.refetch()} /> :
           <>
             <div className="match-mode-switch" role="group" aria-label="Choose match assignment mode">
-              <button className={`mode-button ${mode === 'auto' ? 'active' : ''}`} aria-pressed={mode === 'auto'} onClick={() => setMode('auto')} data-testid="button-mode-auto"><WandSparkles size={14} />Auto-Balance</button>
-              <button className={`mode-button ${mode === 'manual' ? 'active' : ''}`} aria-pressed={mode === 'manual'} onClick={() => setMode('manual')} data-testid="button-mode-manual"><Users size={14} />Manual Assign</button>
+              <button className={`mode-button ${mode === 'auto' ? 'active' : ''}`} aria-pressed={mode === 'auto'} onClick={() => { setMode('auto'); setBalanceResult(null); }} data-testid="button-mode-auto"><WandSparkles size={14} />Auto-Balance</button>
+              <button className={`mode-button ${mode === 'manual' ? 'active' : ''}`} aria-pressed={mode === 'manual'} onClick={() => { setMode('manual'); setBalanceResult(null); }} data-testid="button-mode-manual"><Users size={14} />Manual Assign</button>
             </div>
             <div className="pool-selection">
               <div className="pool-selection-head">
@@ -575,6 +644,7 @@ function MatchesPage() {
                 <div className="assigned-list">{teamAPlayers.length ? teamAPlayers.map((player) => <AssignedPlayer
                   key={player.id}
                   player={player}
+                  roleAssignment={roleAssignmentById.get(player.id)}
                   team="A"
                   swapSelectionId={swapSelectionId}
                   swapSelectionTeam={swapSelectionId === null ? null : teamA.includes(swapSelectionId) ? 'A' : 'B'}
@@ -590,6 +660,7 @@ function MatchesPage() {
                 <div className="assigned-list">{teamBPlayers.length ? teamBPlayers.map((player) => <AssignedPlayer
                   key={player.id}
                   player={player}
+                  roleAssignment={roleAssignmentById.get(player.id)}
                   team="B"
                   swapSelectionId={swapSelectionId}
                   swapSelectionTeam={swapSelectionId === null ? null : teamA.includes(swapSelectionId) ? 'A' : 'B'}
@@ -604,11 +675,11 @@ function MatchesPage() {
               <span>Team ELO difference</span><strong>{eloGap.toLocaleString()}</strong>
               <small>Team A total {teamAElo.toLocaleString()} · Team B total {teamBElo.toLocaleString()}</small>
             </div>
-            {balanceResult && <div className={`balance-feedback ${balanceResult.formationComplete && balanceResult.liberoRuleSatisfied ? 'complete' : 'warning'}`} role="status" data-testid="status-auto-balance">
-              <strong>{balanceResult.formationComplete ? 'Required positions covered' : `Best available position coverage: ${balanceResult.positionCoverage} / 12`}</strong>
-              <span>{balanceResult.setterOverload === 0 ? 'Setters are split between teams where possible.' : `${balanceResult.setterOverload} setter overlap${balanceResult.setterOverload === 1 ? '' : 's'} remain because no better formation was available.`}</span>
-              {!balanceResult.liberoRuleSatisfied && <span>There are not enough Libero-capable players in this pool to meet the selected match size rules.</span>}
-              {poolCount === 13 && balanceResult.underdogCoreGetsLibero === false && <span>The lower-ELO six-player core could not receive the extra Libero while preserving the best available position split.</span>}
+            {balanceResult && <div className={`balance-feedback ${balanceResult.positionShortages.length ? 'warning' : 'complete'}`} role="status" data-testid="status-auto-balance">
+              <strong>Exact role slots assigned</strong>
+              <span>Team ELO gap: {balanceResult.totalEloGap.toLocaleString()}.</span>
+              {balanceResult.positionShortages.length === 0 && <span>Every assigned role is Preferred.</span>}
+              {poolCount === 13 && !balanceResult.underdogCoreGetsLibero && <span>The lower-ELO six-player core could not receive the extra Libero role.</span>}
             </div>}
             {mode === 'manual' && <div className="available-list">
               <div className="available-head"><span>Selected, unassigned players</span><span>{unassignedSelected.length} unassigned</span></div>
