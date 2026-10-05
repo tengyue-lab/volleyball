@@ -20,9 +20,11 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  EloHistoryEntry,
   HealthStatus,
   Match,
   MatchInput,
+  MatchResultInput,
   Player,
   PlayerInput,
   PlayerUpdate
@@ -375,12 +377,89 @@ export function useGetPlayer<TData = Awaited<ReturnType<typeof getPlayer>>, TErr
 
 
 
+export const getGetPlayerEloHistoryUrl = (playerId: number,) => {
+
+
+
+
+  return `/api/players/${playerId}/elo-history`
+}
+
+/**
+ * @summary Get a player's ELO audit history
+ */
+export const getPlayerEloHistory = async (playerId: number, options?: Parameters<typeof customFetch>[1]): Promise<EloHistoryEntry[]> => {
+
+  return customFetch<EloHistoryEntry[]>(getGetPlayerEloHistoryUrl(playerId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPlayerEloHistoryQueryKey = (playerId: number,) => {
+    return [
+    `/api/players/${playerId}/elo-history`
+    ] as const;
+    }
+
+
+export const getGetPlayerEloHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getPlayerEloHistory>>, TError = ErrorType<void>>(playerId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPlayerEloHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPlayerEloHistoryQueryKey(playerId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPlayerEloHistory>>> = ({ signal }) => getPlayerEloHistory(playerId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: playerId !== null && playerId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPlayerEloHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPlayerEloHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getPlayerEloHistory>>>
+export type GetPlayerEloHistoryQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get a player's ELO audit history
+ */
+
+export function useGetPlayerEloHistory<TData = Awaited<ReturnType<typeof getPlayerEloHistory>>, TError = ErrorType<void>>(
+ playerId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPlayerEloHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPlayerEloHistoryQueryOptions(playerId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getUpdatePlayerUrl = (playerId: number,) => {
 
 
 
 
-  return `/api/players/${playerId}`
+  return `/api/players/${playerId}/elo-history`
 }
 
 /**
@@ -469,7 +548,7 @@ export const getDeletePlayerUrl = (playerId: number,) => {
 
 
 
-  return `/api/players/${playerId}`
+  return `/api/players/${playerId}/elo-history`
 }
 
 /**
@@ -857,4 +936,167 @@ export function useGetMatch<TData = Awaited<ReturnType<typeof getMatch>>, TError
 
 
 
+
+export const getSubmitMatchResultUrl = (matchId: number,) => {
+
+
+
+
+  return `/api/matches/${matchId}/result`
+}
+
+/**
+ * @summary Submit a final score and update player ELO
+ */
+export const submitMatchResult = async (matchId: number,
+    matchResultInput: MatchResultInput, options?: Parameters<typeof customFetch>[1]): Promise<Match> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<Match>(getSubmitMatchResultUrl(matchId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(matchResultInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitMatchResultMutationKey = () => ['submitMatchResult'] as const;
+
+export const getSubmitMatchResultMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitMatchResult>>, TError,SubmitMatchResultMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitMatchResult>>, TError,SubmitMatchResultMutationVariables, TContext> => {
+
+const mutationKey = getSubmitMatchResultMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitMatchResult>>, SubmitMatchResultMutationVariables> = (props) => {
+          const {matchId,data} = props ?? {};
+
+          return  submitMatchResult(matchId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitMatchResultMutationResult = NonNullable<Awaited<ReturnType<typeof submitMatchResult>>>
+    export type SubmitMatchResultMutationBody = BodyType<MatchResultInput>
+    export type SubmitMatchResultMutationError = ErrorType<void>
+    export type SubmitMatchResultMutationVariables = {matchId: number;data: BodyType<MatchResultInput>}
+
+    /**
+ * @summary Submit a final score and update player ELO
+ */
+export const useSubmitMatchResult = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitMatchResult>>, TError,SubmitMatchResultMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitMatchResult>>,
+        TError,
+        SubmitMatchResultMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSubmitMatchResultMutationOptions(options));
+    }
+
+export const getReopenMatchResultUrl = (matchId: number,) => {
+
+
+
+
+  return `/api/matches/${matchId}/reopen`
+}
+
+/**
+ * @summary Reverse a match result and reopen score entry
+ */
+export const reopenMatchResult = async (matchId: number, options?: Parameters<typeof customFetch>[1]): Promise<Match> => {
+
+  return customFetch<Match>(getReopenMatchResultUrl(matchId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getReopenMatchResultMutationKey = () => ['reopenMatchResult'] as const;
+
+export const getReopenMatchResultMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reopenMatchResult>>, TError,ReopenMatchResultMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reopenMatchResult>>, TError,ReopenMatchResultMutationVariables, TContext> => {
+
+const mutationKey = getReopenMatchResultMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reopenMatchResult>>, ReopenMatchResultMutationVariables> = (props) => {
+          const {matchId} = props ?? {};
+
+          return  reopenMatchResult(matchId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReopenMatchResultMutationResult = NonNullable<Awaited<ReturnType<typeof reopenMatchResult>>>
+
+    export type ReopenMatchResultMutationError = ErrorType<void>
+    export type ReopenMatchResultMutationVariables = {matchId: number}
+
+    /**
+ * @summary Reverse a match result and reopen score entry
+ */
+export const useReopenMatchResult = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reopenMatchResult>>, TError,ReopenMatchResultMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reopenMatchResult>>,
+        TError,
+        ReopenMatchResultMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReopenMatchResultMutationOptions(options));
+    }
 

@@ -81,6 +81,28 @@ paths:
                 $ref: "#/components/schemas/Player"
         "404":
           description: Player not found
+  /players/{playerId}/elo-history:
+    parameters:
+      - name: playerId
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getPlayerEloHistory
+      tags: [players]
+      summary: Get a player's ELO audit history
+      responses:
+        "200":
+          description: ELO changes ordered from oldest to newest
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EloHistoryEntry"
+        "404":
+          description: Player not found
     patch:
       operationId: updatePlayer
       tags: [players]
@@ -179,6 +201,58 @@ paths:
                 $ref: "#/components/schemas/Match"
         "404":
           description: Match not found
+  /matches/{matchId}/result:
+    parameters:
+      - name: matchId
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      operationId: submitMatchResult
+      tags: [matches]
+      summary: Submit a final score and update player ELO
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MatchResultInput"
+      responses:
+        "200":
+          description: Completed match with the ELO changes from this result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Match"
+        "400":
+          description: Invalid score
+        "404":
+          description: Match not found
+        "409":
+          description: Match is already completed or cannot be scored
+  /matches/{matchId}/reopen:
+    parameters:
+      - name: matchId
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      operationId: reopenMatchResult
+      tags: [matches]
+      summary: Reverse a match result and reopen score entry
+      responses:
+        "200":
+          description: Upcoming match after reversing its ELO changes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Match"
+        "404":
+          description: Match not found
+        "409":
+          description: Result cannot be reversed because a later match depends on it
 components:
   schemas:
     HealthStatus:
@@ -253,7 +327,7 @@ components:
       enum: [upcoming, completed]
     Match:
       type: object
-      required: [id, teamA, teamB, scoreA, scoreB, status, createdAt]
+      required: [id, teamA, teamB, scoreA, scoreB, status, winner, completedAt, createdAt, eloChanges]
       properties:
         id:
           type: integer
@@ -271,9 +345,19 @@ components:
           type: ["integer", "null"]
         status:
           $ref: "#/components/schemas/MatchStatus"
+        winner:
+          type: ["string", "null"]
+          enum: ["Team A", "Team B", null]
+        completedAt:
+          type: ["string", "null"]
+          format: date-time
         createdAt:
           type: string
           format: date-time
+        eloChanges:
+          type: array
+          items:
+            $ref: "#/components/schemas/EloHistoryEntry"
     MatchPlayerSnapshot:
       allOf:
         - $ref: "#/components/schemas/Player"
@@ -323,4 +407,36 @@ components:
           type: integer
         assignedPosition:
           $ref: "#/components/schemas/Position"
+    MatchResultInput:
+      type: object
+      required: [scoreA, scoreB]
+      properties:
+        scoreA:
+          type: integer
+          minimum: 0
+        scoreB:
+          type: integer
+          minimum: 0
+    EloHistoryEntry:
+      type: object
+      required: [id, playerId, matchId, eloBefore, eloAfter, changeAmount, action, createdAt]
+      properties:
+        id:
+          type: integer
+        playerId:
+          type: integer
+        matchId:
+          type: integer
+        eloBefore:
+          type: integer
+        eloAfter:
+          type: integer
+        changeAmount:
+          type: integer
+        action:
+          type: string
+          enum: [result, reversal]
+        createdAt:
+          type: string
+          format: date-time
 

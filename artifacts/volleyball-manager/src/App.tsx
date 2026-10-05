@@ -11,6 +11,8 @@ import {
   useGetPlayer,
   useListMatches,
   useListPlayers,
+  useReopenMatchResult,
+  useSubmitMatchResult,
   useUpdatePlayer,
   getGetLeaderboardQueryKey,
   getGetMatchQueryKey,
@@ -364,6 +366,12 @@ function TeamMetrics({ team, players, total }: { team: 'A' | 'B'; players: Playe
 
 function MatchDetail({ matchId }: { matchId: number }) {
   const query = useGetMatch(matchId, { query: { queryKey: getGetMatchQueryKey(matchId) } });
+  const queryClient = useQueryClient();
+  const submitResult = useSubmitMatchResult();
+  const reopenResult = useReopenMatchResult();
+  const [scoreA, setScoreA] = useState('');
+  const [scoreB, setScoreB] = useState('');
+  const [resultError, setResultError] = useState('');
   const legacyRoleAssignments = useMemo(() => {
     if (!query.data) return new Map<number, MatchPositionAssignment>();
     try {
@@ -380,9 +388,57 @@ function MatchDetail({ matchId }: { matchId: number }) {
       return new Map<number, MatchPositionAssignment>();
     }
   }, [query.data]);
+  useEffect(() => {
+    if (query.data?.status === 'upcoming') {
+      setScoreA('');
+      setScoreB('');
+    }
+  }, [query.data?.status]);
 
   if (query.isLoading) return <div className="state-card">Loading saved roster…</div>;
   if (query.isError || !query.data) return <div className="state-card" role="alert">Roster details could not be loaded. <button className="text-button" onClick={() => void query.refetch()}>Try again</button></div>;
+  const match = query.data;
+  const onMatchUpdated = async (updated: Match) => {
+    queryClient.setQueryData(getGetMatchQueryKey(matchId), updated);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: getGetMatchQueryKey(matchId) }),
+      queryClient.invalidateQueries({ queryKey: getListMatchesQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getListPlayersQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getGetLeaderboardQueryKey() }),
+    ]);
+  };
+  function saveResult(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setResultError('');
+    const parsedA = Number(scoreA);
+    const parsedB = Number(scoreB);
+    if (!scoreA.trim() || !scoreB.trim() || !Number.isInteger(parsedA) || !Number.isInteger(parsedB) || parsedA < 0 || parsedB < 0) {
+      setResultError('Enter a whole-number set score of zero or higher for both teams.');
+      return;
+    }
+    if (parsedA === parsedB) {
+      setResultError('A match cannot end in a tie. Enter the winning set score.');
+      return;
+    }
+    submitResult.mutate({ matchId, data: { scoreA: parsedA, scoreB: parsedB } }, {
+      onSuccess: async (updated) => {
+        await onMatchUpdated(updated);
+        setResultError('');
+      },
+      onError: (error) => setResultError(messageFor(error)),
+    });
+  }
+  function editResult() {
+    setResultError('');
+    reopenResult.mutate({ matchId }, {
+      onSuccess: async (updated) => {
+        await onMatchUpdated(updated);
+        setScoreA('');
+        setScoreB('');
+      },
+      onError: (error) => setResultError(messageFor(error)),
+    });
+  }
   const renderPlayer = (player: Match['teamA'][number]) => {
     const assignedPosition = player.assignedPosition ?? legacyRoleAssignments.get(player.id)?.assignedPosition;
     if (!assignedPosition) return <p key={player.id}>{player.name} <span>· {player.positions.join(', ')}</span></p>;
@@ -394,16 +450,64 @@ function MatchDetail({ matchId }: { matchId: number }) {
     </div>;
   };
   return <div className="roster-detail">
-    <section><h4>Team A · {query.data.teamA.length} players</h4>{query.data.teamA.map(renderPlayer)}</section>
-    <section><h4>Team B · {query.data.teamB.length} players</h4>{query.data.teamB.map(renderPlayer)}</section>
+    {match.status === 'upcoming' ? <section className="score-entry">
+      <h4>Enter final set score</h4>
+      <form className="score-form" onSubmit={saveResult}>
+        <div className="score-field">
+          <label htmlFor={`score-a-${matchId}`}>Team A sets won</label>
+          <input id={`score-a-${matchId}`} type="number" min="0" step="1" inputMode="numeric" required value={scoreA} onChange={(event) => setScoreA(event.currentTarget.value)} data-testid={`input-score-a-${matchId}`} />
+        </div>
+        <div className="score-field">
+          <label htmlFor={`score-b-${matchId}`}>Team B sets won</label>
+          <input id={`score-b-${matchId}`} type="number" min="0" step="1" inputMode="numeric" required value={scoreB} onChange={(event) => setScoreB(event.currentTarget.value)} data-testid={`input-score-b-${matchId}`} />
+        </div>
+        <button className="button button-primary" type="submit" disabled={submitResult.isPending || reopenResult.isPending} data-testid={`button-submit-result-${matchId}`}>
+          {submitResult.isPending ? 'Saving result…' : 'Submit result'}
+        </button>
+      </form>
+      {resultError && <div className="form-error result-error" role="alert">{resultError}</div>}
+    </section> : <section className="match-result">
+      <div className="result-heading">
+        <div><span className="eyebrow">Final result</span><h4>{match.winner} won</h4><p>{match.completedAt ? `Completed ${new Date(match.completedAt).toLocaleString()}` : 'Completed'}</p></div>
+        <button className="button button-secondary" onClick={editResult} disabled={reopenResult.isPending || submitResult.isPending} data-testid={`button-edit-result-${matchId}`}>
+          {reopenResult.isPending ? 'Reopening…' : 'Edit result'}
+        </button>
+      </div>
+      <div className="final-score"><span>Team A</span><strong>{match.scoreA}</strong><span className="score-divider">–</span><strong>{match.scoreB}</strong><span>Team B</span></div>
+      {resultError && <div className="form-error result-error" role="alert">{resultError}</div>}
+      {match.eloChanges.length ? <div className="table-wrap result-table-wrap">
+        <table className="data-table result-table">
+          <thead><tr><th>Player</th><th>Position played</th><th>ELO before</th><th>ELO after</th><th>Change</th></tr></thead>
+          <tbody>{[
+            ...match.teamA.map((player) => ({ player, team: 'Team A' })),
+            ...match.teamB.map((player) => ({ player, team: 'Team B' })),
+          ].map(({ player, team }) => {
+            const change = match.eloChanges.find((entry) => entry.playerId === player.id);
+            const playedPosition = player.assignedPosition ?? legacyRoleAssignments.get(player.id)?.assignedPosition ?? '—';
+            const changeAmount = change?.changeAmount ?? 0;
+            return <tr key={`${team}-${player.id}`}>
+              <td><strong>{player.name}</strong><small>{team}</small></td>
+              <td>{playedPosition}</td>
+              <td>{change?.eloBefore ?? '—'}</td>
+              <td>{change?.eloAfter ?? '—'}</td>
+              <td className={changeAmount > 0 ? 'elo-change-positive' : changeAmount < 0 ? 'elo-change-negative' : ''}>{change ? `${changeAmount > 0 ? '+' : ''}${changeAmount}` : '—'}</td>
+            </tr>;
+          })}</tbody>
+        </table>
+      </div> : <p className="field-hint">ELO change history is unavailable for this match.</p>}
+      <Link href="/leaderboard" className="button button-secondary result-leaderboard"><Trophy size={14} />View leaderboard</Link>
+    </section>}
+    <section><h4>Team A · {match.teamA.length} players</h4>{match.teamA.map(renderPlayer)}</section>
+    <section><h4>Team B · {match.teamB.length} players</h4>{match.teamB.map(renderPlayer)}</section>
   </div>;
 }
 
 function MatchCard({ match, expanded, onToggle }: { match: Match; expanded: boolean; onToggle: () => void }) {
+  const completed = match.status === 'completed';
   return <article className="panel match-card" data-testid={`card-match-${match.id}`}>
-    <div className="match-card-head"><span className="match-label">Roster / {String(match.id).padStart(3, '0')} · {new Date(match.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span><span className="match-badge">Upcoming</span></div>
-    <div className="versus-row"><div className="versus-team">Team A<span>{match.teamA.length} players</span></div><span className="versus-word">VS</span><div className="versus-team">Team B<span>{match.teamB.length} players</span></div></div>
-    <div className="match-card-foot"><span>Match roster saved</span><button className="text-button" onClick={onToggle} aria-expanded={expanded} data-testid={`button-view-match-${match.id}`}>{expanded ? 'Hide roster' : 'View roster'} <ChevronDown size={12} style={{ verticalAlign: 'middle', transform: expanded ? 'rotate(180deg)' : undefined }} /></button></div>
+    <div className="match-card-head"><span className="match-label">Roster / {String(match.id).padStart(3, '0')} · {new Date(match.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span><span className={`match-badge ${completed ? 'completed' : ''}`}>{completed ? 'Completed' : 'Upcoming'}</span></div>
+    <div className="versus-row"><div className="versus-team">Team A<span>{match.teamA.length} players</span>{completed && <strong>{match.scoreA}</strong>}</div><span className="versus-word">{completed ? '–' : 'VS'}</span><div className="versus-team">Team B<span>{match.teamB.length} players</span>{completed && <strong>{match.scoreB}</strong>}</div></div>
+    <div className="match-card-foot"><span>{completed ? `${match.winner} won` : 'Match roster saved'}</span><button className="text-button" onClick={onToggle} aria-expanded={expanded} data-testid={`button-view-match-${match.id}`}>{expanded ? 'Hide details' : completed ? 'View results' : 'Enter score'} <ChevronDown size={12} style={{ verticalAlign: 'middle', transform: expanded ? 'rotate(180deg)' : undefined }} /></button></div>
     {expanded && <MatchDetail matchId={match.id} />}
   </article>;
 }
@@ -693,7 +797,7 @@ function MatchesPage() {
           </>}
       </section>
       <section>
-        <div className="panel-head" style={{ padding: '0 0 13px', border: 0 }}><div><h2 className="panel-title">Saved matches</h2><div className="panel-note">Upcoming rosters at a glance</div></div></div>
+        <div className="panel-head" style={{ padding: '0 0 13px', border: 0 }}><div><h2 className="panel-title">Saved matches</h2><div className="panel-note">Upcoming and completed match results</div></div></div>
         {matchesQuery.isLoading ? <section className="panel"><LoadingState lines={3} /></section> : matchesQuery.isError ? <section className="panel"><ErrorState error={matchesQuery.error} retry={() => void matchesQuery.refetch()} /></section> :
           matchesQuery.data?.length ? <div className="upcoming-list">{matchesQuery.data.map((match) => <MatchCard key={match.id} match={match} expanded={expandedMatch === match.id} onToggle={() => setExpandedMatch(expandedMatch === match.id ? null : match.id)} />)}</div> :
             <section className="panel"><EmptyState title="No match rosters yet" copy="Build two sides on the left and save the first upcoming match." /></section>}

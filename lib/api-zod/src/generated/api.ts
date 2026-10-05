@@ -73,6 +73,26 @@ export const GetPlayerResponse = zod.object({
 
 
 /**
+ * @summary Get a player's ELO audit history
+ */
+export const GetPlayerEloHistoryParams = zod.object({
+  "playerId": zod.coerce.number().int()
+})
+
+export const GetPlayerEloHistoryResponseItem = zod.object({
+  "id": zod.number().int(),
+  "playerId": zod.number().int(),
+  "matchId": zod.number().int(),
+  "eloBefore": zod.number().int(),
+  "eloAfter": zod.number().int(),
+  "changeAmount": zod.number().int(),
+  "action": zod.enum(['result', 'reversal']),
+  "createdAt": zod.coerce.date()
+})
+export const GetPlayerEloHistoryResponse = zod.array(GetPlayerEloHistoryResponseItem)
+
+
+/**
  * @summary Update a player
  */
 export const UpdatePlayerParams = zod.object({
@@ -150,7 +170,19 @@ export const ListMatchesResponseItem = zod.object({
   "scoreA": zod.number().int().nullable(),
   "scoreB": zod.number().int().nullable(),
   "status": zod.enum(['upcoming', 'completed']),
+  "winner": zod.union([zod.literal('Team A'),zod.literal('Team B'),zod.literal(null)]).nullable(),
+  "completedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "eloChanges": zod.array(zod.object({
+  "id": zod.number().int(),
+  "playerId": zod.number().int(),
+  "matchId": zod.number().int(),
+  "eloBefore": zod.number().int(),
+  "eloAfter": zod.number().int(),
+  "changeAmount": zod.number().int(),
+  "action": zod.enum(['result', 'reversal']),
   "createdAt": zod.coerce.date()
+}))
 })
 export const ListMatchesResponse = zod.array(ListMatchesResponseItem)
 
@@ -209,7 +241,19 @@ export const CreateMatchResponse = zod.object({
   "scoreA": zod.number().int().nullable(),
   "scoreB": zod.number().int().nullable(),
   "status": zod.enum(['upcoming', 'completed']),
+  "winner": zod.union([zod.literal('Team A'),zod.literal('Team B'),zod.literal(null)]).nullable(),
+  "completedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "eloChanges": zod.array(zod.object({
+  "id": zod.number().int(),
+  "playerId": zod.number().int(),
+  "matchId": zod.number().int(),
+  "eloBefore": zod.number().int(),
+  "eloAfter": zod.number().int(),
+  "changeAmount": zod.number().int(),
+  "action": zod.enum(['result', 'reversal']),
   "createdAt": zod.coerce.date()
+}))
 })
 
 
@@ -243,7 +287,122 @@ export const GetMatchResponse = zod.object({
   "scoreA": zod.number().int().nullable(),
   "scoreB": zod.number().int().nullable(),
   "status": zod.enum(['upcoming', 'completed']),
+  "winner": zod.union([zod.literal('Team A'),zod.literal('Team B'),zod.literal(null)]).nullable(),
+  "completedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "eloChanges": zod.array(zod.object({
+  "id": zod.number().int(),
+  "playerId": zod.number().int(),
+  "matchId": zod.number().int(),
+  "eloBefore": zod.number().int(),
+  "eloAfter": zod.number().int(),
+  "changeAmount": zod.number().int(),
+  "action": zod.enum(['result', 'reversal']),
   "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Submit a final score and update player ELO
+ */
+export const SubmitMatchResultParams = zod.object({
+  "matchId": zod.coerce.number().int()
+})
+
+export const submitMatchResultBodyScoreAMin = 0;
+
+export const submitMatchResultBodyScoreBMin = 0;
+
+
+
+export const SubmitMatchResultBody = zod.object({
+  "scoreA": zod.number().int().min(submitMatchResultBodyScoreAMin),
+  "scoreB": zod.number().int().min(submitMatchResultBodyScoreBMin)
+})
+
+export const SubmitMatchResultResponse = zod.object({
+  "id": zod.number().int(),
+  "teamA": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
+  "elo": zod.number().int(),
+  "createdAt": zod.coerce.date()
+}).and(zod.object({
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional()
+}))),
+  "teamB": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
+  "elo": zod.number().int(),
+  "createdAt": zod.coerce.date()
+}).and(zod.object({
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional()
+}))),
+  "scoreA": zod.number().int().nullable(),
+  "scoreB": zod.number().int().nullable(),
+  "status": zod.enum(['upcoming', 'completed']),
+  "winner": zod.union([zod.literal('Team A'),zod.literal('Team B'),zod.literal(null)]).nullable(),
+  "completedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "eloChanges": zod.array(zod.object({
+  "id": zod.number().int(),
+  "playerId": zod.number().int(),
+  "matchId": zod.number().int(),
+  "eloBefore": zod.number().int(),
+  "eloAfter": zod.number().int(),
+  "changeAmount": zod.number().int(),
+  "action": zod.enum(['result', 'reversal']),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Reverse a match result and reopen score entry
+ */
+export const ReopenMatchResultParams = zod.object({
+  "matchId": zod.coerce.number().int()
+})
+
+export const ReopenMatchResultResponse = zod.object({
+  "id": zod.number().int(),
+  "teamA": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
+  "elo": zod.number().int(),
+  "createdAt": zod.coerce.date()
+}).and(zod.object({
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional()
+}))),
+  "teamB": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
+  "elo": zod.number().int(),
+  "createdAt": zod.coerce.date()
+}).and(zod.object({
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional()
+}))),
+  "scoreA": zod.number().int().nullable(),
+  "scoreB": zod.number().int().nullable(),
+  "status": zod.enum(['upcoming', 'completed']),
+  "winner": zod.union([zod.literal('Team A'),zod.literal('Team B'),zod.literal(null)]).nullable(),
+  "completedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "eloChanges": zod.array(zod.object({
+  "id": zod.number().int(),
+  "playerId": zod.number().int(),
+  "matchId": zod.number().int(),
+  "eloBefore": zod.number().int(),
+  "eloAfter": zod.number().int(),
+  "changeAmount": zod.number().int(),
+  "action": zod.enum(['result', 'reversal']),
+  "createdAt": zod.coerce.date()
+}))
 })
 
 

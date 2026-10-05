@@ -60,9 +60,39 @@ export const MatchStatus = {
   completed: 'completed',
 } as const;
 
+/**
+ * @nullable
+ */
+export type MatchWinner = typeof MatchWinner[keyof typeof MatchWinner] | null;
+
+
+export const MatchWinner = {
+  Team_A: 'Team A',
+  Team_B: 'Team B',
+} as const;
+
 export type MatchPlayerSnapshot = Player & {
   assignedPosition?: Position;
 };
+
+export type EloHistoryEntryAction = typeof EloHistoryEntryAction[keyof typeof EloHistoryEntryAction];
+
+
+export const EloHistoryEntryAction = {
+  result: 'result',
+  reversal: 'reversal',
+} as const;
+
+export interface EloHistoryEntry {
+  id: number;
+  playerId: number;
+  matchId: number;
+  eloBefore: number;
+  eloAfter: number;
+  changeAmount: number;
+  action: EloHistoryEntryAction;
+  createdAt: string;
+}
 
 export interface Match {
   id: number;
@@ -73,7 +103,12 @@ export interface Match {
   /** @nullable */
   scoreB: number | null;
   status: MatchStatus;
+  /** @nullable */
+  winner: MatchWinner;
+  /** @nullable */
+  completedAt: string | null;
   createdAt: string;
+  eloChanges: EloHistoryEntry[];
 }
 
 export interface MatchPlayerAssignment {
@@ -102,5 +137,12 @@ export interface MatchInput {
      * @maxItems 7
      */
   teamBAssignments: MatchPlayerAssignment[];
+}
+
+export interface MatchResultInput {
+  /** @minimum 0 */
+  scoreA: number;
+  /** @minimum 0 */
+  scoreB: number;
 }
 

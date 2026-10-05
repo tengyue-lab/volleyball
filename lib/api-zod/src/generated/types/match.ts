@@ -5,8 +5,10 @@
  * Volleyball player and match management API
  * OpenAPI spec version: 0.1.0
  */
+import type { EloHistoryEntry } from './eloHistoryEntry';
 import type { MatchPlayerSnapshot } from './matchPlayerSnapshot';
 import type { MatchStatus } from './matchStatus';
+import type { MatchWinner } from './matchWinner';
 
 export interface Match {
   id: number;
@@ -17,5 +19,10 @@ export interface Match {
   /** @nullable */
   scoreB: number | null;
   status: MatchStatus;
+  /** @nullable */
+  winner: MatchWinner;
+  /** @nullable */
+  completedAt: Date | null;
   createdAt: Date;
+  eloChanges: EloHistoryEntry[];
 }

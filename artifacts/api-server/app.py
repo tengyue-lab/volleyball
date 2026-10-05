@@ -4,10 +4,11 @@ The SQLite database is stored alongside this service so the app has no
 external database requirement.
 """
 
-from contextlib import contextmanager
 from collections import Counter
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
+import math
 import os
 from pathlib import Path
 import sqlite3
@@ -34,6 +35,7 @@ SIX_PLAYER_ROLE_COUNTS = Counter(
 )
 SEVEN_PLAYER_ROLE_COUNTS = SIX_PLAYER_ROLE_COUNTS.copy()
 SEVEN_PLAYER_ROLE_COUNTS["Libero"] = 1
+ELO_K_FACTOR = 32
 DEFAULT_DATABASE = Path(__file__).resolve().parent / "data" / "volleyball.sqlite3"
 
 
@@ -68,8 +70,32 @@ def initialize_database(database_path: str) -> None:
                     CHECK (status IN ('upcoming', 'completed')),
                 created_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS elo_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                player_id INTEGER NOT NULL,
+                match_id INTEGER NOT NULL,
+                elo_before INTEGER NOT NULL,
+                elo_after INTEGER NOT NULL,
+                change_amount INTEGER NOT NULL,
+                action TEXT NOT NULL DEFAULT 'result'
+                    CHECK (action IN ('result', 'reversal')),
+                created_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_elo_history_player_id
+                ON elo_history (player_id, id);
+            CREATE INDEX IF NOT EXISTS idx_elo_history_match_id
+                ON elo_history (match_id, id);
             """
         )
+        match_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(matches)")
+        }
+        if "winner" not in match_columns:
+            connection.execute("ALTER TABLE matches ADD COLUMN winner TEXT")
+        if "completed_at" not in match_columns:
+            connection.execute("ALTER TABLE matches ADD COLUMN completed_at TEXT")
 
 
 @contextmanager
@@ -96,7 +122,22 @@ def serialize_player(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
-def serialize_match(row: sqlite3.Row) -> dict[str, Any]:
+def serialize_elo_history_row(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "playerId": row["player_id"],
+        "matchId": row["match_id"],
+        "eloBefore": row["elo_before"],
+        "eloAfter": row["elo_after"],
+        "changeAmount": row["change_amount"],
+        "action": row["action"],
+        "createdAt": row["created_at"],
+    }
+
+
+def serialize_match(
+    row: sqlite3.Row, elo_changes: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
     return {
         "id": row["id"],
         "teamA": json.loads(row["team_a_json"]),
@@ -104,8 +145,77 @@ def serialize_match(row: sqlite3.Row) -> dict[str, Any]:
         "scoreA": row["score_a"],
         "scoreB": row["score_b"],
         "status": row["status"],
+        "winner": row["winner"],
+        "completedAt": row["completed_at"],
         "createdAt": row["created_at"],
+        "eloChanges": elo_changes or [],
     }
+
+
+def active_match_elo_changes(
+    connection: sqlite3.Connection, match_id: int
+) -> list[dict[str, Any]]:
+    reversal = connection.execute(
+        "SELECT MAX(id) AS last_reversal FROM elo_history "
+        "WHERE match_id = ? AND action = 'reversal'",
+        (match_id,),
+    ).fetchone()
+    last_reversal = reversal["last_reversal"] or 0
+    rows = connection.execute(
+        """
+        SELECT * FROM elo_history
+        WHERE match_id = ? AND action = 'result' AND id > ?
+        ORDER BY id
+        """,
+        (match_id, last_reversal),
+    ).fetchall()
+    return [serialize_elo_history_row(row) for row in rows]
+
+
+def calculate_elo_updates(
+    team_a_players: list[dict[str, Any]],
+    team_b_players: list[dict[str, Any]],
+    winner: str,
+) -> list[dict[str, int]]:
+    """Calculate each player's standard K=32 ELO change from pre-match team averages.
+
+    Keep this calculation separate from request handling so the K-factor and
+    expected-score formula are straightforward to review and adjust. Ratings
+    retain the app's existing minimum of zero.
+    """
+    average_a = sum(player["elo"] for player in team_a_players) / len(team_a_players)
+    average_b = sum(player["elo"] for player in team_b_players) / len(team_b_players)
+    exponent = (average_b - average_a) / 400
+    if exponent > 308:
+        expected_a = 0.0
+    elif exponent < -308:
+        expected_a = 1.0
+    else:
+        expected_a = 1 / (1 + math.pow(10, exponent))
+    expected_b = 1 - expected_a
+    actual_a = 1 if winner == "Team A" else 0
+    actual_b = 1 - actual_a
+
+    updates = []
+    for players, expected, actual in (
+        (team_a_players, expected_a, actual_a),
+        (team_b_players, expected_b, actual_b),
+    ):
+        for player in players:
+            old_elo = player["elo"]
+            rounded_elo = math.floor(
+                old_elo + ELO_K_FACTOR * (actual - expected) + 0.5
+            )
+            new_elo = max(0, rounded_elo)
+            updates.append(
+                {
+                    "playerId": player["id"],
+                    "eloBefore": old_elo,
+                    "eloAfter": new_elo,
+                    "changeAmount": new_elo - old_elo,
+                }
+            )
+    return updates
 
 
 def validate_positions(value: Any) -> tuple[list[str] | None, str | None]:
@@ -298,6 +408,20 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             ).fetchall()
         return jsonify([serialize_player(row) for row in rows])
 
+    @app.get("/api/players/<int:player_id>/elo-history")
+    def get_player_elo_history(player_id: int):
+        with database() as connection:
+            player = connection.execute(
+                "SELECT id FROM players WHERE id = ?", (player_id,)
+            ).fetchone()
+            if player is None:
+                return jsonify({"error": "Player not found."}), 404
+            rows = connection.execute(
+                "SELECT * FROM elo_history WHERE player_id = ? ORDER BY id",
+                (player_id,),
+            ).fetchall()
+        return jsonify([serialize_elo_history_row(row) for row in rows])
+
     @app.get("/api/matches")
     def list_matches():
         with database() as connection:
@@ -390,12 +514,7 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             # Assigned positions are stored in the match snapshot, separate
             # from the player's preferred-position profile.
             #
-            # Phase 4 ELO updates should use both pre-match team averages:
-            # expected_A = 1 / (1 + 10 ** ((average_B - average_A) / 400)).
-            # For a win/loss, actual_A is 1 or 0; each Team A player's change
-            # is round(32 * (actual_A - expected_A)). Team B uses the inverse
-            # expectation and result. This makes upsets worth more and keeps
-            # roster creation from changing ratings before a result is entered.
+            # ELO changes are applied only when a final score is submitted.
             created_at = utc_now()
             cursor = connection.execute(
                 """
@@ -417,9 +536,183 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             row = connection.execute(
                 "SELECT * FROM matches WHERE id = ?", (match_id,)
             ).fetchone()
+            if row is not None and row["status"] == "completed":
+                elo_changes = active_match_elo_changes(connection, match_id)
+            else:
+                elo_changes = []
         if row is None:
             return jsonify({"error": "Match not found."}), 404
-        return jsonify(serialize_match(row))
+        return jsonify(serialize_match(row, elo_changes))
+
+    @app.post("/api/matches/<int:match_id>/result")
+    def submit_match_result(match_id: int):
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict) or set(body) != {"scoreA", "scoreB"}:
+            return jsonify({"error": "Submit a Team A and Team B score."}), 400
+        score_a = body["scoreA"]
+        score_b = body["scoreB"]
+        if any(
+            isinstance(score, bool) or not isinstance(score, int) or score < 0
+            for score in (score_a, score_b)
+        ):
+            return jsonify({"error": "Scores must be whole numbers of zero or higher."}), 400
+        if score_a == score_b:
+            return jsonify({"error": "A volleyball match cannot end in a tie."}), 400
+
+        winner = "Team A" if score_a > score_b else "Team B"
+        with database() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            match = connection.execute(
+                "SELECT * FROM matches WHERE id = ?", (match_id,)
+            ).fetchone()
+            if match is None:
+                return jsonify({"error": "Match not found."}), 404
+            if match["status"] != "upcoming":
+                return jsonify(
+                    {"error": "This match is already completed. Reopen it before changing the result."}
+                ), 409
+
+            team_a_snapshots = json.loads(match["team_a_json"])
+            team_b_snapshots = json.loads(match["team_b_json"])
+            team_a_ids = [player["id"] for player in team_a_snapshots]
+            team_b_ids = [player["id"] for player in team_b_snapshots]
+            all_ids = team_a_ids + team_b_ids
+            placeholders = ",".join("?" for _ in all_ids)
+            rows = connection.execute(
+                f"SELECT * FROM players WHERE id IN ({placeholders})", all_ids
+            ).fetchall()
+            players_by_id = {row["id"]: serialize_player(row) for row in rows}
+            if any(player_id not in players_by_id for player_id in all_ids):
+                return jsonify(
+                    {"error": "A roster player no longer exists, so ELO cannot be updated."}
+                ), 409
+
+            team_a_players = [players_by_id[player_id] for player_id in team_a_ids]
+            team_b_players = [players_by_id[player_id] for player_id in team_b_ids]
+            elo_updates = calculate_elo_updates(team_a_players, team_b_players, winner)
+            completed_at = utc_now()
+            for update in elo_updates:
+                connection.execute(
+                    "UPDATE players SET elo = ? WHERE id = ?",
+                    (update["eloAfter"], update["playerId"]),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO elo_history (
+                        player_id, match_id, elo_before, elo_after,
+                        change_amount, action, created_at
+                    ) VALUES (?, ?, ?, ?, ?, 'result', ?)
+                    """,
+                    (
+                        update["playerId"],
+                        match_id,
+                        update["eloBefore"],
+                        update["eloAfter"],
+                        update["changeAmount"],
+                        completed_at,
+                    ),
+                )
+            connection.execute(
+                """
+                UPDATE matches
+                SET score_a = ?, score_b = ?, winner = ?,
+                    completed_at = ?, status = 'completed'
+                WHERE id = ?
+                """,
+                (score_a, score_b, winner, completed_at, match_id),
+            )
+            updated_match = connection.execute(
+                "SELECT * FROM matches WHERE id = ?", (match_id,)
+            ).fetchone()
+            elo_changes = active_match_elo_changes(connection, match_id)
+        return jsonify(serialize_match(updated_match, elo_changes))
+
+    @app.post("/api/matches/<int:match_id>/reopen")
+    def reopen_match_result(match_id: int):
+        with database() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            match = connection.execute(
+                "SELECT * FROM matches WHERE id = ?", (match_id,)
+            ).fetchone()
+            if match is None:
+                return jsonify({"error": "Match not found."}), 404
+            if match["status"] != "completed":
+                return jsonify({"error": "Only a completed match can be reopened."}), 409
+
+            elo_changes = active_match_elo_changes(connection, match_id)
+            if not elo_changes:
+                return jsonify(
+                    {"error": "This completed match has no ELO history to reverse."}
+                ), 409
+            player_ids = [change["playerId"] for change in elo_changes]
+            placeholders = ",".join("?" for _ in player_ids)
+            last_change_id = max(change["id"] for change in elo_changes)
+            later_change = connection.execute(
+                f"""
+                SELECT id FROM elo_history
+                WHERE player_id IN ({placeholders})
+                  AND id > ? AND match_id != ?
+                LIMIT 1
+                """,
+                (*player_ids, last_change_id, match_id),
+            ).fetchone()
+            if later_change is not None:
+                return jsonify(
+                    {
+                        "error": (
+                            "A later match has changed one or more of these players' ELO. "
+                            "Reopen later results first so the rating history stays correct."
+                        )
+                    }
+                ), 409
+
+            player_rows = connection.execute(
+                f"SELECT * FROM players WHERE id IN ({placeholders})", player_ids
+            ).fetchall()
+            players_by_id = {row["id"]: row for row in player_rows}
+            reversed_at = utc_now()
+            for change in elo_changes:
+                player_id = change["playerId"]
+                current_player = players_by_id.get(player_id)
+                before_reversal = (
+                    current_player["elo"] if current_player is not None
+                    else change["eloAfter"]
+                )
+                restored_elo = change["eloBefore"]
+                if current_player is not None:
+                    connection.execute(
+                        "UPDATE players SET elo = ? WHERE id = ?",
+                        (restored_elo, player_id),
+                    )
+                connection.execute(
+                    """
+                    INSERT INTO elo_history (
+                        player_id, match_id, elo_before, elo_after,
+                        change_amount, action, created_at
+                    ) VALUES (?, ?, ?, ?, ?, 'reversal', ?)
+                    """,
+                    (
+                        player_id,
+                        match_id,
+                        before_reversal,
+                        restored_elo,
+                        restored_elo - before_reversal,
+                        reversed_at,
+                    ),
+                )
+            connection.execute(
+                """
+                UPDATE matches
+                SET score_a = NULL, score_b = NULL, winner = NULL,
+                    completed_at = NULL, status = 'upcoming'
+                WHERE id = ?
+                """,
+                (match_id,),
+            )
+            reopened_match = connection.execute(
+                "SELECT * FROM matches WHERE id = ?", (match_id,)
+            ).fetchone()
+        return jsonify(serialize_match(reopened_match))
 
     @app.errorhandler(404)
     def json_not_found(_error):

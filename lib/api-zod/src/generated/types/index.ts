@@ -6,12 +6,16 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './eloHistoryEntry';
+export * from './eloHistoryEntryAction';
 export * from './healthStatus';
 export * from './match';
 export * from './matchInput';
 export * from './matchPlayerAssignment';
 export * from './matchPlayerSnapshot';
+export * from './matchResultInput';
 export * from './matchStatus';
+export * from './matchWinner';
 export * from './player';
 export * from './playerInput';
 export * from './playerUpdate';
