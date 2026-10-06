@@ -2,3 +2,4 @@
 - [Manual Lock and Fill](manual-lock-fill.md) — locks follow formation capacity; Fill may move unlocked players, including those manually placed on a team.
 - [ELO privacy scope](elo-privacy-scope.md) — user approved sign-in, player ownership and admin access to enforce private ratings.
 - [Vite runtime dependencies](vite-runtime-dependencies.md) — matching installed React versions do not guarantee matching prebundled browser runtimes.
+- [Match cadence](volleyball-product-context.md) — players play roughly 3–4 matches per week.
