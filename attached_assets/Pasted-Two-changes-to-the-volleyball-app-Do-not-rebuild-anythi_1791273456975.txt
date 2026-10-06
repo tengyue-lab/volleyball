@@ -1,0 +1,127 @@
+Two changes to the volleyball app. Do not rebuild anything or modify 
+unrelated functionality. Inspect the existing code first, explain how 
+the current preference and manual assignment systems work, then 
+implement these changes.
+
+CHANGE 1 — MINIMUM PREFERENCE COUNT
+
+Currently players must rank at least 3 positions. Change this so:
+
+- A player can save their profile with a minimum of 1 ranked preference.
+- The ranked list still works exactly the same way (rank 1 = strongest 
+  preference, rank 2 = second, etc., drag to reorder).
+- A player can still add up to 5 preferences if they want.
+- Do NOT force players to add fake preferences just to save.
+- In the UI, show a soft nudge when a player has only 1 or 2 
+  preferences, e.g., "Adding more preferences helps us build fairer 
+  teams," but do not block saving.
+- A player with only 1 preference is still eligible for matchmaking. 
+  The existing Filled-assignment + priority system should handle cases 
+  where their single preference is contested.
+- Update the data model and validation so minimum 1 is enforced, not 3.
+- Update existing tests that assume a minimum of 3, and add new tests 
+  for a player with exactly 1 preference.
+
+CHANGE 2 — MANUAL TEAM ASSIGNMENT WITH LOCK AND FILL
+
+The manual team assignment screen currently lets me place players 
+into Team A or Team B. Add a "Lock" feature and a "Fill" button.
+
+MANUAL ASSIGNMENT FLOW:
+
+1. In the manual team assignment screen, when I add a player to 
+   Team A or Team B, show a "Lock" option next to that player.
+
+2. When I press Lock on a player, a position selector appears 
+   (S, OH, MB, OPP, L). I choose the position to lock them into.
+
+3. The locked player now displays with:
+   - Their name
+   - The locked position (e.g., "Outside Hitter — Locked")
+   - A visual lock indicator (e.g., a padlock icon, distinct color)
+
+4. I can lock multiple players across both teams. For example:
+   - Team A: Theo (Outside, locked), John (Setter, locked)
+   - Team B: Joe (Libero, locked), Bob (Setter, locked), 
+     Jack (Middle, locked)
+
+5. I can also add unlocked players to either team manually. 
+   Unlocked players have no fixed position yet.
+
+6. Validation rules for locks:
+   - A locked position must be in that player's ranked preference 
+     list. If it isn't, show an error and refuse the lock.
+   - Two players on the same team cannot be locked to the same 
+     position (e.g., two Setters locked on Team A is invalid).
+   - Locking must not violate the required team composition 
+     (e.g., if Team A already has 2 Outside locked, a third 
+     Outside lock is rejected).
+
+7. Add a "Fill" button. When pressed:
+   - The app auto-assigns all remaining unlocked roster spots 
+     to players using the existing matchmaking algorithm 
+     (ranked preferences, position feasibility, specialist 
+     protection, then ELO balance).
+   - Locked players must NEVER be moved or reassigned. Their 
+     position and team are fixed.
+   - The algorithm treats locked slots as already-filled 
+     constraints and works around them.
+   - If the remaining pool cannot fill the required composition 
+     without breaking locks, show a clear error explaining 
+     which position or slot cannot be filled.
+
+8. After "Fill" completes, the "ELO Balancer" button becomes 
+   available. When pressed:
+   - It may only swap unlocked players between teams.
+   - Locked players are never swapped.
+   - It must not create invalid positional assignments.
+   - Same-position swaps are preferred.
+   - It must not override position preference satisfaction 
+     significantly just to improve ELO.
+
+9. Add a "Clear Locks" button so I can remove all locks at once 
+   and start over.
+
+DISPLAY REQUIREMENTS:
+
+On the manual assignment screen, show for each team:
+- Each player's name
+- Their assigned position (locked or pending)
+- A lock icon if locked
+- The team's total ELO and average ELO
+- The ELO difference between the two teams
+
+Show a warning banner if:
+- Any locked position is not in that player's preference list.
+- The Fill button cannot complete a valid team.
+- A lock conflicts with another lock on the same team.
+
+PRESERVE EXISTING FUNCTIONALITY:
+
+Do not change:
+- Player creation, editing, deletion (except the new minimum 1 rule)
+- Leaderboard
+- ELO calculation and history
+- Match result entry and reversal
+- Automatic auto-balance flow (this is separate from the new manual 
+  Lock + Fill flow)
+- Authentication and database functionality
+
+Add tests for:
+- Minimum 1 preference saves successfully.
+- Minimum 1 preference is eligible for matchmaking.
+- Locking a player to a position in their preference list succeeds.
+- Locking a player to a position NOT in their preference list fails.
+- Two locks to the same position on the same team fail.
+- Fill respects all locks and does not move locked players.
+- ELO Balancer does not swap locked players.
+- Fill produces a clear error when the composition cannot be 
+  completed with the current locks.
+
+First inspect the codebase and explain:
+1. How the current minimum-3 validation works.
+2. How the manual assignment screen currently works.
+3. Where the Fill and Lock logic will need to plug in.
+4. How the auto-balance algorithm will be reused for Fill.
+
+Only after explaining, implement the changes.
