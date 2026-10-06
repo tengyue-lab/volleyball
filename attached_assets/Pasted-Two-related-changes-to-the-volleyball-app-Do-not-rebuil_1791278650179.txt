@@ -1,0 +1,82 @@
+Two related changes to the volleyball app. Do not rebuild anything or 
+modify unrelated functionality. Inspect the existing code first, 
+explain how the player profile and leaderboard currently work, then 
+implement these changes.
+
+CHANGE 1 — ELO PUBLIC / PRIVATE TOGGLE
+
+Add a setting on each player's profile that controls whether their 
+ELO rating is publicly visible.
+
+Requirements:
+- Add a boolean field to the player data model, e.g. 
+  "elo_public" (default: true, so existing players stay visible 
+  unless they change it).
+- On the player edit screen, add a toggle labeled something like 
+  "Show my ELO on the public leaderboard."
+- The player can switch this on or off at any time.
+- When off:
+  - The player does not appear on the public leaderboard.
+  - Other players cannot see this player's ELO on any public-facing 
+    screen (leaderboard, match history, player list, etc.).
+  - The admin (you, when logged in) can still see the ELO on the 
+    admin/edit screens so matchmaking and ELO updates continue to work.
+- The player's own profile should always show their own ELO to 
+  themselves, even when the toggle is off.
+- ELO calculation, matchmaking, and match result updates must 
+  continue to use the player's real ELO regardless of this setting. 
+  The toggle only affects visibility, not the rating itself.
+
+CHANGE 2 — LEADERBOARD SHOWS TOP 10 PUBLIC PLAYERS ONLY
+
+Update the leaderboard so it:
+
+1. Only includes players with "elo_public" set to true.
+2. Sorts by ELO descending.
+3. Shows only the top 10 players.
+4. Does not show players who have toggled their ELO to private, even 
+   if their ELO would place them in the top 10.
+5. Does not show players ranked 11 or lower, even if they are public.
+
+Additional requirements:
+- If fewer than 10 public players exist, show only those players 
+  (no empty rows).
+- If zero public players exist, show a friendly empty state like 
+  "No public players yet."
+- Show each player's rank (1, 2, 3...), name, top preference, and ELO.
+- Do not show a "hidden" or "private" placeholder row for players 
+  who toggled off. They should simply be absent from the leaderboard.
+- The leaderboard must still update immediately when a player toggles 
+  their setting or when ELO changes after a match.
+
+PRESERVE EXISTING FUNCTIONALITY:
+
+Do not change:
+- Player creation, editing, deletion (except adding the new toggle)
+- Ranked preference system and matchmaking algorithm
+- ELO calculation and history
+- Match result entry and reversal
+- Manual Lock + Fill flow
+- Auto-balance flow
+- Authentication and database functionality
+
+Add tests for:
+- A player with elo_public = true appears on the leaderboard.
+- A player with elo_public = false does not appear on the leaderboard.
+- The leaderboard caps at 10 entries even when more than 10 public 
+  players exist.
+- Players ranked 11+ do not appear.
+- Toggling elo_public off removes the player from the leaderboard 
+  immediately.
+- Toggling elo_public on re-adds the player in the correct rank 
+  position.
+- ELO updates after a match still work regardless of the toggle.
+- The admin can still see a private player's ELO on admin screens.
+
+First inspect the codebase and explain:
+1. How the player data model currently stores fields.
+2. How the leaderboard query and display currently work.
+3. Where the new toggle should be added in the UI.
+4. How the leaderboard query needs to change to filter and limit.
+
+Only after explaining, implement the changes.
