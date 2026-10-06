@@ -31,12 +31,16 @@ import {
   assignMatchRoles,
   balanceMatchTeams,
   balanceAssignedTeams,
+  fillMatchTeams,
+  validateMatchLocks,
+  type MatchLock,
   type MatchBalanceResult,
   type MatchPosition,
   type MatchPositionAssignment,
 } from '@/match-balancing';
 import NotFound from '@/pages/not-found';
 import RankedPositionInput from '@/components/RankedPositionInput';
+import AssignedPlayer from '@/components/AssignedPlayer';
 
 const queryClient = new QueryClient();
 const positions: PositionType[] = [
@@ -155,7 +159,7 @@ function PlayerEditor({ playerId, onClose, notify }: { playerId: number | null; 
     const cleanName = name.trim();
     const rating = Number(elo);
     if (!cleanName || cleanName.length > 80) return setFormError('Enter a name between 1 and 80 characters.');
-    if (selectedPositions.length < 3 || selectedPositions.length > 5 || new Set(selectedPositions).size !== selectedPositions.length) return setFormError('Rank between 3 and 5 unique playing positions.');
+    if (selectedPositions.length < 1 || selectedPositions.length > 5 || new Set(selectedPositions).size !== selectedPositions.length) return setFormError('Rank between 1 and 5 unique playing positions.');
     if (!Number.isInteger(rating) || rating < 0) return setFormError('ELO must be a whole number of zero or higher.');
     if (playerId === null) {
       const data: PlayerInput = { name: cleanName, positions: selectedPositions, elo: rating };
@@ -201,7 +205,7 @@ function PlayerEditor({ playerId, onClose, notify }: { playerId: number | null; 
               <div className="form-field"><label htmlFor="player-elo">Starting ELO</label><input id="player-elo" type="number" min="0" step="1" value={elo} onChange={(event) => setElo(event.target.value)} data-testid="input-player-elo" /><div className="field-hint">New players start at 1000. Ratings can be adjusted here.</div></div>
               <fieldset className="form-field" style={{ border: 0, padding: 0, marginLeft: 0, marginRight: 0 }}>
                 <legend className="field-label">Ranked position preferences</legend>
-                {playerQuery.data && !playerQuery.data.preferencesConfirmed && <p className="form-error">Legacy preferences are unranked. Choose at least three, review their order, then save to confirm.</p>}
+                {playerQuery.data && !playerQuery.data.preferencesConfirmed && <p className="form-error">Legacy preferences are unranked. Choose at least one, review the order, then save to confirm.</p>}
                 {playerQuery.data?.preferredRolePriority && <p className="priority-indicator">Priority: Preferred role next match</p>}
                 <RankedPositionInput value={selectedPositions} onChange={(value) => { setSelectedPositions(value); setFormError(''); }} />
               </fieldset>
@@ -295,61 +299,6 @@ function LeaderboardPage() {
           </table></div>}
     </section>
   </main></Shell>;
-}
-
-function AssignedPlayer({
-  player,
-  roleAssignment,
-  team,
-  swapSelectionId,
-  swapSelectionTeam,
-  onSelectSwap,
-  onRemove,
-  onDragStart,
-  onDrop,
-}: {
-  player: Player;
-  roleAssignment?: MatchPositionAssignment;
-  team: 'A' | 'B';
-  swapSelectionId: number | null;
-  swapSelectionTeam: 'A' | 'B' | null;
-  onSelectSwap: (id: number) => void;
-  onRemove: (id: number) => void;
-  onDragStart: (event: ReactDragEvent<HTMLDivElement>, id: number) => void;
-  onDrop: (event: ReactDragEvent<HTMLDivElement>, targetId: number) => void;
-}) {
-  const isSelectedForSwap = swapSelectionId === player.id;
-  const isSwapTarget = swapSelectionId !== null && swapSelectionTeam !== team;
-  const swapLabel = isSelectedForSwap ? 'Cancel' : isSwapTarget ? 'Swap' : 'Choose';
-  return <div
-    className="assigned-player"
-    draggable
-    onDragStart={(event) => onDragStart(event, player.id)}
-    onDragOver={(event) => event.preventDefault()}
-    onDrop={(event) => onDrop(event, player.id)}
-    data-testid={`assigned-player-${player.id}`}
-  >
-    <div className="assigned-player-copy">
-      <strong>{player.name}</strong>
-      {roleAssignment ? <div className="assigned-role-line">
-        <strong className="assigned-role-name">{roleAssignment.assignedPosition}</strong>
-        <RoleBadge assignedPosition={roleAssignment.assignedPosition} status={roleAssignment.assignmentStatus} />
-        {roleAssignment.preferenceRank !== null && <small>Rank {roleAssignment.preferenceRank}</small>}
-      </div> : <small className="role-pending">Role assigned when both sides are complete</small>}
-      <small>Profile: {player.positions.join(' · ')}</small>
-      <span className="assigned-elo">ELO {player.elo.toLocaleString()}</span>
-    </div>
-    <div className="assigned-player-actions">
-      <button
-        className={`swap-player ${isSelectedForSwap ? 'selected' : ''}`}
-        aria-label={isSelectedForSwap ? `Cancel swap for ${player.name}` : isSwapTarget ? `Swap ${player.name} with selected player` : `Choose ${player.name} for swap`}
-        aria-pressed={isSelectedForSwap}
-        onClick={() => onSelectSwap(player.id)}
-        data-testid={`button-swap-player-${player.id}`}
-      ><ArrowLeftRight size={12} />{swapLabel}</button>
-      <button className="remove-player" aria-label={`Remove ${player.name} from Team ${team}`} onClick={() => onRemove(player.id)} data-testid={`button-unassign-${player.id}`}><X size={14} /></button>
-    </div>
-  </div>;
 }
 
 function RoleBadge({ assignedPosition, status }: { assignedPosition: MatchPosition; status: 'preferred' | 'filled' }) {
@@ -532,6 +481,7 @@ function MatchesPage() {
   const [teamB, setTeamB] = useState<number[]>([]);
   const [balanceResult, setBalanceResult] = useState<MatchBalanceResult | null>(null);
   const [balancedProfiles, setBalancedProfiles] = useState('');
+  const [locks, setLocks] = useState<MatchLock[]>([]);
   const [swapSelectionId, setSwapSelectionId] = useState<number | null>(null);
   const [expandedMatch, setExpandedMatch] = useState<number | null>(null);
   const [createError, setCreateError] = useState('');
@@ -543,16 +493,22 @@ function MatchesPage() {
   const unassignedSelected = selectedPlayers.filter((player) => !assigned.has(player.id));
   const teamAPlayers = selectedPlayers.filter((player) => teamA.includes(player.id));
   const teamBPlayers = selectedPlayers.filter((player) => teamB.includes(player.id));
+  const lockedIds = new Set(locks.map((lock) => lock.playerId));
+  let lockError = '';
+  try { validateMatchLocks(selectedPlayers, locks); } catch (error) { lockError = messageFor(error); }
   const roleAssignments = useMemo(() => {
     const selected = players.filter((player) => selectedPlayerIds.includes(player.id));
     if (![12, 13, 14].includes(selected.length)) return null;
     try {
+      validateMatchLocks(selected, locks);
+      if (locks.some((lock) => !(lock.team === 'A' ? teamA : teamB).includes(lock.playerId))) return null;
       if (balanceResult && balancedProfiles === profilesFingerprint && balanceResult.teamAIds.join(',') === teamA.join(',') && balanceResult.teamBIds.join(',') === teamB.join(',')) return balanceResult;
+      if (mode === 'manual') return null;
       return assignMatchRoles(selected, teamA, teamB);
     } catch {
       return null;
     }
-  }, [players, selectedPlayerIds, teamA, teamB, balanceResult, balancedProfiles, profilesFingerprint]);
+  }, [players, selectedPlayerIds, teamA, teamB, balanceResult, balancedProfiles, profilesFingerprint, mode, locks]);
   const roleAssignmentById = new Map(
     roleAssignments
       ? [...roleAssignments.teamAAssignments, ...roleAssignments.teamBAssignments]
@@ -580,7 +536,7 @@ function MatchesPage() {
   } else if (!teamSizesValid) {
     validation = 'Each team must have six or seven players.';
   } else if (!roleAssignments) {
-    validation = 'Assign all selected players to teams in a 6/6, 7/6, or 7/7 split.';
+    validation = mode === 'manual' ? 'Press Fill to assign the remaining slots around your locks.' : 'Assign all selected players to teams in a 6/6, 7/6, or 7/7 split.';
   } else if (selectedPlayers.some((player) => !player.preferencesConfirmed)) {
     validation = 'Confirm ranked preferences for every selected player first.';
   } else if (!selectedPlayers.some((player) => player.positions.includes(Position.Setter))) {
@@ -594,6 +550,10 @@ function MatchesPage() {
   }
 
   function togglePoolPlayer(playerId: number, checked: boolean) {
+    if (!checked && lockedIds.has(playerId)) {
+      setCreateError('Unlock this player before removing them from the selected pool.');
+      return;
+    }
     setSelectedPlayerIds((current) => {
       if (checked) {
         if (current.length >= 14 || current.includes(playerId)) return current;
@@ -621,6 +581,7 @@ function MatchesPage() {
   }
 
   function unassign(playerId: number) {
+    if (lockedIds.has(playerId)) { setCreateError('Unlock this player before removing them from their team.'); return; }
     setTeamA((current) => current.filter((id) => id !== playerId));
     setTeamB((current) => current.filter((id) => id !== playerId));
     setBalanceResult(null);
@@ -629,6 +590,7 @@ function MatchesPage() {
 
   function swapPlayers(firstId: number, secondId: number) {
     if (firstId === secondId) return;
+    if (lockedIds.has(firstId) || lockedIds.has(secondId)) { setCreateError('Locked players cannot be swapped. Unlock them first.'); setSwapSelectionId(null); return; }
     const firstIsA = teamA.includes(firstId);
     const secondIsA = teamA.includes(secondId);
     const firstIsB = teamB.includes(firstId);
@@ -665,6 +627,7 @@ function MatchesPage() {
   }
 
   function selectPlayerForSwap(playerId: number) {
+    if (lockedIds.has(playerId) || !roleAssignments) return;
     if (swapSelectionId === null || swapSelectionId === playerId) {
       setSwapSelectionId(swapSelectionId === playerId ? null : playerId);
       return;
@@ -691,6 +654,7 @@ function MatchesPage() {
 
   function autoBalance() {
     if (poolCount < 12 || poolCount > 14) return;
+    if (locks.length) { setCreateError('Clear Locks before switching to automatic balancing.'); return; }
     try {
     const result = balanceMatchTeams(selectedPlayers);
     setTeamA(result.teamAIds);
@@ -705,10 +669,44 @@ function MatchesPage() {
   function eloBalance() {
     if (!roleAssignments) return;
     try {
-      const result = balanceAssignedTeams(selectedPlayers, {...roleAssignments, teamAIds: teamA, teamBIds: teamB});
+      const result = balanceAssignedTeams(selectedPlayers, {...roleAssignments, teamAIds: teamA, teamBIds: teamB}, locks);
       setTeamA(result.teamAIds); setTeamB(result.teamBIds); setBalanceResult(result);
       setBalancedProfiles(profilesFingerprint);
       setSwapSelectionId(null); setCreateError('');
+    } catch (error) { setCreateError(messageFor(error)); }
+  }
+
+  function lockPlayer(playerId: number, position: MatchPosition): boolean {
+    const team = teamA.includes(playerId) ? 'A' : teamB.includes(playerId) ? 'B' : null;
+    if (!team) { setCreateError('Place this player on a team before locking a position.'); return false; }
+    const nextLocks: MatchLock[] = [...locks.filter((lock) => lock.playerId !== playerId), {playerId,team,position}];
+    try {
+      validateMatchLocks(selectedPlayers, nextLocks);
+      setLocks(nextLocks); setBalanceResult(null); setSwapSelectionId(null); setCreateError('');
+      return true;
+    } catch (error) { setCreateError(messageFor(error)); return false; }
+  }
+
+  function unlockPlayer(playerId: number) {
+    setLocks((current) => current.filter((lock) => lock.playerId !== playerId));
+    setBalanceResult(null); setSwapSelectionId(null); setCreateError('');
+  }
+
+  function clearLocks() {
+    setLocks([]); setBalanceResult(null); setSwapSelectionId(null); setCreateError('');
+  }
+
+  function changeMode(next: 'auto' | 'manual') {
+    if (next === mode) return;
+    if (locks.length) { setCreateError('Clear Locks or unlock every player before switching modes.'); return; }
+    setMode(next); setBalanceResult(null); setSwapSelectionId(null); setCreateError('');
+  }
+
+  function fillManualTeams() {
+    try {
+      const result = fillMatchTeams(selectedPlayers, locks);
+      setTeamA(result.teamAIds); setTeamB(result.teamBIds); setBalanceResult(result);
+      setBalancedProfiles(profilesFingerprint); setSwapSelectionId(null); setCreateError('');
     } catch (error) { setCreateError(messageFor(error)); }
   }
 
@@ -737,6 +735,7 @@ function MatchesPage() {
         setTeamA([]);
         setTeamB([]);
         setBalanceResult(null);
+        setLocks([]);
         setSwapSelectionId(null);
         setNotice('Upcoming match roster saved.');
       },
@@ -767,8 +766,8 @@ function MatchesPage() {
         {playersQuery.isLoading ? <LoadingState lines={3} /> : playersQuery.isError ? <ErrorState error={playersQuery.error} retry={() => void playersQuery.refetch()} /> :
           <>
             <div className="match-mode-switch" role="group" aria-label="Choose match assignment mode">
-              <button className={`mode-button ${mode === 'auto' ? 'active' : ''}`} aria-pressed={mode === 'auto'} onClick={() => { setMode('auto'); setBalanceResult(null); }} data-testid="button-mode-auto"><WandSparkles size={14} />Auto-Balance</button>
-              <button className={`mode-button ${mode === 'manual' ? 'active' : ''}`} aria-pressed={mode === 'manual'} onClick={() => { setMode('manual'); setBalanceResult(null); }} data-testid="button-mode-manual"><Users size={14} />Manual Assign</button>
+              <button className={`mode-button ${mode === 'auto' ? 'active' : ''}`} aria-pressed={mode === 'auto'} onClick={() => changeMode('auto')} data-testid="button-mode-auto"><WandSparkles size={14} />Auto-Balance</button>
+              <button className={`mode-button ${mode === 'manual' ? 'active' : ''}`} aria-pressed={mode === 'manual'} onClick={() => changeMode('manual')} data-testid="button-mode-manual"><Users size={14} />Manual Assign</button>
             </div>
             <div className="pool-selection">
               <div className="pool-selection-head">
@@ -783,7 +782,7 @@ function MatchesPage() {
                       <input
                         type="checkbox"
                         checked={checked}
-                        disabled={!player.preferencesConfirmed || (!checked && poolCount >= 14)}
+                        disabled={!player.preferencesConfirmed || lockedIds.has(player.id) || (!checked && poolCount >= 14)}
                         onChange={(event) => togglePoolPlayer(player.id, event.currentTarget.checked)}
                         data-testid={`checkbox-pool-player-${player.id}`}
                       />
@@ -798,7 +797,15 @@ function MatchesPage() {
               </div>}
             </div>
             <div className="pool-actions"><button className="button button-secondary" disabled={!isRosterValid} onClick={eloBalance} data-testid="button-elo-balance"><ArrowLeftRight size={14} />ELO Balancer</button><small>Same-position swaps only; assigned ranks stay fixed.</small></div>
-            {mode === 'manual' && <div className="manual-assign-head"><strong>Manual assignment</strong><span>Use + A or + B for each selected player.</span></div>}
+            {mode === 'manual' && <>
+              <div className="manual-assign-head"><strong>Manual assignment</strong><span>Place players with + A / + B and lock preferred roles. Fill may move any unlocked player.</span></div>
+              <div className="pool-actions">
+                <button className="button button-primary" onClick={fillManualTeams} data-testid="button-fill"><WandSparkles size={14} />Fill</button>
+                <button className="button button-secondary" onClick={clearLocks} disabled={!locks.length} data-testid="button-clear-locks">Clear Locks</button>
+                <small>{locks.length} locked · locked teams and positions stay fixed</small>
+              </div>
+              {(lockError || createError) && <div className="position-warning" role="alert" data-testid="warning-manual-locks"><strong>Manual roster needs attention</strong><span>{lockError || createError}</span></div>}
+            </>}
             <div className="team-columns">
               <section className="team-column" aria-label="Team A">
                 <div className="team-header"><span className="team-label a">Team A</span><span className={`count-chip ${teamA.length >= 6 && teamA.length <= 7 ? 'ready' : ''}`}>{teamA.length} / 6–7</span></div>
@@ -807,6 +814,11 @@ function MatchesPage() {
                   key={player.id}
                   player={player}
                   roleAssignment={roleAssignmentById.get(player.id)}
+                  manual={mode === 'manual'}
+                  lockedPosition={locks.find((lock) => lock.playerId === player.id)?.position}
+                  canSwap={mode === 'auto' || !!roleAssignments}
+                  onLock={(position) => lockPlayer(player.id, position)}
+                  onUnlock={() => unlockPlayer(player.id)}
                   team="A"
                   swapSelectionId={swapSelectionId}
                   swapSelectionTeam={swapSelectionId === null ? null : teamA.includes(swapSelectionId) ? 'A' : 'B'}
@@ -823,6 +835,11 @@ function MatchesPage() {
                   key={player.id}
                   player={player}
                   roleAssignment={roleAssignmentById.get(player.id)}
+                  manual={mode === 'manual'}
+                  lockedPosition={locks.find((lock) => lock.playerId === player.id)?.position}
+                  canSwap={mode === 'auto' || !!roleAssignments}
+                  onLock={(position) => lockPlayer(player.id, position)}
+                  onUnlock={() => unlockPlayer(player.id)}
                   team="B"
                   swapSelectionId={swapSelectionId}
                   swapSelectionTeam={swapSelectionId === null ? null : teamA.includes(swapSelectionId) ? 'A' : 'B'}
@@ -837,7 +854,7 @@ function MatchesPage() {
               <span>Team ELO difference</span><strong>{eloGap.toLocaleString()}</strong>
               <small>Team A total {teamAElo.toLocaleString()} · Team B total {teamBElo.toLocaleString()}</small>
             </div>
-            {balanceResult && <div className={`balance-feedback ${balanceResult.positionShortages.length ? 'warning' : 'complete'}`} role="status" data-testid="status-auto-balance">
+            {balanceResult && roleAssignments && <div className={`balance-feedback ${balanceResult.positionShortages.length ? 'warning' : 'complete'}`} role="status" data-testid="status-auto-balance">
               <strong>Exact role slots assigned</strong>
               <span>Team ELO gap: {balanceResult.totalEloGap.toLocaleString()}.</span>
               {balanceResult.positionShortages.length === 0 && <span>Every assigned role is Preferred.</span>}

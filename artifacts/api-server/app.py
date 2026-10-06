@@ -304,8 +304,8 @@ def calculate_elo_updates(
 
 
 def validate_positions(value: Any) -> tuple[list[str] | None, str | None]:
-    if not isinstance(value, list) or not 3 <= len(value) <= 5:
-        return None, "Rank between 3 and 5 positions."
+    if not isinstance(value, list) or not 1 <= len(value) <= 5:
+        return None, "Rank between 1 and 5 positions."
     if any(not isinstance(position, str) or position not in POSITIONS for position in value):
         return None, "One or more positions are not supported."
     if len(set(value)) != len(value):

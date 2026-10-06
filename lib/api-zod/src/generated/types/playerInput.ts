@@ -14,7 +14,7 @@ export interface PlayerInput {
      */
   name: string;
   /**
-     * @minItems 3
+     * @minItems 1
      * @maxItems 5
      */
   positions: Position[];

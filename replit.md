@@ -36,11 +36,12 @@ A local-first volleyball roster and match setup app for managing player position
 
 ## Product
 
-- Players rank 3–5 unique preferences; legacy profiles keep their lists but must explicitly save ranked preferences before a new match. New players start at ELO 1000; leaderboard sorts by ELO.
+- Players rank 1–5 unique preferences; legacy profiles keep their lists but must explicitly save ranked preferences before a new match. One- and two-role profiles show a non-blocking suggestion to add more preferences. New players start at ELO 1000; leaderboard sorts by ELO.
 - Phase 2: create upcoming matches from 12, 13, or 14 selected players, with exact six-player roles (1 Setter, 2 Outside Hitters, 2 Middle Blockers, 1 Opposite). Seven-player sides add 1 assigned Libero role.
 - Match creation supports a selected player pool, auto-balancing or manual assignment, Preferred/Filled role badges and shortage warnings, live team ELO totals/averages, and player swaps. For 13, auto-balance gives the Libero to the lower-ELO six-player core when possible.
 - Upcoming scores are null. Completed Filled assignments grant priority; a later completed Preferred assignment clears it. Saving rosters or balancing never changes priority.
 - Matching maximizes Preferred coverage, minimizes rank displacement (top-choice priority bonus of one rank), resolves compensation ties by ELO/wait/ID, protects constrained players, then chooses high-ELO Filled cover. Team ELO balancing uses fixed-role exchanges only.
+- Manual Lock + Fill fixes a locked player's team and preferred role within formation capacity (two OH/MB, one S/OPP/L). Fill may move every unlocked player. Draft changes invalidate Fill; only a fresh filled roster enables ELO balancing and saving. Clear Locks preserves the pool and team placement.
 
 ## User preferences
 

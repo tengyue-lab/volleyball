@@ -4,6 +4,8 @@ import {
   assignMatchRoles,
   balanceMatchTeams,
   balanceAssignedTeams,
+  fillMatchTeams,
+  validateMatchLocks,
 } from '../src/match-balancing.ts';
 
 const OLD_ROLE_POOL = [
@@ -197,14 +199,106 @@ test('input shuffle has no effect on canonical output for 12, 13 and 14', () => 
   }
 });
 
-test('confirmation, 3–5 unique supported ranks and zero Setter are hard gates', () => {
+test('confirmation, 1–5 unique supported ranks and zero Setter are hard gates', () => {
   for (const change of [
-    {preferencesConfirmed:false}, {positions:['Setter','Opposite']},
+    {preferencesConfirmed:false}, {positions:[]},
+    {positions:['Setter','Outside Hitter','Middle Blocker','Opposite','Libero','Setter']},
     {positions:['Setter','Setter','Opposite']}, {positions:['Setter','Unsupported','Opposite']},
   ]) assert.throws(() => balanceMatchTeams(ROLE_POOL.map((p,i) => i === 0 ? {...p,...change} : p)), /confirm/);
   assert.throws(() => balanceMatchTeams(ROLE_POOL.map((p) => ({...p, positions:['Outside Hitter','Middle Blocker','Opposite']}))), /Setter/);
   assert.throws(() => balanceMatchTeams(ROLE_POOL.slice(0,11)), /12/);
   assert.throws(() => balanceMatchTeams([...ROLE_POOL.slice(0,11), ROLE_POOL[0]]), /duplicate/);
+});
+
+const SINGLE_ROLE_POOL = OLD_ROLE_POOL.map((p) => ({...p, preferencesConfirmed:true}));
+const locked = (playerId, team, position) => ({playerId,team,position});
+
+test('single-preference profiles match without invented alternatives and preserve auto output', () => {
+  const before = structuredClone(SINGLE_ROLE_POOL);
+  const result = balanceMatchTeams(SINGLE_ROLE_POOL);
+  assert.equal(result.preferredCount,12);
+  assert.equal(result.totalEloGap,0);
+  assertFormation(result.teamAAssignments,6); assertFormation(result.teamBAssignments,6);
+  assert.deepEqual(SINGLE_ROLE_POOL,before);
+  assert.deepEqual(fillMatchTeams(ROLE_POOL,[]),balanceMatchTeams(ROLE_POOL));
+  for (const a of assignmentsById(result).values()) assert.equal(a.preferenceRank,1);
+});
+
+test('single-preference contested roles keep Filled fallback and compensation scoring', () => {
+  const pool = SINGLE_ROLE_POOL.map((p) => ({...p,positions:['Setter'],elo:1000+p.id,
+    preferredRolePriority:p.id===1,prioritySince:p.id===1?'2026-01-01':null}));
+  const result = fillMatchTeams(pool,[]);
+  assert.equal(result.preferredCount,2);
+  assert.equal(assignmentsById(result).get(1).assignedPosition,'Setter');
+  assert.equal(result.positionShortages.reduce((n,s) => n+s.filledCount,0),10);
+});
+
+test('lock validity and formation capacity allow two OH/MB, never two S or unselected roles', () => {
+  const base = [locked(3,'A','Outside Hitter'),locked(4,'A','Outside Hitter')];
+  assert.doesNotThrow(() => validateMatchLocks(SINGLE_ROLE_POOL,base));
+  assert.doesNotThrow(() => validateMatchLocks(SINGLE_ROLE_POOL,[locked(7,'B','Middle Blocker'),locked(8,'B','Middle Blocker')]));
+  assert.throws(() => validateMatchLocks(SINGLE_ROLE_POOL,[...base,locked(5,'A','Outside Hitter')]),/Team A: Outside Hitter.*only 2/);
+  assert.throws(() => validateMatchLocks(SINGLE_ROLE_POOL,[locked(1,'A','Setter'),locked(2,'A','Setter')]),/Team A: Setter.*only 1/);
+  assert.throws(() => validateMatchLocks(SINGLE_ROLE_POOL,[locked(3,'A','Setter')]),/ranked preferences/);
+  assert.throws(() => validateMatchLocks(SINGLE_ROLE_POOL,[locked(1,'A','Setter'),locked(1,'B','Setter')]),/multiple/);
+  assert.throws(() => validateMatchLocks(SINGLE_ROLE_POOL,[locked(99,'A','Setter')]),/selected pool/);
+});
+
+test('Fill preserves every locked team and role, frees unlocked membership, and is deterministic', () => {
+  const locks = [locked(1,'A','Setter'),locked(3,'A','Outside Hitter'),locked(4,'A','Outside Hitter'),
+    locked(2,'B','Setter'),locked(7,'B','Middle Blocker')];
+  const beforePool=structuredClone(SINGLE_ROLE_POOL), beforeLocks=structuredClone(locks);
+  const result=fillMatchTeams(SINGLE_ROLE_POOL,locks), roles=assignmentsById(result);
+  for (const lock of locks) {
+    assert.ok((lock.team==='A'?result.teamAIds:result.teamBIds).includes(lock.playerId));
+    assert.equal(roles.get(lock.playerId).assignedPosition,lock.position);
+    assert.equal(roles.get(lock.playerId).assignmentStatus,'preferred');
+    assert.equal(roles.get(lock.playerId).preferenceRank,1);
+  }
+  assertFormation(result.teamAAssignments,6); assertFormation(result.teamBAssignments,6);
+  assert.equal(result.preferredCount,12);
+  assert.deepEqual(fillMatchTeams([...SINGLE_ROLE_POOL].reverse(),[...locks].reverse()),result);
+  assert.deepEqual(SINGLE_ROLE_POOL,beforePool); assert.deepEqual(locks,beforeLocks);
+});
+
+test('ELO balancing excludes locked players and preserves all assigned ranks/statuses', () => {
+  const a=[2,5,6,9,10,12],b=[1,3,4,7,8,11];
+  const roster={...assignMatchRoles(SINGLE_ROLE_POOL,a,b),teamAIds:a,teamBIds:b};
+  const locks=[locked(2,'A','Setter'),locked(12,'A','Opposite')];
+  const result=balanceAssignedTeams(SINGLE_ROLE_POOL,roster,locks);
+  assert.ok(result.teamAIds.includes(2)); assert.ok(result.teamAIds.includes(12));
+  assert.ok(result.totalEloGap<roster.totalEloGap);
+  assert.deepEqual(assignmentsById(result),assignmentsById(roster));
+  const allLocks=[...roster.teamAAssignments.map((a)=>locked(a.playerId,'A',a.assignedPosition)),
+    ...roster.teamBAssignments.map((a)=>locked(a.playerId,'B',a.assignedPosition))];
+  const frozen=balanceAssignedTeams(SINGLE_ROLE_POOL,roster,allLocks);
+  assert.equal(frozen.totalEloGap,roster.totalEloGap);
+  assert.deepEqual([...frozen.teamAIds].sort((a,b)=>a-b),[...a].sort((a,b)=>a-b));
+  assert.throws(()=>balanceAssignedTeams(SINGLE_ROLE_POOL,roster,[locked(1,'A','Setter')]),/keep their team and position/);
+});
+
+test('a non-first preferred role may be locked and retains its exact saved rank', () => {
+  const player=ROLE_POOL[0], position=player.positions[1];
+  const result=fillMatchTeams(ROLE_POOL,[locked(player.id,'A',position)]);
+  const role=assignmentsById(result).get(player.id);
+  assert.equal(role.assignedPosition,position);
+  assert.equal(role.assignmentStatus,'preferred');
+  assert.equal(role.preferenceRank,2);
+});
+
+test('Libero locks enforce team sizes and report the impossible slot clearly', () => {
+  const pool=[...SINGLE_ROLE_POOL,{id:13,positions:['Libero'],elo:1000,preferencesConfirmed:true},
+    {id:14,positions:['Libero'],elo:1000,preferencesConfirmed:true}];
+  assert.throws(()=>fillMatchTeams(pool.slice(0,13),[locked(13,'A','Libero'),locked(3,'B','Libero')]),/ranked preferences/);
+  const twoLiberoPool=pool.slice(0,13).map((p)=>p.id===3?{...p,positions:['Libero','Outside Hitter']}:p);
+  assert.throws(()=>fillMatchTeams(twoLiberoPool,[locked(13,'A','Libero'),locked(3,'B','Libero')]),/only one Libero slot/);
+  const twelve=pool.filter((p)=>![11,12].includes(p.id));
+  assert.throws(()=>fillMatchTeams(twelve,[locked(13,'A','Libero')]),/Libero.*only 0/);
+  const thirteen=fillMatchTeams(pool.slice(0,13),[locked(13,'B','Libero')]);
+  assert.equal(thirteen.teamBIds.length,7); assert.ok(thirteen.teamBIds.includes(13));
+  assert.equal(assignmentsById(thirteen).get(13).assignedPosition,'Libero');
+  const fourteen=fillMatchTeams(pool,[locked(13,'A','Libero'),locked(14,'B','Libero')]);
+  assertFormation(fourteen.teamAAssignments,7); assertFormation(fourteen.teamBAssignments,7);
 });
 
 test('one eligible Setter permits the second Setter to be Filled', () => {

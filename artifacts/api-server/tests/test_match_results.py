@@ -195,14 +195,38 @@ class MatchResultTests(unittest.TestCase):
     def test_ranked_positions_round_trip_and_validation(self):
         ranks = ["Libero", "Opposite", "Setter", "Middle Blocker", "Outside Hitter"]
         player_id = self.player_ids[0]
-        for n in [3, 4, 5]:
+        for n in [1, 2, 3, 4, 5]:
             response = self.client.patch(f"/api/players/{player_id}", json={"positions": ranks[:n]})
             self.assertEqual(response.status_code, 200)
             self.assertEqual(self.profile(player_id)["positions"], ranks[:n])
             self.assertTrue(response.get_json()["preferencesConfirmed"])
-        for bad in [[], ["Setter"], ["Setter", "Setter", "Libero"], ["Setter", "Libero", "Nope"], ranks + ["Setter"]]:
+        for bad in [[], ["Setter", "Setter", "Libero"], ["Setter", "Libero", "Nope"], ranks + ["Setter"]]:
             self.assertEqual(self.client.patch(f"/api/players/{player_id}", json={"positions": bad}).status_code, 400)
             self.assertEqual(self.client.post("/api/players", json={"name": "Invalid", "positions": bad}).status_code, 400)
+
+    def test_single_preference_create_edit_matching_and_filled_priority(self):
+        created = self.client.post("/api/players", json={"name": "One preference", "positions": ["Setter"]})
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(created.get_json()["positions"], ["Setter"])
+        self.assertTrue(created.get_json()["preferencesConfirmed"])
+        for player_id in self.player_ids:
+            updated = self.client.patch(f"/api/players/{player_id}", json={"positions": ["Setter"]})
+            self.assertEqual(updated.status_code, 200)
+        match = self.create_match()
+        target = self.player_ids[5]
+        self.assertEqual(match["teamA"][5]["assignmentStatus"], "filled")
+        self.assertIsNone(match["teamA"][5]["preferenceRank"])
+        self.assertFalse(self.profile(target)["preferredRolePriority"])
+        self.complete(match)
+        self.assertTrue(self.profile(target)["preferredRolePriority"])
+        self.client.patch(f"/api/players/{target}", json={"positions": ["Opposite"]})
+        preferred = self.create_match()
+        self.assertEqual(preferred["teamA"][5]["preferenceRank"], 1)
+        self.assertTrue(self.profile(target)["preferredRolePriority"])
+        self.complete(preferred)
+        self.assertFalse(self.profile(target)["preferredRolePriority"])
+        self.assertEqual(self.client.post(f"/api/matches/{preferred['id']}/reopen").status_code, 200)
+        self.assertTrue(self.profile(target)["preferredRolePriority"])
 
     def test_saved_snapshot_audit_no_priority_until_completion(self):
         match = self.create_match()

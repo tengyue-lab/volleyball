@@ -47,6 +47,12 @@ export interface MatchBalanceResult extends MatchRoleAssignments {
   teamBIds: number[];
 }
 
+export interface MatchLock {
+  playerId: number;
+  team: 'A' | 'B';
+  position: MatchPosition;
+}
+
 interface TeamPlan {
   assignments: MatchPositionAssignment[];
   preferredCount: number;
@@ -105,6 +111,7 @@ function assignTeamRoles(
   players: readonly MatchBalancePlayer[],
   requiredCounts: Record<MatchPosition, number>,
   priorityWeights: ReadonlyMap<number, number>,
+  lockedRoles: ReadonlyMap<number, MatchPosition> = new Map(),
 ): TeamPlan {
   const orderedPlayers = [...players].sort((a, b) => a.id - b.id);
   const initialCounts = MATCH_POSITIONS.map((position) => requiredCounts[position]);
@@ -128,6 +135,7 @@ function assignTeamRoles(
     for (let roleIndex = 0; roleIndex < MATCH_POSITIONS.length; roleIndex += 1) {
       if (remaining[roleIndex] === 0) continue;
       const position = MATCH_POSITIONS[roleIndex];
+      if (lockedRoles.has(player.id) && lockedRoles.get(player.id) !== position) continue;
       const nextCounts = [...remaining];
       nextCounts[roleIndex] -= 1;
       const suffix = bestPlan(index + 1, nextCounts);
@@ -252,6 +260,7 @@ function makeRoleAssignments(
   teamAPlayers: readonly MatchBalancePlayer[],
   teamBPlayers: readonly MatchBalancePlayer[],
   playerCount: number,
+  lockedRoles: ReadonlyMap<number, MatchPosition> = new Map(),
 ): MatchRoleAssignments & { filledPlayerElo: number } {
   const pending = [...teamAPlayers, ...teamBPlayers].filter((player) => player.preferredRolePriority)
     .sort((a, b) => b.elo - a.elo || (a.prioritySince ?? '').localeCompare(b.prioritySince ?? '') || a.id - b.id);
@@ -262,11 +271,13 @@ function makeRoleAssignments(
     teamAPlayers,
     teamAPlayers.length === 7 ? SEVEN_PLAYER_COUNTS : SIX_PLAYER_COUNTS,
     priorityWeights,
+    lockedRoles,
   );
   const teamBPlan = assignTeamRoles(
     teamBPlayers,
     teamBPlayers.length === 7 ? SEVEN_PLAYER_COUNTS : SIX_PLAYER_COUNTS,
     priorityWeights,
+    lockedRoles,
   );
   const roleById = new Map(
     [...teamAPlan.assignments, ...teamBPlan.assignments]
@@ -387,6 +398,57 @@ function compareUnderdogToSeed(candidate: BalanceCandidate, seed: BalanceCandida
 export function balanceMatchTeams(
   players: readonly MatchBalancePlayer[],
 ): MatchBalanceResult {
+  return buildMatchTeams(players, []);
+}
+
+/** Manual Fill: only locks constrain team membership and played roles. */
+export function fillMatchTeams(
+  players: readonly MatchBalancePlayer[],
+  locks: readonly MatchLock[],
+): MatchBalanceResult {
+  return buildMatchTeams(players, locks);
+}
+
+/** Validate a draft lock even before all selected players are placed. */
+export function validateMatchLocks(
+  players: readonly MatchBalancePlayer[],
+  locks: readonly MatchLock[],
+): void {
+  const ids = new Set<number>();
+  for (const lock of locks) {
+    const player = players.find((p) => p.id === lock.playerId);
+    if (!player) throw new Error(`Locked player ${lock.playerId} is not in the selected pool. Unlock them before changing the pool.`);
+    if (ids.has(lock.playerId)) throw new Error(`Player ${lock.playerId} cannot have multiple locks.`);
+    ids.add(lock.playerId);
+    if (!['A', 'B'].includes(lock.team) || !MATCH_POSITIONS.includes(lock.position)) throw new Error('Choose a valid team and locked position.');
+    if (!player.positions.includes(lock.position)) throw new Error(`${lock.position} is not in player ${lock.playerId}'s ranked preferences. Choose a preferred position or unlock them.`);
+  }
+  for (const team of ['A','B'] as const) {
+    const side = locks.filter((lock) => lock.team === team);
+    for (const role of MATCH_POSITIONS) {
+      const count = side.filter((lock) => lock.position === role).length;
+      const capacity = role === 'Libero' && players.length === 12 ? 0 : SEVEN_PLAYER_COUNTS[role];
+      if (count > capacity) throw new Error(`Team ${team}: ${role} has ${count} locks but only ${capacity} slot${capacity === 1 ? '' : 's'}. Unlock a player to continue.`);
+    }
+    if (side.length > (players.length === 12 ? 6 : 7)) throw new Error(`Team ${team} has too many locked slots.`);
+  }
+  if (players.length === 13 && locks.some((l) => l.team === 'A' && l.position === 'Libero') && locks.some((l) => l.team === 'B' && l.position === 'Libero')) {
+    throw new Error('A 13-player roster has only one Libero slot. Both teams cannot lock a Libero.');
+  }
+  if (players.length === 13) {
+    for (const team of ['A','B'] as const) {
+      const other = team === 'A' ? 'B' : 'A';
+      if (locks.filter((l) => l.team === team).length > 6 && locks.some((l) => l.team === other && l.position === 'Libero')) {
+        throw new Error(`Team ${other}'s Libero requires seven players, leaving only six slots for Team ${team}. Unlock one of Team ${team}'s seven players or the Team ${other} Libero.`);
+      }
+    }
+  }
+}
+
+function buildMatchTeams(
+  players: readonly MatchBalancePlayer[],
+  locks: readonly MatchLock[],
+): MatchBalanceResult {
   validateRankedPool(players);
   players = [...players].sort((a, b) => a.id - b.id);
   if (![12, 13, 14].includes(players.length)) {
@@ -398,6 +460,8 @@ export function balanceMatchTeams(
   if (players.some((player) => !Number.isFinite(player.elo) || player.elo < 0)) {
     throw new Error('Every selected player must have a valid non-negative ELO rating.');
   }
+  validateMatchLocks(players, locks);
+  const lockedRoles = new Map(locks.map((lock) => [lock.playerId, lock.position]));
 
   const playerCount = players.length;
   const teamASizes = playerCount === 13 ? [6, 7] : [playerCount / 2];
@@ -409,8 +473,10 @@ export function balanceMatchTeams(
     for (const teamA of combinations(players, teamASize)) {
       const teamAIds = teamA.map((player) => player.id);
       const teamAIdSet = new Set(teamAIds);
+      if (locks.some((lock) => teamAIdSet.has(lock.playerId) !== (lock.team === 'A'))) continue;
       const teamB = players.filter((player) => !teamAIdSet.has(player.id));
-      const planned = makeRoleAssignments(teamA, teamB, playerCount);
+      if (locks.some((lock) => lock.position === 'Libero' && (lock.team === 'A' ? teamA.length : teamB.length) !== 7)) continue;
+      const planned = makeRoleAssignments(teamA, teamB, playerCount, lockedRoles);
       const assignments = [
         ...planned.teamAAssignments,
         ...planned.teamBAssignments,
@@ -435,20 +501,29 @@ export function balanceMatchTeams(
       if (!seed || compareSeedCandidates(candidate, seed) < 0) seed = candidate;
     }
   }
-  if (!seed) throw new Error('No team split could be generated for the selected pool.');
-  return balanceAssignedTeams(players, seed);
+  if (!seed) throw new Error('The locked team slots cannot fit a 6/6, 6/7, or 7/7 formation. Unlock a player or a Libero slot and try Fill again.');
+  return balanceAssignedTeams(players, seed, locks);
 }
 
 /** Improve ELO without reassigning any player's role, rank, or compensation. */
 export function balanceAssignedTeams(
   players: readonly MatchBalancePlayer[],
   roster: MatchBalanceResult,
+  locks: readonly MatchLock[] = [],
 ): MatchBalanceResult {
   validateRankedPool(players);
   players = [...players].sort((a, b) => a.id - b.id);
   // Validate membership and formation before accepting a fixed-role roster.
   assignMatchRoles(players, roster.teamAIds, roster.teamBIds);
   const allRosterAssignments = [...roster.teamAAssignments, ...roster.teamBAssignments];
+  validateMatchLocks(players, locks);
+  for (const lock of locks) {
+    const side = lock.team === 'A' ? roster.teamAIds : roster.teamBIds;
+    if (!side.includes(lock.playerId) || allRosterAssignments.find((a) => a.playerId === lock.playerId)?.assignedPosition !== lock.position) {
+      throw new Error(`Team ${lock.team}: locked ${lock.position} player ${lock.playerId} must keep their team and position. Run Fill again.`);
+    }
+  }
+  const lockedIds = new Set(locks.map((lock) => lock.playerId));
   if (allRosterAssignments.length !== players.length || new Set(allRosterAssignments.map((a) => a.playerId)).size !== players.length) {
     throw new Error('Every selected player needs exactly one fixed role.');
   }
@@ -543,6 +618,7 @@ export function balanceAssignedTeams(
 
     for (const playerAId of teamAIds) {
       for (const playerBId of teamBIds) {
+        if (lockedIds.has(playerAId) || lockedIds.has(playerBId)) continue;
         if (!sameRoleCanSwap(playerAId, playerBId, roleById)) continue;
         const nextTeamAIds = teamAIds
           .filter((id) => id !== playerAId)
@@ -573,10 +649,10 @@ export function balanceAssignedTeams(
 
 function validateRankedPool(players: readonly MatchBalancePlayer[]) {
   for (const player of players) {
-    if (!player.preferencesConfirmed || player.positions.length < 3 || player.positions.length > 5 ||
+    if (!player.preferencesConfirmed || player.positions.length < 1 || player.positions.length > 5 ||
       new Set(player.positions).size !== player.positions.length ||
       player.positions.some((role) => !MATCH_POSITIONS.includes(role as MatchPosition))) {
-      throw new Error('Every selected player must confirm 3–5 unique ranked preferences before a new match.');
+      throw new Error('Every selected player must confirm 1–5 unique ranked preferences before a new match.');
     }
     if (!Number.isFinite(player.elo) || player.elo < 0) throw new Error('Every selected player needs a valid non-negative ELO.');
   }

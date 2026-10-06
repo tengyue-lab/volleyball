@@ -64,7 +64,8 @@ export default function RankedPositionInput({ value, onChange }: { value: Positi
 
   return (
     <div className="rpi" data-testid="ranked-position-input">
-      <p className="rpi-help">Choose 3–5 unique roles, then order them. Rank 1 is your strongest.</p>
+      <p className="rpi-help">Choose 1–5 unique roles, then order them. Rank 1 is your strongest.</p>
+      {value.length > 0 && value.length < 3 && <p className="field-hint" data-testid="preference-nudge">Adding more preferences helps us build fairer teams.</p>}
       <div className="position-options">
         {ROLES.map((p) => (
           <label className="position-option" key={p}>

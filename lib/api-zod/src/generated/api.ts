@@ -38,7 +38,6 @@ export const ListPlayersResponse = zod.array(ListPlayersResponseItem)
  */
 export const createPlayerBodyNameMax = 80;
 
-export const createPlayerBodyPositionsMin = 3;
 export const createPlayerBodyPositionsMax = 5;
 
 export const createPlayerBodyEloDefault = 1000;
@@ -48,7 +47,7 @@ export const createPlayerBodyEloMin = 0;
 
 export const CreatePlayerBody = zod.object({
   "name": zod.string().min(1).max(createPlayerBodyNameMax),
-  "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])).min(createPlayerBodyPositionsMin).max(createPlayerBodyPositionsMax),
+  "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])).min(1).max(createPlayerBodyPositionsMax),
   "elo": zod.number().int().min(createPlayerBodyEloMin).default(createPlayerBodyEloDefault)
 })
 
@@ -92,7 +91,6 @@ export const UpdatePlayerParams = zod.object({
 
 export const updatePlayerBodyNameMax = 80;
 
-export const updatePlayerBodyPositionsMin = 3;
 export const updatePlayerBodyPositionsMax = 5;
 
 export const updatePlayerBodyEloMin = 0;
@@ -101,7 +99,7 @@ export const updatePlayerBodyEloMin = 0;
 
 export const UpdatePlayerBody = zod.object({
   "name": zod.string().min(1).max(updatePlayerBodyNameMax).optional(),
-  "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])).min(updatePlayerBodyPositionsMin).max(updatePlayerBodyPositionsMax).optional(),
+  "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])).min(1).max(updatePlayerBodyPositionsMax).optional(),
   "elo": zod.number().int().min(updatePlayerBodyEloMin).optional()
 })
 
