@@ -1,1 +1,2 @@
 - [Filled-role priority](filled-role-priority.md) — keep shortage fallback; preferred-role priority changes on match completion, not roster save.
+- [Manual Lock and Fill](manual-lock-fill.md) — locks follow formation capacity; Fill may move unlocked players, including those manually placed on a team.
