@@ -1,0 +1,1 @@
+- [Filled-role priority](filled-role-priority.md) — keep shortage fallback; preferred-role priority changes on match completion, not roster save.
