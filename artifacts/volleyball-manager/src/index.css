@@ -434,6 +434,8 @@
 }
 
 /* Court-side paper / forest palette */
+.priority-indicator{color:#245c4c;font-size:10px;font-weight:700;margin-top:6px}
+.legacy-indicator{color:#8d491c;font-size:10px;margin-bottom:6px}
 :root {
   --background: 42 31% 95%; --foreground: 211 35% 17%; --border: 39 20% 83%; --input: 39 20% 83%;
   --card: 42 40% 99%; --card-foreground: 211 35% 17%; --card-border: 39 20% 85%;

@@ -17,6 +17,7 @@ import {
   getGetLeaderboardQueryKey,
   getGetMatchQueryKey,
   getGetPlayerQueryKey,
+  getGetPlayerEloHistoryQueryKey,
   getListMatchesQueryKey,
   getListPlayersQueryKey,
 } from '@workspace/api-client-react';
@@ -29,11 +30,13 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import {
   assignMatchRoles,
   balanceMatchTeams,
+  balanceAssignedTeams,
   type MatchBalanceResult,
   type MatchPosition,
   type MatchPositionAssignment,
 } from '@/match-balancing';
 import NotFound from '@/pages/not-found';
+import RankedPositionInput from '@/components/RankedPositionInput';
 
 const queryClient = new QueryClient();
 const positions: PositionType[] = [
@@ -146,17 +149,14 @@ function PlayerEditor({ playerId, onClose, notify }: { playerId: number | null; 
   }, [playerId, playerQuery.data]);
 
   const saving = createPlayer.isPending || updatePlayer.isPending;
-  function togglePosition(position: PositionType) {
-    setSelectedPositions((current) => current.includes(position) ? current.filter((item) => item !== position) : [...current, position]);
-  }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError('');
     const cleanName = name.trim();
     const rating = Number(elo);
     if (!cleanName || cleanName.length > 80) return setFormError('Enter a name between 1 and 80 characters.');
-    if (!selectedPositions.length) return setFormError('Choose at least one playing position.');
-    if (!Number.isFinite(rating) || rating < 0) return setFormError('ELO must be zero or higher.');
+    if (selectedPositions.length < 3 || selectedPositions.length > 5 || new Set(selectedPositions).size !== selectedPositions.length) return setFormError('Rank between 3 and 5 unique playing positions.');
+    if (!Number.isInteger(rating) || rating < 0) return setFormError('ELO must be a whole number of zero or higher.');
     if (playerId === null) {
       const data: PlayerInput = { name: cleanName, positions: selectedPositions, elo: rating };
       createPlayer.mutate({ data }, {
@@ -200,8 +200,10 @@ function PlayerEditor({ playerId, onClose, notify }: { playerId: number | null; 
               <div className="form-field"><label htmlFor="player-name">Player name</label><input id="player-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={80} autoFocus placeholder="e.g. Jordan Lee" data-testid="input-player-name" /></div>
               <div className="form-field"><label htmlFor="player-elo">Starting ELO</label><input id="player-elo" type="number" min="0" step="1" value={elo} onChange={(event) => setElo(event.target.value)} data-testid="input-player-elo" /><div className="field-hint">New players start at 1000. Ratings can be adjusted here.</div></div>
               <fieldset className="form-field" style={{ border: 0, padding: 0, marginLeft: 0, marginRight: 0 }}>
-                <legend className="field-label">Playing positions</legend>
-                <div className="position-options">{positions.map((position) => <label className="position-option" key={position}><input type="checkbox" checked={selectedPositions.includes(position)} onChange={() => togglePosition(position)} data-testid={`checkbox-position-${position.toLowerCase().replaceAll(' ', '-')}`} />{position}</label>)}</div>
+                <legend className="field-label">Ranked position preferences</legend>
+                {playerQuery.data && !playerQuery.data.preferencesConfirmed && <p className="form-error">Legacy preferences are unranked. Choose at least three, review their order, then save to confirm.</p>}
+                {playerQuery.data?.preferredRolePriority && <p className="priority-indicator">Priority: Preferred role next match</p>}
+                <RankedPositionInput value={selectedPositions} onChange={(value) => { setSelectedPositions(value); setFormError(''); }} />
               </fieldset>
               {formError && <div className="form-error" role="alert">{formError}</div>}
               <div className="modal-actions"><button type="button" className="button button-secondary" onClick={onClose} data-testid="button-cancel-player">Cancel</button><button className="button button-primary" type="submit" disabled={saving} data-testid="button-save-player">{saving ? 'Saving…' : playerId === null ? 'Add player' : 'Save changes'}</button></div>
@@ -242,7 +244,7 @@ function PlayersPage() {
     <PageHeader eyebrow="Roster / all players" title="Players" description="Your club roster, all in one place. Keep positions and ratings current for the next match.">
       <button className="button button-primary" onClick={() => setEditor('new')} data-testid="button-add-player"><Plus size={15} /> Add player</button>
     </PageHeader>
-    <div className="summary-strip"><span className="summary-num" data-testid="text-player-count">{players.length.toString().padStart(2, '0')}</span> players on roster <span aria-hidden="true">/</span> ELO ratings update after results are introduced</div>
+    <div className="summary-strip"><span className="summary-num" data-testid="text-player-count">{players.length.toString().padStart(2, '0')}</span> players on roster <span aria-hidden="true">/</span> ELO ratings update after completed results</div>
     <section className="panel" aria-label="Player roster">
       <div className="panel-head">
         <div><h2 className="panel-title">Club roster</h2><div className="panel-note">Player profiles, playing positions and current rating</div></div>
@@ -255,8 +257,8 @@ function PlayersPage() {
             <div className="table-wrap"><table className="data-table">
               <thead><tr><th scope="col">Player</th><th scope="col">Positions</th><th scope="col">ELO rating</th><th scope="col" style={{ textAlign: 'right' }}>Actions</th></tr></thead>
               <tbody>{filteredPlayers.map((player) => <tr key={player.id} data-testid={`row-player-${player.id}`}>
-                <td><div className="player-name">{player.name}</div><div className="player-id">PLAYER / {String(player.id).padStart(3, '0')}</div></td>
-                <td><div className="tag-list">{player.positions.map((position) => <span className="tag" key={position}>{position}</span>)}</div></td>
+                <td><div className="player-name">{player.name}</div><div className="player-id">PLAYER / {String(player.id).padStart(3, '0')}</div>{player.preferredRolePriority && <div className="priority-indicator">Priority: Preferred role next match</div>}</td>
+                <td>{!player.preferencesConfirmed && <div className="legacy-indicator">Confirm preferences before next match</div>}<div className="tag-list">{player.positions.map((position, index) => <span className="tag" key={position}>{player.preferencesConfirmed ? `${index + 1}. ` : ''}{position}</span>)}</div></td>
                 <td className="rating" data-testid={`text-player-elo-${player.id}`}>{player.elo.toLocaleString()}</td>
                 <td><div className="row-actions"><button className="button button-quiet" onClick={() => setEditor(player.id)} aria-label={`Edit ${player.name}`} data-testid={`button-edit-player-${player.id}`}><Pencil size={14} /></button><button className="button button-quiet button-danger" onClick={() => removePlayer(player)} aria-label={`Delete ${player.name}`} disabled={deletePlayer.isPending} data-testid={`button-delete-player-${player.id}`}><Trash2 size={15} /></button></div></td>
               </tr>)}</tbody>
@@ -273,9 +275,9 @@ function LeaderboardPage() {
   const topRating = ranked[0]?.elo ?? 0;
   const average = ranked.length ? Math.round(ranked.reduce((sum, player) => sum + player.elo, 0) / ranked.length) : 0;
   return <Shell><main className="content">
-    <PageHeader eyebrow="Ratings / current standings" title="ELO leaderboard" description="A quick read on the club’s current ratings. ELO changes are not applied until match results are supported." />
+    <PageHeader eyebrow="Ratings / current standings" title="ELO leaderboard" description="Current club ratings, updated after completed match results." />
     <div className="leader-head">
-      <div className="leader-feature"><div className="eyebrow">Club standings</div><h2>Every point has a player behind it.</h2><p>Ratings are shown as recorded. New players begin at 1000; this phase does not change ratings after a match.</p></div>
+      <div className="leader-feature"><div className="eyebrow">Club standings</div><h2>Every point has a player behind it.</h2><p>New players begin at 1000. Completed results update each player's rating.</p></div>
       <div className="leader-stat"><span>Highest rating</span><strong data-testid="text-highest-elo">{query.isLoading ? '—' : topRating.toLocaleString()}</strong><span>Club average <b>{query.isLoading ? '—' : average.toLocaleString()}</b></span></div>
     </div>
     <section className="panel" aria-label="ELO player rankings">
@@ -332,6 +334,7 @@ function AssignedPlayer({
       {roleAssignment ? <div className="assigned-role-line">
         <strong className="assigned-role-name">{roleAssignment.assignedPosition}</strong>
         <RoleBadge assignedPosition={roleAssignment.assignedPosition} status={roleAssignment.assignmentStatus} />
+        {roleAssignment.preferenceRank !== null && <small>Rank {roleAssignment.preferenceRank}</small>}
       </div> : <small className="role-pending">Role assigned when both sides are complete</small>}
       <small>Profile: {player.positions.join(' · ')}</small>
       <span className="assigned-elo">ELO {player.elo.toLocaleString()}</span>
@@ -405,6 +408,10 @@ function MatchDetail({ matchId }: { matchId: number }) {
       queryClient.invalidateQueries({ queryKey: getListMatchesQueryKey() }),
       queryClient.invalidateQueries({ queryKey: getListPlayersQueryKey() }),
       queryClient.invalidateQueries({ queryKey: getGetLeaderboardQueryKey() }),
+      ...[...updated.teamA, ...updated.teamB].flatMap((player) => [
+        queryClient.invalidateQueries({ queryKey: getGetPlayerQueryKey(player.id) }),
+        queryClient.invalidateQueries({ queryKey: getGetPlayerEloHistoryQueryKey(player.id) }),
+      ]),
     ]);
   };
   function saveResult(event: FormEvent<HTMLFormElement>) {
@@ -443,13 +450,14 @@ function MatchDetail({ matchId }: { matchId: number }) {
     const assignedPosition = player.assignedPosition ?? legacyRoleAssignments.get(player.id)?.assignedPosition;
     if (!assignedPosition) return <p key={player.id}>{player.name} <span>· {player.positions.join(', ')}</span></p>;
     const position = assignedPosition as MatchPosition;
-    const status = player.positions.includes(assignedPosition) ? 'preferred' : 'filled';
+    const status = player.assignmentStatus ?? (player.positions.includes(assignedPosition) ? 'preferred' : 'filled');
     return <div className="saved-roster-player" key={player.id}>
       <div><strong>{player.name}</strong><small>Profile: {player.positions.join(' · ')}</small></div>
-      <div className="saved-role-info"><strong>{position}</strong><RoleBadge assignedPosition={position} status={status} /></div>
+      <div className="saved-role-info"><strong>{position}</strong><RoleBadge assignedPosition={position} status={status} />{player.preferenceRank != null && <small>Rank {player.preferenceRank}</small>}</div>
     </div>;
   };
   return <div className="roster-detail">
+    {[...match.teamA, ...match.teamB].some((p) => p.assignmentStatus === 'filled' || (p.assignedPosition && !p.positions.includes(p.assignedPosition))) && <div className="position-warning" role="status"><strong>Filled positions</strong><span>{positions.filter((role) => [...match.teamA, ...match.teamB].some((p) => p.assignedPosition === role && (p.assignmentStatus === 'filled' || !p.positions.includes(role)))).join(' · ')}</span></div>}
     {match.status === 'upcoming' ? <section className="score-entry">
       <h4>Enter final set score</h4>
       <form className="score-form" onSubmit={saveResult}>
@@ -523,12 +531,14 @@ function MatchesPage() {
   const [teamA, setTeamA] = useState<number[]>([]);
   const [teamB, setTeamB] = useState<number[]>([]);
   const [balanceResult, setBalanceResult] = useState<MatchBalanceResult | null>(null);
+  const [balancedProfiles, setBalancedProfiles] = useState('');
   const [swapSelectionId, setSwapSelectionId] = useState<number | null>(null);
   const [expandedMatch, setExpandedMatch] = useState<number | null>(null);
   const [createError, setCreateError] = useState('');
   const players = playersQuery.data ?? [];
   const selectedIds = new Set(selectedPlayerIds);
   const selectedPlayers = players.filter((player) => selectedIds.has(player.id));
+  const profilesFingerprint = JSON.stringify(selectedPlayers.map((p) => [p.id,p.positions,p.elo,p.preferencesConfirmed,p.preferredRolePriority,p.prioritySince]));
   const assigned = new Set([...teamA, ...teamB]);
   const unassignedSelected = selectedPlayers.filter((player) => !assigned.has(player.id));
   const teamAPlayers = selectedPlayers.filter((player) => teamA.includes(player.id));
@@ -537,11 +547,12 @@ function MatchesPage() {
     const selected = players.filter((player) => selectedPlayerIds.includes(player.id));
     if (![12, 13, 14].includes(selected.length)) return null;
     try {
+      if (balanceResult && balancedProfiles === profilesFingerprint && balanceResult.teamAIds.join(',') === teamA.join(',') && balanceResult.teamBIds.join(',') === teamB.join(',')) return balanceResult;
       return assignMatchRoles(selected, teamA, teamB);
     } catch {
       return null;
     }
-  }, [players, selectedPlayerIds, teamA, teamB]);
+  }, [players, selectedPlayerIds, teamA, teamB, balanceResult, balancedProfiles, profilesFingerprint]);
   const roleAssignmentById = new Map(
     roleAssignments
       ? [...roleAssignments.teamAAssignments, ...roleAssignments.teamBAssignments]
@@ -560,14 +571,20 @@ function MatchesPage() {
   let isRosterValid = false;
   if (poolCount < 12 || poolCount > 14) {
     validation = `Select 12 to 14 players (${poolCount} selected).`;
+  } else if (selectedPlayers.some((player) => !player.preferencesConfirmed)) {
+    validation = 'Confirm ranked preferences for every selected player first.';
+  } else if (!selectedPlayers.some((player) => player.positions.includes(Position.Setter))) {
+    validation = 'Select at least one Setter-capable player.';
   } else if (!allSelectedAssigned) {
     validation = `Assign all ${poolCount} selected players to Team A or Team B.`;
   } else if (!teamSizesValid) {
     validation = 'Each team must have six or seven players.';
   } else if (!roleAssignments) {
     validation = 'Assign all selected players to teams in a 6/6, 7/6, or 7/7 split.';
-  } else if (poolCount === 13 && balanceResult && !underdogCoreGetsLibero) {
-    validation = 'Auto-balance could not give the extra Libero role to the lower-ELO six-player core.';
+  } else if (selectedPlayers.some((player) => !player.preferencesConfirmed)) {
+    validation = 'Confirm ranked preferences for every selected player first.';
+  } else if (!selectedPlayers.some((player) => player.positions.includes(Position.Setter))) {
+    validation = 'Select at least one Setter-capable player.';
   } else if (poolCount === 13 && !underdogCoreGetsLibero) {
     validation = '13-player roster has the exact role formation, but the seven-player core is not lower ELO.';
     isRosterValid = true;
@@ -617,9 +634,33 @@ function MatchesPage() {
     const firstIsB = teamB.includes(firstId);
     const secondIsB = teamB.includes(secondId);
     if (!(firstIsA && secondIsB) && !(firstIsB && secondIsA)) return;
-    setTeamA((current) => current.map((id) => id === firstId ? secondId : id === secondId ? firstId : id));
-    setTeamB((current) => current.map((id) => id === firstId ? secondId : id === secondId ? firstId : id));
-    setBalanceResult(null);
+    if (!roleAssignments || roleAssignmentById.get(firstId)?.assignedPosition !== roleAssignmentById.get(secondId)?.assignedPosition) {
+      setCreateError('Only players assigned the same position can swap. This keeps ranks and exact formations unchanged.');
+      setSwapSelectionId(null);
+      return;
+    }
+    const nextA = teamA.map((id) => id === firstId ? secondId : id === secondId ? firstId : id);
+    const nextB = teamB.map((id) => id === firstId ? secondId : id === secondId ? firstId : id);
+    try {
+      const planned = assignMatchRoles(selectedPlayers, nextA, nextB);
+      const allRoles = [...roleAssignments.teamAAssignments, ...roleAssignments.teamBAssignments];
+      const larger = nextA.length === 7 ? nextA : nextB;
+      const smaller = nextA.length === 6 ? nextA : nextB;
+      const liberoId = allRoles.find((a) => a.assignedPosition === 'Libero')?.playerId;
+      const coreElo = selectedPlayers.filter((p) => larger.includes(p.id) && p.id !== liberoId).reduce((sum,p) => sum+p.elo,0);
+      const smallerElo = selectedPlayers.filter((p) => smaller.includes(p.id)).reduce((sum,p) => sum+p.elo,0);
+      setBalanceResult({...planned, teamAIds: nextA, teamBIds: nextB,
+        teamAAssignments: allRoles.filter((a) => nextA.includes(a.playerId)),
+        teamBAssignments: allRoles.filter((a) => nextB.includes(a.playerId)),
+        rankCost: roleAssignments.rankCost, specialistCost: roleAssignments.specialistCost, priorityScore: roleAssignments.priorityScore,
+        preferredCount: roleAssignments.preferredCount, positionShortages: roleAssignments.positionShortages,
+        underdogCoreGetsLibero: poolCount === 13 ? coreElo <= smallerElo : null,
+      });
+      setBalancedProfiles(profilesFingerprint);
+      setTeamA(nextA);
+      setTeamB(nextB);
+      setCreateError('');
+    } catch (error) { setCreateError(messageFor(error)); }
     setSwapSelectionId(null);
   }
 
@@ -650,17 +691,29 @@ function MatchesPage() {
 
   function autoBalance() {
     if (poolCount < 12 || poolCount > 14) return;
+    try {
     const result = balanceMatchTeams(selectedPlayers);
     setTeamA(result.teamAIds);
     setTeamB(result.teamBIds);
     setBalanceResult(result);
+    setBalancedProfiles(profilesFingerprint);
     setSwapSelectionId(null);
     setCreateError('');
+    } catch (error) { setCreateError(messageFor(error)); }
+  }
+
+  function eloBalance() {
+    if (!roleAssignments) return;
+    try {
+      const result = balanceAssignedTeams(selectedPlayers, {...roleAssignments, teamAIds: teamA, teamBIds: teamB});
+      setTeamA(result.teamAIds); setTeamB(result.teamBIds); setBalanceResult(result);
+      setBalancedProfiles(profilesFingerprint);
+      setSwapSelectionId(null); setCreateError('');
+    } catch (error) { setCreateError(messageFor(error)); }
   }
 
   function saveMatch() {
-    if (!isRosterValid || !roleAssignments ||
-      (poolCount === 13 && balanceResult && !balanceResult.underdogCoreGetsLibero)) return;
+    if (!isRosterValid || !roleAssignments) return;
     setCreateError('');
     createMatch.mutate({ data: {
       teamAPlayerIds: teamA,
@@ -668,10 +721,14 @@ function MatchesPage() {
       teamAAssignments: roleAssignments.teamAAssignments.map((assignment) => ({
         playerId: assignment.playerId,
         assignedPosition: apiPositionByRole[assignment.assignedPosition],
+        assignmentStatus: assignment.assignmentStatus,
+        preferenceRank: assignment.preferenceRank,
       })),
       teamBAssignments: roleAssignments.teamBAssignments.map((assignment) => ({
         playerId: assignment.playerId,
         assignedPosition: apiPositionByRole[assignment.assignedPosition],
+        assignmentStatus: assignment.assignmentStatus,
+        preferenceRank: assignment.preferenceRank,
       })),
     } }, {
       onSuccess: async () => {
@@ -726,11 +783,11 @@ function MatchesPage() {
                       <input
                         type="checkbox"
                         checked={checked}
-                        disabled={!checked && poolCount >= 14}
+                        disabled={!player.preferencesConfirmed || (!checked && poolCount >= 14)}
                         onChange={(event) => togglePoolPlayer(player.id, event.currentTarget.checked)}
                         data-testid={`checkbox-pool-player-${player.id}`}
                       />
-                      <span className="pool-player-info"><strong>{player.name}</strong><small>{player.positions.join(' · ')}</small></span>
+                      <span className="pool-player-info"><strong>{player.name}</strong><small>{player.positions.map((p, i) => player.preferencesConfirmed ? `${i + 1}. ${p}` : p).join(' · ')}</small>{!player.preferencesConfirmed && <small>Confirm preferences in Players first</small>}{player.preferredRolePriority && <small className="priority-indicator">Priority: Preferred role next match</small>}</span>
                       <span className="pool-player-elo">ELO {player.elo.toLocaleString()}</span>
                     </label>;
                   })}
@@ -740,6 +797,7 @@ function MatchesPage() {
                 <button className="button button-quiet" onClick={() => { setSelectedPlayerIds([]); setTeamA([]); setTeamB([]); setBalanceResult(null); setSwapSelectionId(null); }} disabled={poolCount === 0} data-testid="button-clear-pool">Clear selection</button>
               </div>}
             </div>
+            <div className="pool-actions"><button className="button button-secondary" disabled={!isRosterValid} onClick={eloBalance} data-testid="button-elo-balance"><ArrowLeftRight size={14} />ELO Balancer</button><small>Same-position swaps only; assigned ranks stay fixed.</small></div>
             {mode === 'manual' && <div className="manual-assign-head"><strong>Manual assignment</strong><span>Use + A or + B for each selected player.</span></div>}
             <div className="team-columns">
               <section className="team-column" aria-label="Team A">

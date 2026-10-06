@@ -32,14 +32,15 @@ A local-first volleyball roster and match setup app for managing player position
 - SQLite is intentional; do not replace it with the workspace PostgreSQL database.
 - Match rosters save player details and the assigned role as snapshots so later player edits or deletions do not rewrite a saved roster.
 - The match builder supports manual assignment and exact role-first, same-role ELO balancing with post-balance swaps. Roles not listed on a profile may be Filled by the best available ELO player and are reported by role.
-- Match result entry and rating changes remain deferred until Phase 4.
+- Completed results apply the existing K=32 ELO calculation; reopening restores ratings and reverses priority events. Later dependent results must be reopened first.
 
 ## Product
 
-- Phase 1: create, view, edit, and delete players; positions are multi-select and new players start at ELO 1000; leaderboard sorts by ELO.
+- Players rank 3–5 unique preferences; legacy profiles keep their lists but must explicitly save ranked preferences before a new match. New players start at ELO 1000; leaderboard sorts by ELO.
 - Phase 2: create upcoming matches from 12, 13, or 14 selected players, with exact six-player roles (1 Setter, 2 Outside Hitters, 2 Middle Blockers, 1 Opposite). Seven-player sides add 1 assigned Libero role.
 - Match creation supports a selected player pool, auto-balancing or manual assignment, Preferred/Filled role badges and shortage warnings, live team ELO totals/averages, and player swaps. For 13, auto-balance gives the Libero to the lower-ELO six-player core when possible.
-- Scores are stored as null and are not editable until result entry is built.
+- Upcoming scores are null. Completed Filled assignments grant priority; a later completed Preferred assignment clears it. Saving rosters or balancing never changes priority.
+- Matching maximizes Preferred coverage, minimizes rank displacement (top-choice priority bonus of one rank), resolves compensation ties by ELO/wait/ID, protects constrained players, then chooses high-ELO Filled cover. Team ELO balancing uses fixed-role exchanges only.
 
 ## User preferences
 

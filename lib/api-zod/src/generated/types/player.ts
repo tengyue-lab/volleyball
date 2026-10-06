@@ -13,4 +13,8 @@ export interface Player {
   positions: Position[];
   elo: number;
   createdAt: Date;
+  preferencesConfirmed: boolean;
+  preferredRolePriority: boolean;
+  /** @nullable */
+  prioritySince: Date | null;
 }

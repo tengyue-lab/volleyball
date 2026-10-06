@@ -81,28 +81,6 @@ paths:
                 $ref: "#/components/schemas/Player"
         "404":
           description: Player not found
-  /players/{playerId}/elo-history:
-    parameters:
-      - name: playerId
-        in: path
-        required: true
-        schema:
-          type: integer
-    get:
-      operationId: getPlayerEloHistory
-      tags: [players]
-      summary: Get a player's ELO audit history
-      responses:
-        "200":
-          description: ELO changes ordered from oldest to newest
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/EloHistoryEntry"
-        "404":
-          description: Player not found
     patch:
       operationId: updatePlayer
       tags: [players]
@@ -131,6 +109,28 @@ paths:
       responses:
         "204":
           description: Player deleted
+        "404":
+          description: Player not found
+  /players/{playerId}/elo-history:
+    parameters:
+      - name: playerId
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getPlayerEloHistory
+      tags: [players]
+      summary: Get a player's ELO audit history
+      responses:
+        "200":
+          description: ELO changes ordered from oldest to newest
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EloHistoryEntry"
         "404":
           description: Player not found
   /leaderboard:
@@ -272,7 +272,7 @@ components:
         - Libero
     Player:
       type: object
-      required: [id, name, positions, elo, createdAt]
+      required: [id, name, positions, elo, createdAt, preferencesConfirmed, preferredRolePriority, prioritySince]
       properties:
         id:
           type: integer
@@ -287,6 +287,13 @@ components:
         createdAt:
           type: string
           format: date-time
+        preferencesConfirmed:
+          type: boolean
+        preferredRolePriority:
+          type: boolean
+        prioritySince:
+          type: ["string", "null"]
+          format: date-time
     PlayerInput:
       type: object
       required: [name, positions]
@@ -297,7 +304,8 @@ components:
           maxLength: 80
         positions:
           type: array
-          minItems: 1
+          minItems: 3
+          maxItems: 5
           uniqueItems: true
           items:
             $ref: "#/components/schemas/Position"
@@ -315,7 +323,8 @@ components:
           maxLength: 80
         positions:
           type: array
-          minItems: 1
+          minItems: 3
+          maxItems: 5
           uniqueItems: true
           items:
             $ref: "#/components/schemas/Position"
@@ -359,12 +368,37 @@ components:
           items:
             $ref: "#/components/schemas/EloHistoryEntry"
     MatchPlayerSnapshot:
-      allOf:
-        - $ref: "#/components/schemas/Player"
-        - type: object
-          properties:
-            assignedPosition:
-              $ref: "#/components/schemas/Position"
+      type: object
+      description: Immutable played roster. New ranking and priority fields are optional because older snapshots are never rewritten.
+      required: [id, name, positions, elo]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        positions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Position"
+        elo:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        preferencesConfirmed:
+          type: boolean
+        preferredRolePriority:
+          type: boolean
+        prioritySince:
+          type: ["string", "null"]
+          format: date-time
+        assignedPosition:
+          $ref: "#/components/schemas/Position"
+        assignmentStatus:
+          type: string
+          enum: [preferred, filled]
+        preferenceRank:
+          type: ["integer", "null"]
     MatchInput:
       type: object
       required:
@@ -407,6 +441,11 @@ components:
           type: integer
         assignedPosition:
           $ref: "#/components/schemas/Position"
+        assignmentStatus:
+          type: string
+          enum: [preferred, filled]
+        preferenceRank:
+          type: ["integer", "null"]
     MatchResultInput:
       type: object
       required: [scoreA, scoreB]

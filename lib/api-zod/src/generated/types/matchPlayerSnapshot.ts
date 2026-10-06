@@ -5,9 +5,24 @@
  * Volleyball player and match management API
  * OpenAPI spec version: 0.1.0
  */
-import type { Player } from './player';
+import type { MatchPlayerSnapshotAssignmentStatus } from './matchPlayerSnapshotAssignmentStatus';
 import type { Position } from './position';
 
-export type MatchPlayerSnapshot = Player & {
+/**
+ * Immutable played roster. New ranking and priority fields are optional because older snapshots are never rewritten.
+ */
+export interface MatchPlayerSnapshot {
+  id: number;
+  name: string;
+  positions: Position[];
+  elo: number;
+  createdAt?: Date;
+  preferencesConfirmed?: boolean;
+  preferredRolePriority?: boolean;
+  /** @nullable */
+  prioritySince?: Date | null;
   assignedPosition?: Position;
-};
+  assignmentStatus?: MatchPlayerSnapshotAssignmentStatus;
+  /** @nullable */
+  preferenceRank?: number | null;
+}

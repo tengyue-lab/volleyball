@@ -13,7 +13,10 @@ export interface PlayerUpdate {
      * @maxLength 80
      */
   name?: string;
-  /** @minItems 1 */
+  /**
+     * @minItems 3
+     * @maxItems 5
+     */
   positions?: Position[];
   /** @minimum 0 */
   elo?: number;

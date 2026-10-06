@@ -49,6 +49,7 @@ def initialize_database(database_path: str) -> None:
     path = Path(database_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(path) as connection:
+        connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA journal_mode = WAL")
         connection.executescript(
             """
@@ -96,6 +97,63 @@ def initialize_database(database_path: str) -> None:
             connection.execute("ALTER TABLE matches ADD COLUMN winner TEXT")
         if "completed_at" not in match_columns:
             connection.execute("ALTER TABLE matches ADD COLUMN completed_at TEXT")
+        player_columns = {row[1] for row in connection.execute("PRAGMA table_info(players)")}
+        if "preferences_confirmed" not in player_columns:
+            connection.execute("ALTER TABLE players ADD COLUMN preferences_confirmed INTEGER NOT NULL DEFAULT 0")
+        if "priority_since" not in player_columns:
+            connection.execute("ALTER TABLE players ADD COLUMN priority_since TEXT")
+        connection.executescript("""
+            CREATE TABLE IF NOT EXISTS assignment_audit (
+                match_id INTEGER NOT NULL, player_id INTEGER NOT NULL,
+                position TEXT NOT NULL, status TEXT NOT NULL, preference_rank INTEGER,
+                PRIMARY KEY (match_id, player_id)
+            );
+            CREATE TABLE IF NOT EXISTS priority_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, match_id INTEGER NOT NULL,
+                player_id INTEGER NOT NULL, status TEXT NOT NULL,
+                created_at TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1,
+                completion_order INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE INDEX IF NOT EXISTS idx_priority_events_player ON priority_events(player_id, id);
+        """)
+        if "completion_order" not in {row[1] for row in connection.execute("PRAGMA table_info(priority_events)")}:
+            connection.execute("ALTER TABLE priority_events ADD COLUMN completion_order INTEGER NOT NULL DEFAULT 0")
+            connection.execute("""
+                UPDATE priority_events SET completion_order = COALESCE((
+                    SELECT MIN(h.id) FROM elo_history h
+                    WHERE h.match_id = priority_events.match_id AND h.action = 'result'
+                        AND h.created_at = priority_events.created_at
+                ), id)
+            """)
+        # Only recover assignments explicitly present in immutable old snapshots.
+        for row in connection.execute("SELECT id, team_a_json, team_b_json FROM matches").fetchall():
+            for player in json.loads(row[1]) + json.loads(row[2]):
+                if player.get("assignedPosition") in POSITIONS:
+                    position = player["assignedPosition"]
+                    rank = player["positions"].index(position) + 1 if position in player["positions"] else None
+                    connection.execute(
+                        "INSERT OR IGNORE INTO assignment_audit VALUES (?, ?, ?, ?, ?)",
+                        (row[0], player["id"], position, "preferred" if rank else "filled", rank),
+                    )
+        # Recover compensation only when both played roles and real completion
+        # audit order exist. Never invent positions or completion history.
+        completed = connection.execute("""
+            SELECT m.id, m.completed_at, MIN(h.id) AS completion_order
+            FROM matches m JOIN elo_history h ON h.match_id = m.id
+            WHERE m.status = 'completed' AND m.completed_at IS NOT NULL
+                AND h.action = 'result'
+                AND h.id > COALESCE((SELECT MAX(r.id) FROM elo_history r
+                    WHERE r.match_id = m.id AND r.action = 'reversal'), 0)
+                AND NOT EXISTS (SELECT 1 FROM priority_events e WHERE e.match_id = m.id)
+            GROUP BY m.id ORDER BY completion_order
+        """).fetchall()
+        for match in completed:
+            for assignment in connection.execute("SELECT * FROM assignment_audit WHERE match_id = ?", (match["id"],)).fetchall():
+                connection.execute("""
+                    INSERT INTO priority_events (match_id,player_id,status,created_at,completion_order)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (match["id"], assignment["player_id"], assignment["status"], match["completed_at"], match["completion_order"]))
+        replay_priority(connection, [row[0] for row in connection.execute("SELECT DISTINCT player_id FROM priority_events")])
 
 
 @contextmanager
@@ -112,6 +170,30 @@ def database() -> Iterator[sqlite3.Connection]:
         connection.close()
 
 
+def assignment_metadata(player: dict[str, Any], position: str) -> dict[str, Any]:
+    rank = player["positions"].index(position) + 1 if position in player["positions"] else None
+    return {"assignmentStatus": "preferred" if rank else "filled", "preferenceRank": rank}
+
+
+def replay_priority(connection: sqlite3.Connection, player_ids: list[int]) -> None:
+    """Derive state in completion-event order, not roster order or live preferences.
+
+    Replaying only active events makes reversal safe and keeps the earliest
+    outstanding Filled completion through repeated Filled assignments.
+    """
+    for player_id in player_ids:
+        pending_since = None
+        for event in connection.execute(
+            "SELECT status, created_at FROM priority_events WHERE player_id = ? AND active = 1 ORDER BY completion_order, id",
+            (player_id,),
+        ):
+            if event["status"] == "preferred":
+                pending_since = None
+            elif pending_since is None:
+                pending_since = event["created_at"]
+        connection.execute("UPDATE players SET priority_since = ? WHERE id = ?", (pending_since, player_id))
+
+
 def serialize_player(row: sqlite3.Row) -> dict[str, Any]:
     return {
         "id": row["id"],
@@ -119,6 +201,9 @@ def serialize_player(row: sqlite3.Row) -> dict[str, Any]:
         "positions": json.loads(row["positions_json"]),
         "elo": row["elo"],
         "createdAt": row["created_at"],
+        "preferencesConfirmed": bool(row["preferences_confirmed"]),
+        "preferredRolePriority": row["priority_since"] is not None,
+        "prioritySince": row["priority_since"],
     }
 
 
@@ -219,8 +304,8 @@ def calculate_elo_updates(
 
 
 def validate_positions(value: Any) -> tuple[list[str] | None, str | None]:
-    if not isinstance(value, list) or not value:
-        return None, "Choose at least one position."
+    if not isinstance(value, list) or not 3 <= len(value) <= 5:
+        return None, "Rank between 3 and 5 positions."
     if any(not isinstance(position, str) or position not in POSITIONS for position in value):
         return None, "One or more positions are not supported."
     if len(set(value)) != len(value):
@@ -236,10 +321,7 @@ def validate_match_assignments(
 
     assignments: dict[int, str] = {}
     for assignment in value:
-        if not isinstance(assignment, dict) or set(assignment) != {
-            "playerId",
-            "assignedPosition",
-        }:
+        if not isinstance(assignment, dict) or not {"playerId", "assignedPosition"} <= set(assignment) or set(assignment) - {"playerId", "assignedPosition", "assignmentStatus", "preferenceRank"}:
             return None
         player_id = assignment["playerId"]
         position = assignment["assignedPosition"]
@@ -331,8 +413,8 @@ def create_app(database_path: str | Path | None = None) -> Flask:
         with database() as connection:
             cursor = connection.execute(
                 """
-                INSERT INTO players (name, positions_json, elo, created_at)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO players (name, positions_json, elo, created_at, preferences_confirmed)
+                VALUES (?, ?, ?, ?, 1)
                 """,
                 (
                     player["name"],
@@ -380,10 +462,10 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             connection.execute(
                 """
                 UPDATE players
-                SET name = ?, positions_json = ?, elo = ?
+                SET name = ?, positions_json = ?, elo = ?, preferences_confirmed = ?
                 WHERE id = ?
                 """,
-                (name, json.dumps(positions), elo, player_id),
+                (name, json.dumps(positions), elo, 1 if "positions" in changes else current["preferences_confirmed"], player_id),
             )
             updated = connection.execute(
                 "SELECT * FROM players WHERE id = ?", (player_id,)
@@ -486,6 +568,7 @@ def create_app(database_path: str | Path | None = None) -> Flask:
         all_ids = team_a_ids + team_b_ids
         placeholders = ",".join("?" for _ in all_ids)
         with database() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             rows = connection.execute(
                 f"SELECT * FROM players WHERE id IN ({placeholders})", all_ids
             ).fetchall()
@@ -495,11 +578,23 @@ def create_app(database_path: str | Path | None = None) -> Flask:
                 return jsonify(
                     {"error": "One or more selected players no longer exist."}
                 ), 400
+            if any(not player["preferencesConfirmed"] for player in players_by_id.values()):
+                return jsonify({"error": "Confirm ranked preferences for every selected player first."}), 400
+            if not any("Setter" in player["positions"] for player in players_by_id.values()):
+                return jsonify({"error": "Select at least one Setter-capable player."}), 400
+            for assignment in team_a_assignments + team_b_assignments:
+                player = players_by_id[assignment["playerId"]]
+                position = assignment["assignedPosition"]
+                rank = player["positions"].index(position) + 1 if position in player["positions"] else None
+                status = "preferred" if rank else "filled"
+                if ("assignmentStatus" in assignment and assignment["assignmentStatus"] != status) or ("preferenceRank" in assignment and (isinstance(assignment["preferenceRank"], bool) or assignment["preferenceRank"] != rank)):
+                    return jsonify({"error": "Assignment classification and rank must match saved preferences."}), 400
 
             team_a = [
                 {
                     **players_by_id[player_id],
                     "assignedPosition": team_a_roles[player_id],
+                    **assignment_metadata(players_by_id[player_id], team_a_roles[player_id]),
                 }
                 for player_id in team_a_ids
             ]
@@ -507,6 +602,7 @@ def create_app(database_path: str | Path | None = None) -> Flask:
                 {
                     **players_by_id[player_id],
                     "assignedPosition": team_b_roles[player_id],
+                    **assignment_metadata(players_by_id[player_id], team_b_roles[player_id]),
                 }
                 for player_id in team_b_ids
             ]
@@ -527,6 +623,9 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             match_row = connection.execute(
                 "SELECT * FROM matches WHERE id = ?", (cursor.lastrowid,)
             ).fetchone()
+            for player in team_a + team_b:
+                connection.execute("INSERT INTO assignment_audit VALUES (?, ?, ?, ?, ?)",
+                    (cursor.lastrowid, player["id"], player["assignedPosition"], player["assignmentStatus"], player["preferenceRank"]))
 
         return jsonify(serialize_match(match_row)), 201
 
@@ -591,6 +690,7 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             team_b_players = [players_by_id[player_id] for player_id in team_b_ids]
             elo_updates = calculate_elo_updates(team_a_players, team_b_players, winner)
             completed_at = utc_now()
+            completion_order = connection.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM elo_history").fetchone()[0]
             for update in elo_updates:
                 connection.execute(
                     "UPDATE players SET elo = ? WHERE id = ?",
@@ -612,6 +712,10 @@ def create_app(database_path: str | Path | None = None) -> Flask:
                         completed_at,
                     ),
                 )
+            for assignment in connection.execute("SELECT * FROM assignment_audit WHERE match_id = ?", (match_id,)).fetchall():
+                connection.execute("INSERT INTO priority_events (match_id, player_id, status, created_at, completion_order) VALUES (?, ?, ?, ?, ?)",
+                    (match_id, assignment["player_id"], assignment["status"], completed_at, completion_order))
+            replay_priority(connection, all_ids)
             connection.execute(
                 """
                 UPDATE matches
@@ -649,9 +753,12 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             last_change_id = max(change["id"] for change in elo_changes)
             later_change = connection.execute(
                 f"""
-                SELECT id FROM elo_history
-                WHERE player_id IN ({placeholders})
-                  AND id > ? AND match_id != ?
+                SELECT h.id FROM elo_history h JOIN matches m ON m.id = h.match_id
+                WHERE h.player_id IN ({placeholders})
+                  AND h.id > ? AND h.match_id != ? AND h.action = 'result'
+                  AND m.status = 'completed'
+                  AND h.id > COALESCE((SELECT MAX(r.id) FROM elo_history r
+                      WHERE r.match_id = h.match_id AND r.action = 'reversal'), 0)
                 LIMIT 1
                 """,
                 (*player_ids, last_change_id, match_id),
@@ -712,6 +819,8 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             reopened_match = connection.execute(
                 "SELECT * FROM matches WHERE id = ?", (match_id,)
             ).fetchone()
+            connection.execute("UPDATE priority_events SET active = 0 WHERE match_id = ?", (match_id,))
+            replay_priority(connection, player_ids)
         return jsonify(serialize_match(reopened_match))
 
     @app.errorhandler(404)

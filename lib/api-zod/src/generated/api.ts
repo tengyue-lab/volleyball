@@ -25,7 +25,10 @@ export const ListPlayersResponseItem = zod.object({
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "preferencesConfirmed": zod.boolean(),
+  "preferredRolePriority": zod.boolean(),
+  "prioritySince": zod.coerce.date().nullable()
 })
 export const ListPlayersResponse = zod.array(ListPlayersResponseItem)
 
@@ -35,6 +38,8 @@ export const ListPlayersResponse = zod.array(ListPlayersResponseItem)
  */
 export const createPlayerBodyNameMax = 80;
 
+export const createPlayerBodyPositionsMin = 3;
+export const createPlayerBodyPositionsMax = 5;
 
 export const createPlayerBodyEloDefault = 1000;
 export const createPlayerBodyEloMin = 0;
@@ -43,7 +48,7 @@ export const createPlayerBodyEloMin = 0;
 
 export const CreatePlayerBody = zod.object({
   "name": zod.string().min(1).max(createPlayerBodyNameMax),
-  "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])).min(1),
+  "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])).min(createPlayerBodyPositionsMin).max(createPlayerBodyPositionsMax),
   "elo": zod.number().int().min(createPlayerBodyEloMin).default(createPlayerBodyEloDefault)
 })
 
@@ -52,7 +57,10 @@ export const CreatePlayerResponse = zod.object({
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "preferencesConfirmed": zod.boolean(),
+  "preferredRolePriority": zod.boolean(),
+  "prioritySince": zod.coerce.date().nullable()
 })
 
 
@@ -68,8 +76,55 @@ export const GetPlayerResponse = zod.object({
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "preferencesConfirmed": zod.boolean(),
+  "preferredRolePriority": zod.boolean(),
+  "prioritySince": zod.coerce.date().nullable()
 })
+
+
+/**
+ * @summary Update a player
+ */
+export const UpdatePlayerParams = zod.object({
+  "playerId": zod.coerce.number().int()
+})
+
+export const updatePlayerBodyNameMax = 80;
+
+export const updatePlayerBodyPositionsMin = 3;
+export const updatePlayerBodyPositionsMax = 5;
+
+export const updatePlayerBodyEloMin = 0;
+
+
+
+export const UpdatePlayerBody = zod.object({
+  "name": zod.string().min(1).max(updatePlayerBodyNameMax).optional(),
+  "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])).min(updatePlayerBodyPositionsMin).max(updatePlayerBodyPositionsMax).optional(),
+  "elo": zod.number().int().min(updatePlayerBodyEloMin).optional()
+})
+
+export const UpdatePlayerResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
+  "elo": zod.number().int(),
+  "createdAt": zod.coerce.date(),
+  "preferencesConfirmed": zod.boolean(),
+  "preferredRolePriority": zod.boolean(),
+  "prioritySince": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Delete a player
+ */
+export const DeletePlayerParams = zod.object({
+  "playerId": zod.coerce.number().int()
+})
+
+export const DeletePlayerResponse = zod.void()
 
 
 /**
@@ -93,45 +148,6 @@ export const GetPlayerEloHistoryResponse = zod.array(GetPlayerEloHistoryResponse
 
 
 /**
- * @summary Update a player
- */
-export const UpdatePlayerParams = zod.object({
-  "playerId": zod.coerce.number().int()
-})
-
-export const updatePlayerBodyNameMax = 80;
-
-
-export const updatePlayerBodyEloMin = 0;
-
-
-
-export const UpdatePlayerBody = zod.object({
-  "name": zod.string().min(1).max(updatePlayerBodyNameMax).optional(),
-  "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])).min(1).optional(),
-  "elo": zod.number().int().min(updatePlayerBodyEloMin).optional()
-})
-
-export const UpdatePlayerResponse = zod.object({
-  "id": zod.number().int(),
-  "name": zod.string(),
-  "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
-  "elo": zod.number().int(),
-  "createdAt": zod.coerce.date()
-})
-
-
-/**
- * @summary Delete a player
- */
-export const DeletePlayerParams = zod.object({
-  "playerId": zod.coerce.number().int()
-})
-
-export const DeletePlayerResponse = zod.void()
-
-
-/**
  * @summary List players ranked by ELO
  */
 export const GetLeaderboardResponseItem = zod.object({
@@ -139,7 +155,10 @@ export const GetLeaderboardResponseItem = zod.object({
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "preferencesConfirmed": zod.boolean(),
+  "preferredRolePriority": zod.boolean(),
+  "prioritySince": zod.coerce.date().nullable()
 })
 export const GetLeaderboardResponse = zod.array(GetLeaderboardResponseItem)
 
@@ -154,19 +173,27 @@ export const ListMatchesResponseItem = zod.object({
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int(),
-  "createdAt": zod.coerce.date()
-}).and(zod.object({
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional()
-}))),
+  "createdAt": zod.coerce.date().optional(),
+  "preferencesConfirmed": zod.boolean().optional(),
+  "preferredRolePriority": zod.boolean().optional(),
+  "prioritySince": zod.coerce.date().nullish(),
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
+  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "preferenceRank": zod.number().int().nullish()
+}).describe('Immutable played roster. New ranking and priority fields are optional because older snapshots are never rewritten.')),
   "teamB": zod.array(zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int(),
-  "createdAt": zod.coerce.date()
-}).and(zod.object({
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional()
-}))),
+  "createdAt": zod.coerce.date().optional(),
+  "preferencesConfirmed": zod.boolean().optional(),
+  "preferredRolePriority": zod.boolean().optional(),
+  "prioritySince": zod.coerce.date().nullish(),
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
+  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "preferenceRank": zod.number().int().nullish()
+}).describe('Immutable played roster. New ranking and priority fields are optional because older snapshots are never rewritten.')),
   "scoreA": zod.number().int().nullable(),
   "scoreB": zod.number().int().nullable(),
   "status": zod.enum(['upcoming', 'completed']),
@@ -210,11 +237,15 @@ export const CreateMatchBody = zod.object({
   "teamBPlayerIds": zod.array(zod.number().int()).min(createMatchBodyTeamBPlayerIdsMin).max(createMatchBodyTeamBPlayerIdsMax),
   "teamAAssignments": zod.array(zod.object({
   "playerId": zod.number().int(),
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),
+  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "preferenceRank": zod.number().int().nullish()
 })).min(createMatchBodyTeamAAssignmentsMin).max(createMatchBodyTeamAAssignmentsMax),
   "teamBAssignments": zod.array(zod.object({
   "playerId": zod.number().int(),
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),
+  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "preferenceRank": zod.number().int().nullish()
 })).min(createMatchBodyTeamBAssignmentsMin).max(createMatchBodyTeamBAssignmentsMax)
 })
 
@@ -225,19 +256,27 @@ export const CreateMatchResponse = zod.object({
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int(),
-  "createdAt": zod.coerce.date()
-}).and(zod.object({
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional()
-}))),
+  "createdAt": zod.coerce.date().optional(),
+  "preferencesConfirmed": zod.boolean().optional(),
+  "preferredRolePriority": zod.boolean().optional(),
+  "prioritySince": zod.coerce.date().nullish(),
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
+  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "preferenceRank": zod.number().int().nullish()
+}).describe('Immutable played roster. New ranking and priority fields are optional because older snapshots are never rewritten.')),
   "teamB": zod.array(zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int(),
-  "createdAt": zod.coerce.date()
-}).and(zod.object({
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional()
-}))),
+  "createdAt": zod.coerce.date().optional(),
+  "preferencesConfirmed": zod.boolean().optional(),
+  "preferredRolePriority": zod.boolean().optional(),
+  "prioritySince": zod.coerce.date().nullish(),
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
+  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "preferenceRank": zod.number().int().nullish()
+}).describe('Immutable played roster. New ranking and priority fields are optional because older snapshots are never rewritten.')),
   "scoreA": zod.number().int().nullable(),
   "scoreB": zod.number().int().nullable(),
   "status": zod.enum(['upcoming', 'completed']),
@@ -271,19 +310,27 @@ export const GetMatchResponse = zod.object({
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int(),
-  "createdAt": zod.coerce.date()
-}).and(zod.object({
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional()
-}))),
+  "createdAt": zod.coerce.date().optional(),
+  "preferencesConfirmed": zod.boolean().optional(),
+  "preferredRolePriority": zod.boolean().optional(),
+  "prioritySince": zod.coerce.date().nullish(),
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
+  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "preferenceRank": zod.number().int().nullish()
+}).describe('Immutable played roster. New ranking and priority fields are optional because older snapshots are never rewritten.')),
   "teamB": zod.array(zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int(),
-  "createdAt": zod.coerce.date()
-}).and(zod.object({
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional()
-}))),
+  "createdAt": zod.coerce.date().optional(),
+  "preferencesConfirmed": zod.boolean().optional(),
+  "preferredRolePriority": zod.boolean().optional(),
+  "prioritySince": zod.coerce.date().nullish(),
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
+  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "preferenceRank": zod.number().int().nullish()
+}).describe('Immutable played roster. New ranking and priority fields are optional because older snapshots are never rewritten.')),
   "scoreA": zod.number().int().nullable(),
   "scoreB": zod.number().int().nullable(),
   "status": zod.enum(['upcoming', 'completed']),
@@ -328,19 +375,27 @@ export const SubmitMatchResultResponse = zod.object({
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int(),
-  "createdAt": zod.coerce.date()
-}).and(zod.object({
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional()
-}))),
+  "createdAt": zod.coerce.date().optional(),
+  "preferencesConfirmed": zod.boolean().optional(),
+  "preferredRolePriority": zod.boolean().optional(),
+  "prioritySince": zod.coerce.date().nullish(),
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
+  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "preferenceRank": zod.number().int().nullish()
+}).describe('Immutable played roster. New ranking and priority fields are optional because older snapshots are never rewritten.')),
   "teamB": zod.array(zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int(),
-  "createdAt": zod.coerce.date()
-}).and(zod.object({
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional()
-}))),
+  "createdAt": zod.coerce.date().optional(),
+  "preferencesConfirmed": zod.boolean().optional(),
+  "preferredRolePriority": zod.boolean().optional(),
+  "prioritySince": zod.coerce.date().nullish(),
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
+  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "preferenceRank": zod.number().int().nullish()
+}).describe('Immutable played roster. New ranking and priority fields are optional because older snapshots are never rewritten.')),
   "scoreA": zod.number().int().nullable(),
   "scoreB": zod.number().int().nullable(),
   "status": zod.enum(['upcoming', 'completed']),
@@ -374,19 +429,27 @@ export const ReopenMatchResultResponse = zod.object({
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int(),
-  "createdAt": zod.coerce.date()
-}).and(zod.object({
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional()
-}))),
+  "createdAt": zod.coerce.date().optional(),
+  "preferencesConfirmed": zod.boolean().optional(),
+  "preferredRolePriority": zod.boolean().optional(),
+  "prioritySince": zod.coerce.date().nullish(),
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
+  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "preferenceRank": zod.number().int().nullish()
+}).describe('Immutable played roster. New ranking and priority fields are optional because older snapshots are never rewritten.')),
   "teamB": zod.array(zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int(),
-  "createdAt": zod.coerce.date()
-}).and(zod.object({
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional()
-}))),
+  "createdAt": zod.coerce.date().optional(),
+  "preferencesConfirmed": zod.boolean().optional(),
+  "preferredRolePriority": zod.boolean().optional(),
+  "prioritySince": zod.coerce.date().nullish(),
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
+  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "preferenceRank": zod.number().int().nullish()
+}).describe('Immutable played roster. New ranking and priority fields are optional because older snapshots are never rewritten.')),
   "scoreA": zod.number().int().nullable(),
   "scoreB": zod.number().int().nullable(),
   "status": zod.enum(['upcoming', 'completed']),

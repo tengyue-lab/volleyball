@@ -5,9 +5,13 @@
  * Volleyball player and match management API
  * OpenAPI spec version: 0.1.0
  */
+import type { MatchPlayerAssignmentAssignmentStatus } from './matchPlayerAssignmentAssignmentStatus';
 import type { Position } from './position';
 
 export interface MatchPlayerAssignment {
   playerId: number;
   assignedPosition: Position;
+  assignmentStatus?: MatchPlayerAssignmentAssignmentStatus;
+  /** @nullable */
+  preferenceRank?: number | null;
 }

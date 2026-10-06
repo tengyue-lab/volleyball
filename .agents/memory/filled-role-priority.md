@@ -14,3 +14,9 @@ Preferred-role priority is granted after a completed Filled assignment and clear
 **Why:** The user explicitly chose match completion as the priority transition point.
 
 **How to apply:** Base priority on actual completed-match assignment history, preserve existing roster snapshots, and verify completion and reversal transitions. Display "Priority: Preferred role next match" while active; resolve competing priority players by ELO, then oldest outstanding Filled assignment.
+
+Do not infer historical played roles by running the new matcher over old preferences. Recover compensation only when explicit saved roles and actual completion audit order are available.
+
+**Why:** Older completed rosters in this project can contain preferences without any recorded played role. Recomputing with today's ranking rules would invent history and could grant the wrong player priority.
+
+**How to apply:** Leave ambiguous historical snapshots unchanged. Order recovered compensation by actual completion history, not when recovery rows were inserted or when the roster was created.

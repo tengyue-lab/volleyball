@@ -26,6 +26,10 @@ export interface Player {
   positions: Position[];
   elo: number;
   createdAt: string;
+  preferencesConfirmed: boolean;
+  preferredRolePriority: boolean;
+  /** @nullable */
+  prioritySince: string | null;
 }
 
 export interface PlayerInput {
@@ -34,7 +38,10 @@ export interface PlayerInput {
      * @maxLength 80
      */
   name: string;
-  /** @minItems 1 */
+  /**
+     * @minItems 3
+     * @maxItems 5
+     */
   positions: Position[];
   /** @minimum 0 */
   elo?: number;
@@ -46,7 +53,10 @@ export interface PlayerUpdate {
      * @maxLength 80
      */
   name?: string;
-  /** @minItems 1 */
+  /**
+     * @minItems 3
+     * @maxItems 5
+     */
   positions?: Position[];
   /** @minimum 0 */
   elo?: number;
@@ -71,9 +81,32 @@ export const MatchWinner = {
   Team_B: 'Team B',
 } as const;
 
-export type MatchPlayerSnapshot = Player & {
+export type MatchPlayerSnapshotAssignmentStatus = typeof MatchPlayerSnapshotAssignmentStatus[keyof typeof MatchPlayerSnapshotAssignmentStatus];
+
+
+export const MatchPlayerSnapshotAssignmentStatus = {
+  preferred: 'preferred',
+  filled: 'filled',
+} as const;
+
+/**
+ * Immutable played roster. New ranking and priority fields are optional because older snapshots are never rewritten.
+ */
+export interface MatchPlayerSnapshot {
+  id: number;
+  name: string;
+  positions: Position[];
+  elo: number;
+  createdAt?: string;
+  preferencesConfirmed?: boolean;
+  preferredRolePriority?: boolean;
+  /** @nullable */
+  prioritySince?: string | null;
   assignedPosition?: Position;
-};
+  assignmentStatus?: MatchPlayerSnapshotAssignmentStatus;
+  /** @nullable */
+  preferenceRank?: number | null;
+}
 
 export type EloHistoryEntryAction = typeof EloHistoryEntryAction[keyof typeof EloHistoryEntryAction];
 
@@ -111,9 +144,20 @@ export interface Match {
   eloChanges: EloHistoryEntry[];
 }
 
+export type MatchPlayerAssignmentAssignmentStatus = typeof MatchPlayerAssignmentAssignmentStatus[keyof typeof MatchPlayerAssignmentAssignmentStatus];
+
+
+export const MatchPlayerAssignmentAssignmentStatus = {
+  preferred: 'preferred',
+  filled: 'filled',
+} as const;
+
 export interface MatchPlayerAssignment {
   playerId: number;
   assignedPosition: Position;
+  assignmentStatus?: MatchPlayerAssignmentAssignmentStatus;
+  /** @nullable */
+  preferenceRank?: number | null;
 }
 
 export interface MatchInput {

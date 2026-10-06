@@ -377,89 +377,12 @@ export function useGetPlayer<TData = Awaited<ReturnType<typeof getPlayer>>, TErr
 
 
 
-export const getGetPlayerEloHistoryUrl = (playerId: number,) => {
-
-
-
-
-  return `/api/players/${playerId}/elo-history`
-}
-
-/**
- * @summary Get a player's ELO audit history
- */
-export const getPlayerEloHistory = async (playerId: number, options?: Parameters<typeof customFetch>[1]): Promise<EloHistoryEntry[]> => {
-
-  return customFetch<EloHistoryEntry[]>(getGetPlayerEloHistoryUrl(playerId),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-
-
-export const getGetPlayerEloHistoryQueryKey = (playerId: number,) => {
-    return [
-    `/api/players/${playerId}/elo-history`
-    ] as const;
-    }
-
-
-export const getGetPlayerEloHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getPlayerEloHistory>>, TError = ErrorType<void>>(playerId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPlayerEloHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetPlayerEloHistoryQueryKey(playerId);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPlayerEloHistory>>> = ({ signal }) => getPlayerEloHistory(playerId, { signal, ...requestOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, enabled: playerId !== null && playerId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPlayerEloHistory>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetPlayerEloHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getPlayerEloHistory>>>
-export type GetPlayerEloHistoryQueryError = ErrorType<void>
-
-
-/**
- * @summary Get a player's ELO audit history
- */
-
-export function useGetPlayerEloHistory<TData = Awaited<ReturnType<typeof getPlayerEloHistory>>, TError = ErrorType<void>>(
- playerId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPlayerEloHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetPlayerEloHistoryQueryOptions(playerId,options)
-
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-
 export const getUpdatePlayerUrl = (playerId: number,) => {
 
 
 
 
-  return `/api/players/${playerId}/elo-history`
+  return `/api/players/${playerId}`
 }
 
 /**
@@ -548,7 +471,7 @@ export const getDeletePlayerUrl = (playerId: number,) => {
 
 
 
-  return `/api/players/${playerId}/elo-history`
+  return `/api/players/${playerId}`
 }
 
 /**
@@ -616,6 +539,83 @@ export const useDeletePlayer = <TError = ErrorType<void>,
       > => {
       return useMutation(getDeletePlayerMutationOptions(options));
     }
+
+export const getGetPlayerEloHistoryUrl = (playerId: number,) => {
+
+
+
+
+  return `/api/players/${playerId}/elo-history`
+}
+
+/**
+ * @summary Get a player's ELO audit history
+ */
+export const getPlayerEloHistory = async (playerId: number, options?: Parameters<typeof customFetch>[1]): Promise<EloHistoryEntry[]> => {
+
+  return customFetch<EloHistoryEntry[]>(getGetPlayerEloHistoryUrl(playerId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPlayerEloHistoryQueryKey = (playerId: number,) => {
+    return [
+    `/api/players/${playerId}/elo-history`
+    ] as const;
+    }
+
+
+export const getGetPlayerEloHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getPlayerEloHistory>>, TError = ErrorType<void>>(playerId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPlayerEloHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPlayerEloHistoryQueryKey(playerId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPlayerEloHistory>>> = ({ signal }) => getPlayerEloHistory(playerId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: playerId !== null && playerId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPlayerEloHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPlayerEloHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getPlayerEloHistory>>>
+export type GetPlayerEloHistoryQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get a player's ELO audit history
+ */
+
+export function useGetPlayerEloHistory<TData = Awaited<ReturnType<typeof getPlayerEloHistory>>, TError = ErrorType<void>>(
+ playerId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPlayerEloHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPlayerEloHistoryQueryOptions(playerId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetLeaderboardUrl = () => {
 
