@@ -1,0 +1,57 @@
+The plan says impossible pools should show an error instead of 
+Filled assignments. I actually want the opposite. If a required 
+position cannot be filled by a player who selected it, the app 
+should still create the match, assign the best available player 
+by ELO, highlight that assignment as "Filled" (orange badge), 
+and show a warning banner listing which positions were short.
+
+Only block the match if the pool is so small that a valid team 
+composition is impossible (e.g., fewer than 12 players, or no 
+Setter at all across the whole pool).
+
+ADDITIONALLY — PRIORITY FOR FILLED PLAYERS IN THE NEXT MATCH
+
+When a player is assigned to a "Filled" position (a role they did 
+not select in their ranked preferences), record this in the database 
+as a "filled assignment" for that player and that match.
+
+In the NEXT match the player participates in, the matchmaking 
+algorithm must give that player priority for one of their 
+preferred positions. Specifically:
+
+1. Track a flag or counter per player, e.g. "pending_priority" 
+   that is set to true when they play a Filled role, and cleared 
+   once they are given a Preferred role in a later match.
+
+2. When building the next match, if a player has pending_priority 
+   = true, the algorithm should treat their top-ranked preference 
+   as if it were one rank higher (or apply a priority bonus in the 
+   scoring system) so they are more likely to receive a role they 
+   actually selected.
+
+3. Priority only applies to positional assignment. It must NOT 
+   override:
+   - Validity (they still must be assigned a role from their list)
+   - Position feasibility (teams must still meet the required 
+     composition)
+   - ELO balancing (ELO is still used after positions are assigned)
+
+4. If two players both have pending_priority and compete for the 
+   same preferred role, the tiebreaker is ELO, then the player 
+   who has been waiting longer (older filled assignment).
+
+5. Once a player receives a Preferred role, clear their 
+   pending_priority flag.
+
+6. Display this on the player profile: a small indicator showing 
+   "Priority: Preferred role next match" when the flag is active, 
+   so the player and admin can see it.
+
+Add tests for this behavior:
+- A player who played a Filled role last match gets their top 
+  preference in the next match when possible.
+- A player with pending_priority does not break team composition 
+  or ELO balance.
+- The flag clears correctly after a Preferred assignment.
+- Two priority players competing for the same role resolve 
+  deterministically (ELO, then wait time).
