@@ -1,0 +1,392 @@
+# Volleyball App — Ranked Position Preferences & Matchmaking Algorithm Upgrade
+
+You are working on an existing volleyball management application. **Do not rebuild the application or change unrelated functionality.** First inspect the existing codebase and understand how player profiles, positions, matchmaking/team balancing, ELO, match history, and the database currently work.
+
+The goal of this task is to replace the current "select multiple positions" system with a **ranked position preference system**, and then update the matchmaking algorithm to use those rankings.
+
+## 1. Player Position Preferences
+
+Currently players can select multiple positions without ranking them.
+
+Change this so each player has a **ranked list of preferred positions**.
+
+The available positions are:
+
+* Setter (S)
+* Outside Hitter (OH)
+* Middle Blocker (MB)
+* Opposite (OPP)
+* Libero (L)
+
+### Requirements
+
+* A player must select **at least 3 positions**.
+* A player may select more than 3 positions.
+* Each position can only appear once in a player's preference list.
+* The player must be able to drag/reorder their selected positions.
+* The order represents preference:
+
+  * Rank 1 = strongest preference
+  * Rank 2 = second preference
+  * Rank 3 = third preference
+  * etc.
+* Players should not be required to rank positions they do not want to play.
+* The UI should clearly communicate that the order matters for matchmaking.
+
+Example:
+
+Player A:
+
+1. Setter
+2. Opposite
+3. Outside Hitter
+
+Player B:
+
+1. Outside Hitter
+2. Middle Blocker
+3. Opposite
+4. Setter
+
+Player C:
+
+1. Middle Blocker
+2. Outside Hitter
+3. Opposite
+4. Libero
+
+The system must preserve this ranking in the database.
+
+## 2. Data Model
+
+Inspect the existing database/schema before making changes.
+
+Modify the player position data model so that the preference order is preserved.
+
+Do not unnecessarily change unrelated database structures.
+
+If the current system stores positions as an unordered array/list, migrate it to an ordered representation.
+
+The application should be able to retrieve a player's preferences in exactly the order they selected them.
+
+Existing players need to be handled safely.
+
+If existing players have multiple positions but no ranking, create a sensible migration strategy rather than deleting their existing data.
+
+If there is no objectively correct way to determine the old rankings, preserve their existing positions and require the player to confirm/reorder them before they can participate in a new match.
+
+## 3. Player UI
+
+Update the player creation/edit screen.
+
+Players should:
+
+1. Select positions they are willing to play.
+2. Have the selected positions displayed as a ranked list.
+3. Drag and drop positions to change their ranking.
+4. Be unable to save the player profile unless at least 3 positions are ranked.
+5. Be able to edit their rankings later.
+
+Example UI:
+
+Preferred Positions
+
+1. ⭐ Setter
+2. Outside Hitter
+3. Opposite
+
+Drag to reorder.
+
+The UI should be mobile-friendly.
+
+Do not unnecessarily redesign the rest of the player screen.
+
+## 4. Matchmaking Algorithm
+
+This is the most important part of the task.
+
+The existing matchmaking algorithm currently uses whether a player can play a position, but the new algorithm must use the **ranked preference list**.
+
+Do not simply convert the ranked list into a boolean "can/cannot play" system.
+
+The ranking must materially affect the result.
+
+### Core principle
+
+The algorithm should prioritise giving players their highest-ranked available position while still producing valid teams.
+
+For example:
+
+Player A:
+
+1. Setter
+2. Outside
+3. Opposite
+
+Player B:
+
+1. Outside
+2. Setter
+3. Opposite
+
+If only one Setter position is available and one Outside position is available, the algorithm should strongly prefer:
+
+Player A → Setter
+
+Player B → Outside
+
+rather than treating the two players as interchangeable.
+
+### Position scarcity
+
+The algorithm must also account for players who have fewer alternatives.
+
+A player who has:
+
+1. Setter
+2. Outside
+3. Opposite
+
+should generally have higher priority for Setter than a player who has:
+
+1. Setter
+2. Outside
+3. Middle
+4. Opposite
+5. Libero
+
+because the second player has more alternatives.
+
+Therefore the algorithm should consider both:
+
+* Preference rank
+* Number of alternative positions available to that player
+
+This is important for avoiding situations where a flexible player takes a position that a specialist needs.
+
+## 5. Match Composition
+
+Preserve the existing match-size requirements unless the existing code reveals that they are implemented differently.
+
+For a 12-player match, the target composition is:
+
+Each team:
+
+* 1 Setter
+* 2 Outside Hitters
+* 2 Middle Blockers
+* 1 Opposite
+
+For 13-player matches, determine how the existing application currently handles the additional player and preserve the intended Libero behaviour.
+
+For 14-player matches, determine how the existing application currently handles the additional players and preserve the intended Libero behaviour.
+
+Do not invent new match-composition rules if the existing code already defines them.
+
+If the existing implementation is ambiguous, stop and clearly report the ambiguity rather than silently changing the rules.
+
+## 6. Team Assignment
+
+The algorithm should optimise position assignment before ELO balancing.
+
+Use the following priority order:
+
+### Priority 1 — Validity
+
+Every player must be assigned to a position that appears in their ranked preferences.
+
+No player may be assigned to a position they did not select.
+
+### Priority 2 — Position feasibility
+
+Ensure both teams have the required positional composition.
+
+### Priority 3 — Player preference
+
+Among valid solutions, maximise player satisfaction by giving players higher-ranked positions.
+
+A practical scoring system can be used, for example:
+
+* Rank 1 = highest score
+* Rank 2 = lower score
+* Rank 3 = lower again
+* etc.
+
+However, do not blindly assume a particular scoring formula is optimal. Inspect the existing algorithm and choose a deterministic scoring method that properly rewards higher-ranked preferences.
+
+### Priority 4 — Specialist protection
+
+When two players compete for the same position, prefer the player for whom that position is more important and/or who has fewer viable alternatives.
+
+Do not allow flexible players to systematically take positions away from specialists.
+
+### Priority 5 — ELO balance
+
+Only after finding strong valid positional assignments should the algorithm optimise team ELO balance.
+
+ELO balancing must not override the fundamental positional requirements or cause players to receive positions they did not select.
+
+## 7. ELO Balancer Button
+
+Preserve the existing "ELO Balancer" functionality.
+
+The button should attempt to improve the ELO balance by swapping players between teams.
+
+However:
+
+* Only perform legal swaps.
+* A player's position assignment must remain valid after the swap.
+* Do not swap players simply because it improves ELO if doing so substantially damages position preference satisfaction.
+* Same-position swaps should remain the preferred mechanism where possible.
+
+The algorithm should evaluate candidate swaps and select the best valid result.
+
+## 8. Deterministic Behaviour
+
+The matchmaking algorithm must be deterministic.
+
+Given:
+
+* the same players
+* the same ELO ratings
+* the same ranked position preferences
+* the same match size
+
+the algorithm should produce the same result.
+
+Do not use an AI model, randomness, or nondeterministic behaviour during matchmaking.
+
+This must be normal application code.
+
+## 9. Edge Cases
+
+Handle situations such as:
+
+* Multiple players strongly preferring Setter.
+* Only two players being capable of Setter.
+* A specialist player competing with a flexible player for a position.
+* Players with exactly 3 preferences.
+* Players with 4 preferences.
+* Players with all 5 preferences.
+* A position having very few eligible players.
+* Players having identical preference rankings.
+* 12, 13 and 14 selected players.
+* Very large ELO differences.
+* Several equally good positional solutions.
+
+The algorithm should fail gracefully if no valid assignment exists.
+
+It should provide a useful error message explaining why a valid team composition could not be created rather than silently assigning invalid positions.
+
+## 10. Testing
+
+Before modifying the production matchmaking logic, inspect the existing tests.
+
+Add or update automated tests covering the new ranked-preference behaviour.
+
+At minimum include tests for:
+
+### Test A — Specialist beats flexible player
+
+Player A:
+
+1. Setter
+2. Outside
+3. Opposite
+
+Player B:
+
+1. Outside
+2. Setter
+3. Middle
+4. Opposite
+
+If both can fill Setter but Player A has fewer alternatives and ranks Setter first, the algorithm should favour Player A for Setter.
+
+### Test B — Ranking matters
+
+Player A:
+
+1. Setter
+2. Outside
+3. Opposite
+
+Player B:
+
+1. Outside
+2. Setter
+3. Opposite
+
+The algorithm should prefer A at Setter and B at Outside when that produces a valid team.
+
+### Test C — Flexible player fills a scarce position
+
+If a player has only one viable position remaining while another player can fill several positions, the algorithm should protect the constrained player.
+
+### Test D — ELO balancing
+
+Create a valid positional assignment and verify that the ELO balancer can improve the team ELO difference without creating invalid positional assignments.
+
+### Test E — 12 players
+
+Verify the exact required positional composition.
+
+### Test F — 13 players
+
+Verify the existing intended Libero behaviour.
+
+### Test G — 14 players
+
+Verify the existing intended Libero behaviour.
+
+### Test H — No valid assignment
+
+Create an impossible group of players and verify that the application gives a clear error instead of creating an invalid match.
+
+## 11. Do Not Break Existing Functionality
+
+Do not modify unrelated functionality.
+
+In particular, preserve:
+
+* Player creation
+* Player editing
+* Player deletion
+* Leaderboard
+* ELO history
+* Match history
+* Match deletion/reversal
+* Authentication
+* Existing database functionality
+* Existing UI unless changes are required for ranked preferences
+
+Before making changes, inspect the repository and identify the relevant files.
+
+After making changes:
+
+1. Run the existing test suite.
+2. Run the new matchmaking tests.
+3. Fix regressions.
+4. Verify the application builds successfully.
+5. Verify the frontend and API still communicate correctly.
+
+## 12. Important Development Instruction
+
+Do not immediately rewrite the matchmaking algorithm.
+
+First:
+
+1. Inspect the current implementation.
+2. Explain how it currently works.
+3. Identify which parts can be reused.
+4. Identify which parts need to change for ranked preferences.
+5. Propose the new algorithm.
+6. Only then implement it.
+
+Do not change the ELO calculation during this task unless a change is absolutely required by the new matchmaking implementation.
+
+The goal of this task is primarily:
+
+**Ranked player position preferences → better positional assignment → valid teams → ELO balancing.**
+
+Keep the implementation maintainable and well documented so the matchmaking rules can be adjusted later.
