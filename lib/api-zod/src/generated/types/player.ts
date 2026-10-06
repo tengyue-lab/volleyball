@@ -11,7 +11,12 @@ export interface Player {
   id: number;
   name: string;
   positions: Position[];
-  elo: number;
+  /**
+     * Null when this viewer cannot see the rating.
+     * @nullable
+     */
+  elo: number | null;
+  eloPublic: boolean;
   createdAt: Date;
   preferencesConfirmed: boolean;
   preferredRolePriority: boolean;

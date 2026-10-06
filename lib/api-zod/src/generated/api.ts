@@ -8,6 +8,64 @@
 import * as zod from 'zod';
 
 
+export const GetAuthViewerResponse = zod.object({
+  "signedIn": zod.boolean(),
+  "isAdmin": zod.boolean(),
+  "userId": zod.string().nullable(),
+  "email": zod.string().nullable(),
+  "playerId": zod.number().int().nullable()
+})
+
+
+export const ListAdminAccountsResponseItem = zod.object({
+  "id": zod.string(),
+  "email": zod.string().nullable(),
+  "isAdmin": zod.boolean(),
+  "playerId": zod.number().int().nullable()
+})
+export const ListAdminAccountsResponse = zod.array(ListAdminAccountsResponseItem)
+
+
+export const UpdateAccountLinkParams = zod.object({
+  "accountId": zod.coerce.string()
+})
+
+export const UpdateAccountLinkBody = zod.object({
+  "playerId": zod.number().int().nullable()
+})
+
+export const UpdateAccountLinkResponse = zod.object({
+  "id": zod.string(),
+  "email": zod.string().nullable(),
+  "isAdmin": zod.boolean(),
+  "playerId": zod.number().int().nullable()
+})
+
+
+export const ListAdminAccessResponseItem = zod.object({
+  "email": zod.string(),
+  "bootstrap": zod.boolean()
+})
+export const ListAdminAccessResponse = zod.array(ListAdminAccessResponseItem)
+
+
+export const GrantAdminAccessBody = zod.object({
+  "email": zod.string().email()
+})
+
+export const GrantAdminAccessResponse = zod.object({
+  "email": zod.string(),
+  "bootstrap": zod.boolean()
+})
+
+
+export const RevokeAdminAccessParams = zod.object({
+  "email": zod.coerce.string()
+})
+
+export const RevokeAdminAccessResponse = zod.void()
+
+
 /**
  * Returns server health status
  * @summary Health check
@@ -24,7 +82,8 @@ export const ListPlayersResponseItem = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
-  "elo": zod.number().int(),
+  "elo": zod.number().int().nullable().describe('Null when this viewer cannot see the rating.'),
+  "eloPublic": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "preferencesConfirmed": zod.boolean(),
   "preferredRolePriority": zod.boolean(),
@@ -43,19 +102,21 @@ export const createPlayerBodyPositionsMax = 5;
 export const createPlayerBodyEloDefault = 1000;
 export const createPlayerBodyEloMin = 0;
 
-
+export const createPlayerBodyEloPublicDefault = true;
 
 export const CreatePlayerBody = zod.object({
   "name": zod.string().min(1).max(createPlayerBodyNameMax),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])).min(1).max(createPlayerBodyPositionsMax),
-  "elo": zod.number().int().min(createPlayerBodyEloMin).default(createPlayerBodyEloDefault)
+  "elo": zod.number().int().min(createPlayerBodyEloMin).default(createPlayerBodyEloDefault),
+  "eloPublic": zod.boolean().default(createPlayerBodyEloPublicDefault)
 })
 
 export const CreatePlayerResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
-  "elo": zod.number().int(),
+  "elo": zod.number().int().nullable().describe('Null when this viewer cannot see the rating.'),
+  "eloPublic": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "preferencesConfirmed": zod.boolean(),
   "preferredRolePriority": zod.boolean(),
@@ -74,7 +135,8 @@ export const GetPlayerResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
-  "elo": zod.number().int(),
+  "elo": zod.number().int().nullable().describe('Null when this viewer cannot see the rating.'),
+  "eloPublic": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "preferencesConfirmed": zod.boolean(),
   "preferredRolePriority": zod.boolean(),
@@ -100,14 +162,16 @@ export const updatePlayerBodyEloMin = 0;
 export const UpdatePlayerBody = zod.object({
   "name": zod.string().min(1).max(updatePlayerBodyNameMax).optional(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])).min(1).max(updatePlayerBodyPositionsMax).optional(),
-  "elo": zod.number().int().min(updatePlayerBodyEloMin).optional()
+  "elo": zod.number().int().min(updatePlayerBodyEloMin).optional(),
+  "eloPublic": zod.boolean().optional()
 })
 
 export const UpdatePlayerResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
-  "elo": zod.number().int(),
+  "elo": zod.number().int().nullable().describe('Null when this viewer cannot see the rating.'),
+  "eloPublic": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "preferencesConfirmed": zod.boolean(),
   "preferredRolePriority": zod.boolean(),
@@ -136,9 +200,9 @@ export const GetPlayerEloHistoryResponseItem = zod.object({
   "id": zod.number().int(),
   "playerId": zod.number().int(),
   "matchId": zod.number().int(),
-  "eloBefore": zod.number().int(),
-  "eloAfter": zod.number().int(),
-  "changeAmount": zod.number().int(),
+  "eloBefore": zod.number().int().nullable(),
+  "eloAfter": zod.number().int().nullable(),
+  "changeAmount": zod.number().int().nullable(),
   "action": zod.enum(['result', 'reversal']),
   "createdAt": zod.coerce.date()
 })
@@ -152,7 +216,8 @@ export const GetLeaderboardResponseItem = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
-  "elo": zod.number().int(),
+  "elo": zod.number().int().nullable().describe('Null when this viewer cannot see the rating.'),
+  "eloPublic": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "preferencesConfirmed": zod.boolean(),
   "preferredRolePriority": zod.boolean(),
@@ -170,7 +235,7 @@ export const ListMatchesResponseItem = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
-  "elo": zod.number().int(),
+  "elo": zod.number().int().nullable(),
   "createdAt": zod.coerce.date().optional(),
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
@@ -183,7 +248,7 @@ export const ListMatchesResponseItem = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
-  "elo": zod.number().int(),
+  "elo": zod.number().int().nullable(),
   "createdAt": zod.coerce.date().optional(),
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
@@ -202,9 +267,9 @@ export const ListMatchesResponseItem = zod.object({
   "id": zod.number().int(),
   "playerId": zod.number().int(),
   "matchId": zod.number().int(),
-  "eloBefore": zod.number().int(),
-  "eloAfter": zod.number().int(),
-  "changeAmount": zod.number().int(),
+  "eloBefore": zod.number().int().nullable(),
+  "eloAfter": zod.number().int().nullable(),
+  "changeAmount": zod.number().int().nullable(),
   "action": zod.enum(['result', 'reversal']),
   "createdAt": zod.coerce.date()
 }))
@@ -253,7 +318,7 @@ export const CreateMatchResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
-  "elo": zod.number().int(),
+  "elo": zod.number().int().nullable(),
   "createdAt": zod.coerce.date().optional(),
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
@@ -266,7 +331,7 @@ export const CreateMatchResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
-  "elo": zod.number().int(),
+  "elo": zod.number().int().nullable(),
   "createdAt": zod.coerce.date().optional(),
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
@@ -285,9 +350,9 @@ export const CreateMatchResponse = zod.object({
   "id": zod.number().int(),
   "playerId": zod.number().int(),
   "matchId": zod.number().int(),
-  "eloBefore": zod.number().int(),
-  "eloAfter": zod.number().int(),
-  "changeAmount": zod.number().int(),
+  "eloBefore": zod.number().int().nullable(),
+  "eloAfter": zod.number().int().nullable(),
+  "changeAmount": zod.number().int().nullable(),
   "action": zod.enum(['result', 'reversal']),
   "createdAt": zod.coerce.date()
 }))
@@ -307,7 +372,7 @@ export const GetMatchResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
-  "elo": zod.number().int(),
+  "elo": zod.number().int().nullable(),
   "createdAt": zod.coerce.date().optional(),
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
@@ -320,7 +385,7 @@ export const GetMatchResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
-  "elo": zod.number().int(),
+  "elo": zod.number().int().nullable(),
   "createdAt": zod.coerce.date().optional(),
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
@@ -339,9 +404,9 @@ export const GetMatchResponse = zod.object({
   "id": zod.number().int(),
   "playerId": zod.number().int(),
   "matchId": zod.number().int(),
-  "eloBefore": zod.number().int(),
-  "eloAfter": zod.number().int(),
-  "changeAmount": zod.number().int(),
+  "eloBefore": zod.number().int().nullable(),
+  "eloAfter": zod.number().int().nullable(),
+  "changeAmount": zod.number().int().nullable(),
   "action": zod.enum(['result', 'reversal']),
   "createdAt": zod.coerce.date()
 }))
@@ -372,7 +437,7 @@ export const SubmitMatchResultResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
-  "elo": zod.number().int(),
+  "elo": zod.number().int().nullable(),
   "createdAt": zod.coerce.date().optional(),
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
@@ -385,7 +450,7 @@ export const SubmitMatchResultResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
-  "elo": zod.number().int(),
+  "elo": zod.number().int().nullable(),
   "createdAt": zod.coerce.date().optional(),
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
@@ -404,9 +469,9 @@ export const SubmitMatchResultResponse = zod.object({
   "id": zod.number().int(),
   "playerId": zod.number().int(),
   "matchId": zod.number().int(),
-  "eloBefore": zod.number().int(),
-  "eloAfter": zod.number().int(),
-  "changeAmount": zod.number().int(),
+  "eloBefore": zod.number().int().nullable(),
+  "eloAfter": zod.number().int().nullable(),
+  "changeAmount": zod.number().int().nullable(),
   "action": zod.enum(['result', 'reversal']),
   "createdAt": zod.coerce.date()
 }))
@@ -426,7 +491,7 @@ export const ReopenMatchResultResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
-  "elo": zod.number().int(),
+  "elo": zod.number().int().nullable(),
   "createdAt": zod.coerce.date().optional(),
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
@@ -439,7 +504,7 @@ export const ReopenMatchResultResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
-  "elo": zod.number().int(),
+  "elo": zod.number().int().nullable(),
   "createdAt": zod.coerce.date().optional(),
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
@@ -458,9 +523,9 @@ export const ReopenMatchResultResponse = zod.object({
   "id": zod.number().int(),
   "playerId": zod.number().int(),
   "matchId": zod.number().int(),
-  "eloBefore": zod.number().int(),
-  "eloAfter": zod.number().int(),
-  "changeAmount": zod.number().int(),
+  "eloBefore": zod.number().int().nullable(),
+  "eloAfter": zod.number().int().nullable(),
+  "changeAmount": zod.number().int().nullable(),
   "action": zod.enum(['result', 'reversal']),
   "createdAt": zod.coerce.date()
 }))

@@ -1,0 +1,215 @@
+import base64
+import json
+import sqlite3
+import time
+import unittest
+
+import test_match_results as results
+from auth_client import SignedClient
+from privacy_auth import INITIAL_ADMIN_EMAILS, sign_request
+
+
+class PrivacyTests(unittest.TestCase):
+    setUp = results.MatchResultTests.setUp
+    tearDown = results.MatchResultTests.tearDown
+    create_match = results.MatchResultTests.create_match
+    complete = results.MatchResultTests.complete
+    profile = results.MatchResultTests.profile
+
+    def anonymous(self):
+        return SignedClient(self.app, None, None)
+
+    def owner(self, player_id):
+        owner = SignedClient(self.app, "user_test_owner", "owner@example.test")
+        owner.get("/api/auth/me")
+        linked = self.client.patch("/api/admin/accounts/user_test_owner", json={"playerId": player_id})
+        self.assertEqual(linked.status_code, 200)
+        return owner
+
+    def test_default_public_cap_and_filter_before_limit(self):
+        self.assertTrue(all(p["eloPublic"] for p in self.client.get("/api/players").get_json()))
+        expected_ids = [p["id"] for p in sorted(
+            self.client.get("/api/players").get_json(),
+            key=lambda p: (-p["elo"], p["name"].casefold(), p["id"])
+        )]
+        before = self.anonymous().get("/api/leaderboard").get_json()
+        self.assertEqual(len(before), 10)
+        self.assertEqual([p["id"] for p in before], expected_ids[:10])
+        hidden = self.player_ids[0]
+        self.client.patch(f"/api/players/{hidden}", json={"eloPublic": False})
+        after = self.anonymous().get("/api/leaderboard").get_json()
+        self.assertEqual(len(after), 10)
+        self.assertNotIn(hidden, [p["id"] for p in after])
+        self.assertIn(expected_ids[10], [p["id"] for p in after])
+        self.assertEqual(self.client.get("/api/leaderboard").get_json(), after)
+        self.client.patch(f"/api/players/{hidden}", json={"eloPublic": True})
+        self.assertEqual(self.anonymous().get("/api/leaderboard").get_json(), before)
+
+    def test_fewer_and_no_public_players(self):
+        for player_id in self.player_ids[2:]:
+            self.client.patch(f"/api/players/{player_id}", json={"eloPublic": False})
+        self.assertEqual(len(self.anonymous().get("/api/leaderboard").get_json()), 2)
+        for player_id in self.player_ids[:2]:
+            self.client.patch(f"/api/players/{player_id}", json={"eloPublic": False})
+        self.assertEqual(self.anonymous().get("/api/leaderboard").get_json(), [])
+
+    def test_strict_boolean_creation_updates_and_preservation(self):
+        target = self.player_ids[0]
+        for bad in (0, 1, "false", None, [], {}):
+            self.assertEqual(self.client.patch(f"/api/players/{target}", json={"eloPublic": bad}).status_code, 400)
+            self.assertEqual(self.client.post("/api/players", json={"name": "Invalid", "positions": ["Setter"], "eloPublic": bad}).status_code, 400)
+        created = self.client.post("/api/players", json={"name": "Private", "positions": ["Libero", "Setter"], "eloPublic": False}).get_json()
+        self.assertFalse(created["eloPublic"])
+        changed = self.client.patch(f"/api/players/{created['id']}", json={"name": "Still private"}).get_json()
+        self.assertFalse(changed["eloPublic"])
+        self.assertEqual(changed["positions"], ["Libero", "Setter"])
+        self.assertEqual(changed["elo"], 1000)
+
+    def test_private_profile_owner_admin_other_and_anonymous(self):
+        target = self.player_ids[0]
+        owner = self.owner(target)
+        response = owner.patch(f"/api/players/{target}", json={"eloPublic": False})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["elo"], 1050)
+        other = SignedClient(self.app, "user_test_other", "other@example.test")
+        for client in (self.anonymous(), other):
+            self.assertIsNone(client.get(f"/api/players/{target}").get_json()["elo"])
+            self.assertIsNone(next(p for p in client.get("/api/players").get_json() if p["id"] == target)["elo"])
+        self.assertEqual(self.profile(target)["elo"], 1050)
+        self.assertEqual(owner.get("/api/auth/me").get_json()["playerId"], target)
+        self.assertFalse(owner.get("/api/auth/me").get_json()["isAdmin"])
+
+    def test_nonadmin_mutations_and_ownership_are_denied(self):
+        target = self.player_ids[0]
+        owner = self.owner(target)
+        self.assertEqual(owner.patch(f"/api/players/{target}", json={"elo": 9999}).status_code, 403)
+        self.assertEqual(owner.patch(f"/api/players/{target}", json={"eloPublic": False, "isAdmin": True}).status_code, 403)
+        self.assertEqual(owner.patch(f"/api/players/{self.player_ids[1]}", json={"eloPublic": False}).status_code, 403)
+        self.assertEqual(owner.delete(f"/api/players/{target}").status_code, 403)
+        self.assertEqual(owner.post("/api/players", json={"name": "No", "positions": ["Setter"]}).status_code, 403)
+        for route in ("/api/admin/accounts", "/api/admin/admin-access"):
+            self.assertEqual(owner.get(route).status_code, 403)
+            self.assertEqual(self.anonymous().get(route).status_code, 401)
+        self.assertEqual(owner.patch("/api/admin/accounts/user_test_owner", json={"playerId": self.player_ids[1]}).status_code, 403)
+        self.assertEqual(owner.post("/api/matches", json={}).status_code, 403)
+        self.assertEqual(owner.post("/api/matches/1/result", json={"scoreA": 3, "scoreB": 1}).status_code, 403)
+        self.assertEqual(owner.post("/api/matches/1/reopen").status_code, 403)
+        self.assertEqual(self.anonymous().post("/api/players", json={}).status_code, 401)
+
+    def test_private_snapshots_history_and_deleted_owner_stay_private(self):
+        target = self.player_ids[0]
+        owner = self.owner(target)
+        match = self.create_match()
+        self.complete(match)
+        with sqlite3.connect(self.app.config["DATABASE_PATH"]) as conn:
+            stored_before = conn.execute("SELECT team_a_json FROM matches WHERE id=?", (match["id"],)).fetchone()[0]
+        owner.patch(f"/api/players/{target}", json={"eloPublic": False})
+        anon = self.anonymous()
+        for response in (anon.get(f"/api/matches/{match['id']}").get_json(), anon.get("/api/matches").get_json()[0]):
+            self.assertIsNone(response["teamA"][0]["elo"])
+        history = anon.get(f"/api/players/{target}/elo-history").get_json()[0]
+        self.assertTrue(all(history[k] is None for k in ("eloBefore", "eloAfter", "changeAmount")))
+        changes = anon.get(f"/api/matches/{match['id']}").get_json()["eloChanges"]
+        self.assertIsNone(next(c for c in changes if c["playerId"] == target)["changeAmount"])
+        self.assertEqual(owner.get(f"/api/matches/{match['id']}").get_json()["teamA"][0]["elo"], 1050)
+        self.assertEqual(self.client.delete(f"/api/players/{target}").status_code, 204)
+        self.assertIsNone(anon.get(f"/api/matches/{match['id']}").get_json()["teamA"][0]["elo"])
+        self.assertEqual(owner.get(f"/api/matches/{match['id']}").get_json()["teamA"][0]["elo"], 1050)
+        self.assertEqual(self.client.get(f"/api/matches/{match['id']}").get_json()["teamA"][0]["elo"], 1050)
+        with sqlite3.connect(self.app.config["DATABASE_PATH"]) as conn:
+            self.assertEqual(conn.execute("SELECT team_a_json FROM matches WHERE id=?", (match["id"],)).fetchone()[0], stored_before)
+
+    def test_private_players_still_receive_real_result_priority_and_reversal(self):
+        target = self.player_ids[5]
+        self.client.patch(f"/api/players/{target}", json={"eloPublic": False})
+        match = self.create_match()
+        self.assertEqual(match["teamA"][5]["elo"], 1050)
+        self.complete(match)
+        self.assertEqual(self.profile(target)["elo"], 1064)
+        self.assertTrue(self.profile(target)["preferredRolePriority"])
+        self.assertIsNone(self.anonymous().get(f"/api/players/{target}").get_json()["elo"])
+        self.assertEqual(self.client.post(f"/api/matches/{match['id']}/reopen").status_code, 200)
+        self.assertEqual(self.profile(target)["elo"], 1050)
+        self.assertFalse(self.profile(target)["preferredRolePriority"])
+        self.assertFalse(self.profile(target)["eloPublic"])
+
+    def test_unidentifiable_legacy_snapshot_ratings_fail_closed(self):
+        match = self.create_match()
+        with sqlite3.connect(self.app.config["DATABASE_PATH"]) as conn:
+            team = json.loads(conn.execute(
+                "SELECT team_a_json FROM matches WHERE id=?", (match["id"],)
+            ).fetchone()[0])
+            team[0].pop("id")
+            team[1]["id"] = 999999
+            conn.execute("UPDATE matches SET team_a_json=? WHERE id=?", (json.dumps(team), match["id"]))
+        public = self.anonymous().get(f"/api/matches/{match['id']}").get_json()
+        self.assertIsNone(public["teamA"][0]["elo"])
+        self.assertIsNone(public["teamA"][1]["elo"])
+        admin = self.client.get(f"/api/matches/{match['id']}").get_json()
+        self.assertEqual(admin["teamA"][0]["elo"], 1050)
+
+    def test_link_validation_uniqueness_and_unlink(self):
+        target = self.player_ids[0]
+        first = self.owner(target)
+        second = SignedClient(self.app, "user_test_second", "second@example.test")
+        second.get("/api/auth/me")
+        self.assertEqual(self.client.patch("/api/admin/accounts/user_test_second", json={"playerId": target}).status_code, 409)
+        self.assertEqual(self.client.patch("/api/admin/accounts/user_missing", json={"playerId": target}).status_code, 404)
+        for bad in (True, 0, "1", -1):
+            self.assertEqual(self.client.patch("/api/admin/accounts/user_test_second", json={"playerId": bad}).status_code, 400)
+        self.assertEqual(self.client.patch("/api/admin/accounts/user_test_owner", json={"playerId": None}).status_code, 200)
+        self.assertIsNone(first.get("/api/auth/me").get_json()["playerId"])
+        self.assertEqual(self.client.patch("/api/admin/accounts/user_test_second", json={"playerId": target}).status_code, 200)
+
+    def test_verified_email_admin_grants_future_signin_and_revocation(self):
+        unverified = SignedClient(self.app, "user_test_unverified", None)
+        self.assertFalse(unverified.get("/api/auth/me").get_json()["isAdmin"])
+        self.assertTrue(self.client.get("/api/auth/me").get_json()["isAdmin"])
+        self.assertEqual(self.client.post("/api/admin/admin-access", json={"email": "FUTURE@example.test"}).status_code, 201)
+        future = SignedClient(self.app, "user_test_future", "future@example.test")
+        self.assertTrue(future.get("/api/auth/me").get_json()["isAdmin"])
+        self.assertEqual(self.client.delete("/api/admin/admin-access/future@example.test").status_code, 204)
+        self.assertFalse(future.get("/api/auth/me").get_json()["isAdmin"])
+        self.assertEqual(future.get("/api/admin/accounts").status_code, 403)
+        self.assertEqual(self.client.delete(f"/api/admin/admin-access/{INITIAL_ADMIN_EMAILS[0]}").status_code, 409)
+        self.assertFalse(SignedClient(self.app, "user_test_first", "first@example.test").get("/api/auth/me").get_json()["isAdmin"])
+
+    def test_no_store_and_identity_does_not_persist_between_requests(self):
+        target = self.player_ids[0]
+        self.client.patch(f"/api/players/{target}", json={"eloPublic": False})
+        response = self.client.get(f"/api/players/{target}")
+        self.assertEqual(response.headers["Cache-Control"], "private, no-store")
+        self.assertEqual(response.headers["Vary"], "Cookie")
+        self.assertIsNotNone(response.get_json()["elo"])
+        self.assertIsNone(self.anonymous().get(f"/api/players/{target}").get_json()["elo"])
+
+    def test_unsigned_forged_expired_and_tampered_requests_fail_closed(self):
+        raw = self.app.test_client()
+        for headers in ({}, {"X-User-Id": "user_test_admin", "X-Is-Admin": "true"},
+                        {"X-Sideout-Identity": '{"userId":"user_test_admin","email":"'+INITIAL_ADMIN_EMAILS[0]+'"}'}):
+            self.assertEqual(raw.get("/api/players", headers=headers).status_code, 403)
+        uri = "/api/players"
+        context = base64.b64encode(json.dumps({"userId": "user_test_admin", "email": INITIAL_ADMIN_EMAILS[0]}).encode()).decode()
+        timestamp = str(time.time() - 60)
+        signature = sign_request(self.app.config["AUTH_GATEWAY_SECRET"], "GET", uri, timestamp, context, b"")
+        headers = {"X-Sideout-Time": timestamp, "X-Sideout-Identity": context, "X-Sideout-Signature": signature}
+        self.assertEqual(raw.get(uri, headers=headers).status_code, 403)
+        timestamp = str(time.time())
+        headers["X-Sideout-Time"] = timestamp
+        headers["X-Sideout-Signature"] = sign_request(self.app.config["AUTH_GATEWAY_SECRET"], "GET", uri, timestamp, context, b"")
+        self.assertEqual(raw.get("/api/admin/accounts", headers=headers).status_code, 403)
+        self.assertEqual(raw.patch(uri+"/1", headers=headers, json={"elo": 9999}).status_code, 403)
+
+    def test_malformed_identity_and_query_binding_fail_closed(self):
+        raw = self.app.test_client()
+        for identity in ({"userId": "user_test_owner", "email": "owner@example.test", "isAdmin": True}, {"userId": None, "email": INITIAL_ADMIN_EMAILS[0]}, []):
+            timestamp = str(time.time())
+            context = base64.b64encode(json.dumps(identity).encode()).decode()
+            headers = {"X-Sideout-Time": timestamp, "X-Sideout-Identity": context,
+                       "X-Sideout-Signature": sign_request(self.app.config["AUTH_GATEWAY_SECRET"], "GET", "/api/players", timestamp, context, b"")}
+            self.assertEqual(raw.get("/api/players", headers=headers).status_code, 403)
+        self.assertEqual(self.anonymous().get("/api/players?test=1").status_code, 200)
+
+
+if __name__ == "__main__":
+    unittest.main()

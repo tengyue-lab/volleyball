@@ -15,6 +15,95 @@ tags:
   - name: matches
     description: Match setup and rosters
 paths:
+  /auth/me:
+    get:
+      operationId: getAuthViewer
+      tags: [players]
+      responses:
+        "200":
+          description: Verified session and application permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthViewer"
+  /admin/accounts:
+    get:
+      operationId: listAdminAccounts
+      tags: [players]
+      responses:
+        "200":
+          description: Accounts that have signed into this app
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AppAccount"
+  /admin/accounts/{accountId}:
+    parameters:
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      operationId: updateAccountLink
+      tags: [players]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountLinkUpdate"
+      responses:
+        "200":
+          description: Linked account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppAccount"
+  /admin/admin-access:
+    get:
+      operationId: listAdminAccess
+      tags: [players]
+      responses:
+        "200":
+          description: Administrator email grants including future sign-ins
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminAccess"
+    post:
+      operationId: grantAdminAccess
+      tags: [players]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminAccessInput"
+      responses:
+        "201":
+          description: Administrator access granted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminAccess"
+  /admin/admin-access/{email}:
+    parameters:
+      - name: email
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      operationId: revokeAdminAccess
+      tags: [players]
+      responses:
+        "204":
+          description: Administrator access revoked
   /healthz:
     get:
       operationId: healthCheck
@@ -272,7 +361,7 @@ components:
         - Libero
     Player:
       type: object
-      required: [id, name, positions, elo, createdAt, preferencesConfirmed, preferredRolePriority, prioritySince]
+      required: [id, name, positions, elo, eloPublic, createdAt, preferencesConfirmed, preferredRolePriority, prioritySince]
       properties:
         id:
           type: integer
@@ -283,7 +372,10 @@ components:
           items:
             $ref: "#/components/schemas/Position"
         elo:
-          type: integer
+          type: ["integer", "null"]
+          description: Null when this viewer cannot see the rating.
+        eloPublic:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -313,6 +405,9 @@ components:
           type: integer
           default: 1000
           minimum: 0
+        eloPublic:
+          type: boolean
+          default: true
     PlayerUpdate:
       type: object
       minProperties: 1
@@ -331,6 +426,8 @@ components:
         elo:
           type: integer
           minimum: 0
+        eloPublic:
+          type: boolean
     MatchStatus:
       type: string
       enum: [upcoming, completed]
@@ -381,7 +478,7 @@ components:
           items:
             $ref: "#/components/schemas/Position"
         elo:
-          type: integer
+          type: ["integer", "null"]
         createdAt:
           type: string
           format: date-time
@@ -467,15 +564,50 @@ components:
         matchId:
           type: integer
         eloBefore:
-          type: integer
+          type: ["integer", "null"]
         eloAfter:
-          type: integer
+          type: ["integer", "null"]
         changeAmount:
-          type: integer
+          type: ["integer", "null"]
         action:
           type: string
           enum: [result, reversal]
         createdAt:
           type: string
           format: date-time
+    AuthViewer:
+      type: object
+      required: [signedIn, isAdmin, userId, email, playerId]
+      properties:
+        signedIn: {type: boolean}
+        isAdmin: {type: boolean}
+        userId: {type: ["string", "null"]}
+        email: {type: ["string", "null"]}
+        playerId: {type: ["integer", "null"]}
+    AppAccount:
+      type: object
+      required: [id, email, isAdmin, playerId]
+      properties:
+        id: {type: string}
+        email: {type: ["string", "null"]}
+        isAdmin: {type: boolean}
+        playerId: {type: ["integer", "null"]}
+    AccountLinkUpdate:
+      type: object
+      additionalProperties: false
+      required: [playerId]
+      properties:
+        playerId: {type: ["integer", "null"]}
+    AdminAccess:
+      type: object
+      required: [email, bootstrap]
+      properties:
+        email: {type: string}
+        bootstrap: {type: boolean}
+    AdminAccessInput:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        email: {type: string, format: email}
 

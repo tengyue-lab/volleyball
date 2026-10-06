@@ -15,7 +15,8 @@ export interface MatchPlayerSnapshot {
   id: number;
   name: string;
   positions: Position[];
-  elo: number;
+  /** @nullable */
+  elo: number | null;
   createdAt?: Date;
   preferencesConfirmed?: boolean;
   preferredRolePriority?: boolean;

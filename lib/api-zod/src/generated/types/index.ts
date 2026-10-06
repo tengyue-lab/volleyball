@@ -6,6 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './accountLinkUpdate';
+export * from './adminAccess';
+export * from './adminAccessInput';
+export * from './appAccount';
+export * from './authViewer';
 export * from './eloHistoryEntry';
 export * from './eloHistoryEntryAction';
 export * from './healthStatus';

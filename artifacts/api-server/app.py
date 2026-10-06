@@ -15,6 +15,7 @@ import sqlite3
 from typing import Any, Iterator
 
 from flask import Flask, current_app, jsonify, request
+from privacy_auth import initialize_auth_schema, install_privacy
 
 
 POSITIONS = (
@@ -154,6 +155,7 @@ def initialize_database(database_path: str) -> None:
                     VALUES (?, ?, ?, ?, ?)
                 """, (match["id"], assignment["player_id"], assignment["status"], match["completed_at"], match["completion_order"]))
         replay_priority(connection, [row[0] for row in connection.execute("SELECT DISTINCT player_id FROM priority_events")])
+        initialize_auth_schema(connection)
 
 
 @contextmanager
@@ -200,6 +202,7 @@ def serialize_player(row: sqlite3.Row) -> dict[str, Any]:
         "name": row["name"],
         "positions": json.loads(row["positions_json"]),
         "elo": row["elo"],
+        "eloPublic": bool(row["elo_public"]),
         "createdAt": row["created_at"],
         "preferencesConfirmed": bool(row["preferences_confirmed"]),
         "preferredRolePriority": row["priority_since"] is not None,
@@ -349,9 +352,9 @@ def validate_match_assignments(
 def validate_player_fields(
     body: dict[str, Any], *, partial: bool
 ) -> tuple[dict[str, Any] | None, str | None]:
-    allowed_fields = {"name", "positions", "elo"}
+    allowed_fields = {"name", "positions", "elo", "eloPublic"}
     if set(body) - allowed_fields:
-        return None, "Only name, positions, and ELO can be changed."
+        return None, "Only name, positions, ELO, and ELO visibility can be changed."
     if partial and not body:
         return None, "Provide at least one field to update."
 
@@ -380,6 +383,13 @@ def validate_player_fields(
     elif not partial:
         normalized["elo"] = 1000
 
+    if "eloPublic" in body:
+        if type(body["eloPublic"]) is not bool:
+            return None, "ELO visibility must be true or false."
+        normalized["eloPublic"] = body["eloPublic"]
+    elif not partial:
+        normalized["eloPublic"] = True
+
     return normalized, None
 
 
@@ -387,6 +397,7 @@ def create_app(database_path: str | Path | None = None) -> Flask:
     app = Flask(__name__)
     app.config["DATABASE_PATH"] = str(database_path or DEFAULT_DATABASE)
     initialize_database(app.config["DATABASE_PATH"])
+    install_privacy(app, database)
 
     @app.get("/api/healthz")
     def health_check():
@@ -413,14 +424,15 @@ def create_app(database_path: str | Path | None = None) -> Flask:
         with database() as connection:
             cursor = connection.execute(
                 """
-                INSERT INTO players (name, positions_json, elo, created_at, preferences_confirmed)
-                VALUES (?, ?, ?, ?, 1)
+                INSERT INTO players (name, positions_json, elo, created_at, elo_public, preferences_confirmed)
+                VALUES (?, ?, ?, ?, ?, 1)
                 """,
                 (
                     player["name"],
                     json.dumps(player["positions"]),
                     player["elo"],
                     created_at,
+                    int(player["eloPublic"]),
                 ),
             )
             row = connection.execute(
@@ -462,10 +474,10 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             connection.execute(
                 """
                 UPDATE players
-                SET name = ?, positions_json = ?, elo = ?, preferences_confirmed = ?
+                SET name = ?, positions_json = ?, elo = ?, preferences_confirmed = ?, elo_public = ?
                 WHERE id = ?
                 """,
-                (name, json.dumps(positions), elo, 1 if "positions" in changes else current["preferences_confirmed"], player_id),
+                (name, json.dumps(positions), elo, 1 if "positions" in changes else current["preferences_confirmed"], int(changes.get("eloPublic", bool(current["elo_public"]))), player_id),
             )
             updated = connection.execute(
                 "SELECT * FROM players WHERE id = ?", (player_id,)
@@ -475,6 +487,12 @@ def create_app(database_path: str | Path | None = None) -> Flask:
     @app.delete("/api/players/<int:player_id>")
     def delete_player(player_id: int):
         with database() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                "INSERT OR REPLACE INTO archived_player_owners (player_id,account_id) "
+                "SELECT player_id,id FROM app_accounts WHERE player_id=?", (player_id,)
+            )
+            connection.execute("UPDATE app_accounts SET player_id=NULL WHERE player_id=?", (player_id,))
             cursor = connection.execute(
                 "DELETE FROM players WHERE id = ?", (player_id,)
             )
@@ -486,7 +504,7 @@ def create_app(database_path: str | Path | None = None) -> Flask:
     def get_leaderboard():
         with database() as connection:
             rows = connection.execute(
-                "SELECT * FROM players ORDER BY elo DESC, name COLLATE NOCASE, id"
+                "SELECT * FROM players WHERE elo_public=1 ORDER BY elo DESC, name COLLATE NOCASE, id LIMIT 10"
             ).fetchall()
         return jsonify([serialize_player(row) for row in rows])
 

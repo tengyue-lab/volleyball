@@ -1,9 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent as ReactDragEvent, FormEvent, ReactNode } from 'react';
+import { Redirect } from 'wouter';
+import { useAuth, useClerk } from '@clerk/react';
+import { AuthBridge, isRatedPlayer, useAccess } from '@/auth';
+import type { RatedPlayer } from '@/auth';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import {
   Position,
   useCreateMatch,
+  useGetAuthViewer,
+  useGrantAdminAccess,
+  useListAdminAccess,
+  useListAdminAccounts,
+  useRevokeAdminAccess,
+  useUpdateAccountLink,
   useCreatePlayer,
   useDeletePlayer,
   useGetLeaderboard,
@@ -22,7 +32,7 @@ import {
   getListPlayersQueryKey,
 } from '@workspace/api-client-react';
 import type { Match, Player, PlayerInput, PlayerUpdate, Position as PositionType } from '@workspace/api-client-react';
-import { ArrowLeftRight, CalendarDays, Check, ChevronDown, Pencil, Plus, Search, Trophy, Trash2, Users, WandSparkles, X } from 'lucide-react';
+import { ArrowLeftRight, LogIn, LogOut, ShieldCheck, UserRound, CalendarDays, Check, ChevronDown, Pencil, Plus, Search, Trophy, Trash2, Users, WandSparkles, X } from 'lucide-react';
 import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -38,11 +48,14 @@ import {
   type MatchPosition,
   type MatchPositionAssignment,
 } from '@/match-balancing';
+import { ClerkShell } from '@/clerk-shell';
 import NotFound from '@/pages/not-found';
 import RankedPositionInput from '@/components/RankedPositionInput';
 import AssignedPlayer from '@/components/AssignedPlayer';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({ defaultOptions: { queries: { refetchInterval: 5000, staleTime: 0, refetchIntervalInBackground: false, retry: 1 } } });
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+function refreshEverything(client: ReturnType<typeof useQueryClient>) { return client.invalidateQueries(); }
 const positions: PositionType[] = [
   Position.Setter,
   Position.Outside_Hitter,
@@ -79,11 +92,13 @@ function Notice({ text }: { text: string }) {
 
 function Shell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
-  const active = location === '/' ? '/players' : location;
+  const active = location === '/' ? '/leaderboard' : location;
+  const access = useAccess();
+  const { signOut } = useClerk();
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <Link href="/players" className="brand" data-testid="link-brand">
+        <Link href={access.signedIn ? '/user-portal' : '/'} className="brand" data-testid="link-brand">
           <span className="brand-mark" aria-hidden="true" />
           <span><span className="brand-name">SIDEOUT</span><span className="brand-sub">CLUB ROSTER</span></span>
         </Link>
@@ -92,6 +107,11 @@ function Shell({ children }: { children: ReactNode }) {
           <Link href="/players" className={`nav-link ${active === '/players' ? 'active' : ''}`} data-testid="link-players"><Users size={16} strokeWidth={1.8} /> Players</Link>
           <Link href="/matches" className={`nav-link ${active === '/matches' ? 'active' : ''}`} data-testid="link-matches"><CalendarDays size={16} strokeWidth={1.8} /> Match rosters</Link>
           <Link href="/leaderboard" className={`nav-link ${active === '/leaderboard' ? 'active' : ''}`} data-testid="link-leaderboard"><Trophy size={16} strokeWidth={1.8} /> ELO leaderboard</Link>
+          {access.signedIn && <Link href="/user-portal" className={`nav-link ${active === '/user-portal' ? 'active' : ''}`} data-testid="link-user-portal"><UserRound size={16} strokeWidth={1.8} /> My profile</Link>}
+          {access.isAdmin && <Link href="/admin" className={`nav-link ${active === '/admin' ? 'active' : ''}`} data-testid="link-admin"><ShieldCheck size={16} strokeWidth={1.8} /> Admin access</Link>}
+          {access.signedIn
+            ? <button type="button" className="nav-link nav-button" onClick={() => void signOut({ redirectUrl: basePath || '/' })} data-testid="button-sign-out"><LogOut size={16} strokeWidth={1.8} /> Sign out</button>
+            : <Link href="/sign-in" className="nav-link" data-testid="link-sign-in"><LogIn size={16} strokeWidth={1.8} /> Sign in</Link>}
         </nav>
         <div className="sidebar-foot"><strong>Weekly club match</strong>Keep the roster ready. Organize both sides before first serve.</div>
       </aside>
@@ -129,25 +149,34 @@ function EmptyState({ title, copy, action }: { title: string; copy: string; acti
 
 function PlayerEditor({ playerId, onClose, notify }: { playerId: number | null; onClose: () => void; notify: (text: string) => void }) {
   const queryClient = useQueryClient();
+  const access = useAccess();
+  const ownerOnly = !access.isAdmin;
   const playerQuery = useGetPlayer(playerId ?? 0, {
-    query: { queryKey: getGetPlayerQueryKey(playerId ?? 0), enabled: playerId !== null },
+    query: { queryKey: getGetPlayerQueryKey(playerId ?? 0), enabled: playerId !== null, refetchInterval: false, refetchOnWindowFocus: false, staleTime: Infinity },
   });
   const createPlayer = useCreatePlayer();
   const updatePlayer = useUpdatePlayer();
   const [name, setName] = useState('');
   const [elo, setElo] = useState('1000');
+  const [eloPublic, setEloPublic] = useState(true);
   const [selectedPositions, setSelectedPositions] = useState<PositionType[]>([]);
   const [formError, setFormError] = useState('');
+  const initializedFor = useRef<number | null | undefined>(undefined);
 
   useEffect(() => {
+    if (initializedFor.current === playerId) return;
     if (playerId !== null && playerQuery.data) {
+      initializedFor.current = playerId;
       setName(playerQuery.data.name);
-      setElo(String(playerQuery.data.elo));
+      setElo(playerQuery.data.elo === null ? '' : String(playerQuery.data.elo));
+      setEloPublic(playerQuery.data.eloPublic);
       setSelectedPositions(playerQuery.data.positions);
     }
     if (playerId === null) {
+      initializedFor.current = null;
       setName('');
       setElo('1000');
+      setEloPublic(false);
       setSelectedPositions([]);
     }
   }, [playerId, playerQuery.data]);
@@ -156,53 +185,56 @@ function PlayerEditor({ playerId, onClose, notify }: { playerId: number | null; 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError('');
+    if (playerId !== null && ownerOnly) {
+      const data: PlayerUpdate = { eloPublic };
+      updatePlayer.mutate({ playerId, data }, {
+        onSuccess: async () => { await refreshEverything(queryClient); notify('Your ELO visibility was saved.'); onClose(); },
+        onError: (error) => setFormError(messageFor(error)),
+      });
+      return;
+    }
+    if (!access.isAdmin) return;
     const cleanName = name.trim();
     const rating = Number(elo);
     if (!cleanName || cleanName.length > 80) return setFormError('Enter a name between 1 and 80 characters.');
     if (selectedPositions.length < 1 || selectedPositions.length > 5 || new Set(selectedPositions).size !== selectedPositions.length) return setFormError('Rank between 1 and 5 unique playing positions.');
-    if (!Number.isInteger(rating) || rating < 0) return setFormError('ELO must be a whole number of zero or higher.');
+    if (!elo.trim() || !Number.isInteger(rating) || rating < 0) return setFormError('ELO must be a whole number of zero or higher.');
     if (playerId === null) {
-      const data: PlayerInput = { name: cleanName, positions: selectedPositions, elo: rating };
+      const data: PlayerInput = { name: cleanName, positions: selectedPositions, elo: rating, eloPublic };
       createPlayer.mutate({ data }, {
-        onSuccess: async () => {
-          await Promise.all([
-            queryClient.invalidateQueries({ queryKey: getListPlayersQueryKey() }),
-            queryClient.invalidateQueries({ queryKey: getGetLeaderboardQueryKey() }),
-          ]);
-          notify(`${cleanName} added to the roster.`);
-          onClose();
-        },
+        onSuccess: async () => { await refreshEverything(queryClient); notify(`${cleanName} added to the roster.`); onClose(); },
         onError: (error) => setFormError(messageFor(error)),
       });
     } else {
-      const data: PlayerUpdate = { name: cleanName, positions: selectedPositions, elo: rating };
+      const data: PlayerUpdate = { name: cleanName, positions: selectedPositions, elo: rating, eloPublic };
       updatePlayer.mutate({ playerId, data }, {
-        onSuccess: async () => {
-          await Promise.all([
-            queryClient.invalidateQueries({ queryKey: getListPlayersQueryKey() }),
-            queryClient.invalidateQueries({ queryKey: getGetPlayerQueryKey(playerId) }),
-            queryClient.invalidateQueries({ queryKey: getGetLeaderboardQueryKey() }),
-          ]);
-          notify(`${cleanName}'s player details saved.`);
-          onClose();
-        },
+        onSuccess: async () => { await refreshEverything(queryClient); notify(`${cleanName}'s player details saved.`); onClose(); },
         onError: (error) => setFormError(messageFor(error)),
       });
     }
   }
 
+  const visibility = <div className="form-field visibility-field"><label className="check-row" htmlFor="player-elo-public"><input id="player-elo-public" type="checkbox" checked={eloPublic} onChange={(event) => setEloPublic(event.target.checked)} data-testid="checkbox-elo-public" /><span>Show my ELO on the public leaderboard.</span></label><div className="field-hint">Only the top ten public ratings are listed. You always see your own rating.</div></div>;
+
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="modal" role="dialog" aria-modal="true" aria-labelledby="player-dialog-title">
         <div className="modal-head">
-          <div><h2 id="player-dialog-title">{playerId === null ? 'Add a player' : 'Edit player'}</h2><p>{playerId === null ? 'Add someone to the club roster.' : 'Update this player’s roster details.'}</p></div>
+          <div><h2 id="player-dialog-title">{playerId === null ? 'Add a player' : ownerOnly ? 'ELO visibility' : 'Edit player'}</h2><p>{playerId === null ? 'Add someone to the club roster.' : ownerOnly ? 'Choose whether your rating appears publicly.' : 'Update this player’s roster details.'}</p></div>
           <button className="button button-quiet" onClick={onClose} aria-label="Close dialog" data-testid="button-close-player"><X size={17} /></button>
         </div>
         {playerId !== null && playerQuery.isLoading ? <div className="modal-body"><LoadingState lines={2} /></div> :
           playerId !== null && playerQuery.isError ? <div className="modal-body"><ErrorState error={playerQuery.error} retry={() => void playerQuery.refetch()} /></div> :
+            ownerOnly ? <form className="modal-body" onSubmit={submit}>
+              <div className="form-field"><span className="field-label">{name}</span><div className="rating" data-testid="text-own-elo">Your ELO: {playerQuery.data?.elo === null || playerQuery.data?.elo === undefined ? 'Private' : playerQuery.data.elo.toLocaleString()}</div></div>
+              {visibility}
+              {formError && <div className="form-error" role="alert">{formError}</div>}
+              <div className="modal-actions"><button type="button" className="button button-secondary" onClick={onClose} data-testid="button-cancel-player">Cancel</button><button className="button button-primary" type="submit" disabled={saving} data-testid="button-save-player">{saving ? 'Saving…' : 'Save visibility'}</button></div>
+            </form> :
             <form className="modal-body" onSubmit={submit}>
               <div className="form-field"><label htmlFor="player-name">Player name</label><input id="player-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={80} autoFocus placeholder="e.g. Jordan Lee" data-testid="input-player-name" /></div>
-              <div className="form-field"><label htmlFor="player-elo">Starting ELO</label><input id="player-elo" type="number" min="0" step="1" value={elo} onChange={(event) => setElo(event.target.value)} data-testid="input-player-elo" /><div className="field-hint">New players start at 1000. Ratings can be adjusted here.</div></div>
+              <div className="form-field"><label htmlFor="player-elo">{playerId === null ? 'Starting ELO' : 'ELO'}</label><input id="player-elo" type="number" min="0" step="1" value={elo} onChange={(event) => setElo(event.target.value)} data-testid="input-player-elo" /><div className="field-hint">New players start at 1000. Ratings can be adjusted here.</div></div>
+              {visibility}
               <fieldset className="form-field" style={{ border: 0, padding: 0, marginLeft: 0, marginRight: 0 }}>
                 <legend className="field-label">Ranked position preferences</legend>
                 {playerQuery.data && !playerQuery.data.preferencesConfirmed && <p className="form-error">Legacy preferences are unranked. Choose at least one, review the order, then save to confirm.</p>}
@@ -218,6 +250,7 @@ function PlayerEditor({ playerId, onClose, notify }: { playerId: number | null; 
 }
 
 function PlayersPage() {
+  const access = useAccess();
   const query = useListPlayers();
   const deletePlayer = useDeletePlayer();
   const queryClient = useQueryClient();
@@ -233,11 +266,7 @@ function PlayersPage() {
     setDeleteError('');
     deletePlayer.mutate({ playerId: player.id }, {
       onSuccess: async () => {
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: getListPlayersQueryKey() }),
-          queryClient.invalidateQueries({ queryKey: getGetLeaderboardQueryKey() }),
-          queryClient.invalidateQueries({ queryKey: getGetPlayerQueryKey(player.id) }),
-        ]);
+        await refreshEverything(queryClient);
         setNotice(`${player.name} removed from the roster.`);
       },
       onError: (error) => setDeleteError(messageFor(error)),
@@ -246,7 +275,7 @@ function PlayersPage() {
 
   return <Shell><main className="content">
     <PageHeader eyebrow="Roster / all players" title="Players" description="Your club roster, all in one place. Keep positions and ratings current for the next match.">
-      <button className="button button-primary" onClick={() => setEditor('new')} data-testid="button-add-player"><Plus size={15} /> Add player</button>
+      {access.isAdmin && <button className="button button-primary" onClick={() => setEditor('new')} data-testid="button-add-player"><Plus size={15} /> Add player</button>}
     </PageHeader>
     <div className="summary-strip"><span className="summary-num" data-testid="text-player-count">{players.length.toString().padStart(2, '0')}</span> players on roster <span aria-hidden="true">/</span> ELO ratings update after completed results</div>
     <section className="panel" aria-label="Player roster">
@@ -256,15 +285,15 @@ function PlayersPage() {
       </div>
       {deleteError && <div className="form-error" role="alert" style={{ margin: 12 }}>{deleteError}</div>}
       {query.isLoading ? <div><LoadingState /></div> : query.isError ? <ErrorState error={query.error} retry={() => void query.refetch()} /> : players.length === 0 ?
-        <EmptyState title="Start your club roster" copy="Add the players who turn up each week. You can keep more than one position on every profile." action={<button className="button button-primary" onClick={() => setEditor('new')} data-testid="button-empty-add-player"><Plus size={14} /> Add first player</button>} /> :
+        <EmptyState title="Start your club roster" copy="Add the players who turn up each week. You can keep more than one position on every profile." action={access.isAdmin ? <button className="button button-primary" onClick={() => setEditor('new')} data-testid="button-empty-add-player"><Plus size={14} /> Add first player</button> : undefined} /> :
           filteredPlayers.length === 0 ? <EmptyState title="No players match that search" copy="Try another player name or playing position." /> :
             <div className="table-wrap"><table className="data-table">
               <thead><tr><th scope="col">Player</th><th scope="col">Positions</th><th scope="col">ELO rating</th><th scope="col" style={{ textAlign: 'right' }}>Actions</th></tr></thead>
               <tbody>{filteredPlayers.map((player) => <tr key={player.id} data-testid={`row-player-${player.id}`}>
                 <td><div className="player-name">{player.name}</div><div className="player-id">PLAYER / {String(player.id).padStart(3, '0')}</div>{player.preferredRolePriority && <div className="priority-indicator">Priority: Preferred role next match</div>}</td>
                 <td>{!player.preferencesConfirmed && <div className="legacy-indicator">Confirm preferences before next match</div>}<div className="tag-list">{player.positions.map((position, index) => <span className="tag" key={position}>{player.preferencesConfirmed ? `${index + 1}. ` : ''}{position}</span>)}</div></td>
-                <td className="rating" data-testid={`text-player-elo-${player.id}`}>{player.elo.toLocaleString()}</td>
-                <td><div className="row-actions"><button className="button button-quiet" onClick={() => setEditor(player.id)} aria-label={`Edit ${player.name}`} data-testid={`button-edit-player-${player.id}`}><Pencil size={14} /></button><button className="button button-quiet button-danger" onClick={() => removePlayer(player)} aria-label={`Delete ${player.name}`} disabled={deletePlayer.isPending} data-testid={`button-delete-player-${player.id}`}><Trash2 size={15} /></button></div></td>
+                <td className="rating" data-testid={`text-player-elo-${player.id}`}>{player.elo === null ? <span className="private-rating">Private</span> : player.elo.toLocaleString()}</td>
+                <td><div className="row-actions">{(access.isAdmin || access.playerId === player.id) && <button className="button button-quiet" onClick={() => setEditor(player.id)} aria-label={access.isAdmin ? `Edit ${player.name}` : 'Change my ELO visibility'} data-testid={`button-edit-player-${player.id}`}><Pencil size={14} /></button>}{access.isAdmin && <button className="button button-quiet button-danger" onClick={() => removePlayer(player)} aria-label={`Delete ${player.name}`} disabled={deletePlayer.isPending} data-testid={`button-delete-player-${player.id}`}><Trash2 size={15} /></button>}</div></td>
               </tr>)}</tbody>
             </table></div>}
     </section>
@@ -275,25 +304,25 @@ function PlayersPage() {
 
 function LeaderboardPage() {
   const query = useGetLeaderboard();
-  const ranked = [...(query.data ?? [])].sort((a, b) => b.elo - a.elo || a.name.localeCompare(b.name));
+  const ranked = (query.data ?? []).filter(isRatedPlayer);
   const topRating = ranked[0]?.elo ?? 0;
   const average = ranked.length ? Math.round(ranked.reduce((sum, player) => sum + player.elo, 0) / ranked.length) : 0;
   return <Shell><main className="content">
-    <PageHeader eyebrow="Ratings / current standings" title="ELO leaderboard" description="Current club ratings, updated after completed match results." />
+    <PageHeader eyebrow="Ratings / public top ten" title="ELO leaderboard" description="Players who chose to share their rating, highest first." />
     <div className="leader-head">
-      <div className="leader-feature"><div className="eyebrow">Club standings</div><h2>Every point has a player behind it.</h2><p>New players begin at 1000. Completed results update each player's rating.</p></div>
-      <div className="leader-stat"><span>Highest rating</span><strong data-testid="text-highest-elo">{query.isLoading ? '—' : topRating.toLocaleString()}</strong><span>Club average <b>{query.isLoading ? '—' : average.toLocaleString()}</b></span></div>
+      <div className="leader-feature"><div className="eyebrow">Club standings</div><h2>Every point has a player behind it.</h2><p>Players control whether their rating is public. Only the public top ten is listed.</p></div>
+      <div className="leader-stat"><span>Highest rating</span><strong data-testid="text-highest-elo">{query.isLoading || !ranked.length ? '—' : topRating.toLocaleString()}</strong><span>Public average <b>{query.isLoading || !ranked.length ? '—' : average.toLocaleString()}</b></span></div>
     </div>
     <section className="panel" aria-label="ELO player rankings">
-      <div className="panel-head"><div><h2 className="panel-title">Player rankings</h2><div className="panel-note">Sorted by ELO, highest rating first</div></div><span className="panel-note">{ranked.length} {ranked.length === 1 ? 'player' : 'players'}</span></div>
+      <div className="panel-head"><div><h2 className="panel-title">Player rankings</h2><div className="panel-note">Public ratings, highest first</div></div><span className="panel-note">{ranked.length} {ranked.length === 1 ? 'player' : 'players'}</span></div>
       {query.isLoading ? <LoadingState /> : query.isError ? <ErrorState error={query.error} retry={() => void query.refetch()} /> : ranked.length === 0 ?
-        <EmptyState title="No ratings to rank yet" copy="Add players to the roster and their current ELO will appear here." action={<Link href="/players" className="button button-primary" data-testid="link-leaderboard-roster">Go to players</Link>} /> :
+        <EmptyState title="No public players yet." copy="Players can choose to show their ELO from their profile." /> :
           <div className="table-wrap"><table className="data-table leaderboard-table">
-            <thead><tr><th scope="col">Rank</th><th scope="col">Player</th><th scope="col">Positions</th><th scope="col">ELO rating</th></tr></thead>
+            <thead><tr><th scope="col">Rank</th><th scope="col">Player</th><th scope="col">Top preference</th><th scope="col">ELO rating</th></tr></thead>
             <tbody>{ranked.map((player, index) => <tr key={player.id} data-testid={`row-ranking-${player.id}`}>
-              <td className="rank-cell"><span className={index < 3 ? 'rank-top' : ''}>{String(index + 1).padStart(2, '0')}</span></td>
-              <td><div className="player-name">{player.name}</div><div className="player-id">PLAYER / {String(player.id).padStart(3, '0')}</div></td>
-              <td><div className="tag-list">{player.positions.map((position) => <span className="tag" key={position}>{position}</span>)}</div></td>
+              <td className="rank-cell"><span className={index < 3 ? 'rank-top' : ''}>{index + 1}</span></td>
+              <td><div className="player-name">{player.name}</div></td>
+              <td><div className="tag-list">{player.positions[0] && <span className="tag">{player.positions[0]}</span>}</div></td>
               <td className="elo-cell"><div className="elo-value"><span>{player.elo.toLocaleString()}</span><span>{topRating > 0 ? Math.round((player.elo / topRating) * 100) : 0}%</span></div><div className="elo-meter"><span style={{ width: `${topRating > 0 ? Math.max(5, (player.elo / topRating) * 100) : 0}%` }} /></div></td>
             </tr>)}</tbody>
           </table></div>}
@@ -317,6 +346,7 @@ function TeamMetrics({ team, players, total }: { team: 'A' | 'B'; players: Playe
 }
 
 function MatchDetail({ matchId }: { matchId: number }) {
+  const { isAdmin } = useAccess();
   const query = useGetMatch(matchId, { query: { queryKey: getGetMatchQueryKey(matchId) } });
   const queryClient = useQueryClient();
   const submitResult = useSubmitMatchResult();
@@ -326,9 +356,13 @@ function MatchDetail({ matchId }: { matchId: number }) {
   const [resultError, setResultError] = useState('');
   const legacyRoleAssignments = useMemo(() => {
     if (!query.data) return new Map<number, MatchPositionAssignment>();
+    const snapshot = [...query.data.teamA, ...query.data.teamB];
+    if (snapshot.every((p) => p.assignedPosition)) return new Map<number, MatchPositionAssignment>();
+    const rated = snapshot.filter((p): p is typeof p & { elo: number } => typeof p.elo === 'number');
+    if (rated.length !== snapshot.length) return new Map<number, MatchPositionAssignment>();
     try {
       const derived = assignMatchRoles(
-        [...query.data.teamA, ...query.data.teamB],
+        rated,
         query.data.teamA.map((player) => player.id),
         query.data.teamB.map((player) => player.id),
       );
@@ -353,6 +387,7 @@ function MatchDetail({ matchId }: { matchId: number }) {
   const onMatchUpdated = async (updated: Match) => {
     queryClient.setQueryData(getGetMatchQueryKey(matchId), updated);
     await Promise.all([
+      refreshEverything(queryClient),
       queryClient.invalidateQueries({ queryKey: getGetMatchQueryKey(matchId) }),
       queryClient.invalidateQueries({ queryKey: getListMatchesQueryKey() }),
       queryClient.invalidateQueries({ queryKey: getListPlayersQueryKey() }),
@@ -407,7 +442,7 @@ function MatchDetail({ matchId }: { matchId: number }) {
   };
   return <div className="roster-detail">
     {[...match.teamA, ...match.teamB].some((p) => p.assignmentStatus === 'filled' || (p.assignedPosition && !p.positions.includes(p.assignedPosition))) && <div className="position-warning" role="status"><strong>Filled positions</strong><span>{positions.filter((role) => [...match.teamA, ...match.teamB].some((p) => p.assignedPosition === role && (p.assignmentStatus === 'filled' || !p.positions.includes(role)))).join(' · ')}</span></div>}
-    {match.status === 'upcoming' ? <section className="score-entry">
+    {match.status === 'upcoming' ? !isAdmin ? <p className="field-hint">Result entry is handled by club admins.</p> : <section className="score-entry">
       <h4>Enter final set score</h4>
       <form className="score-form" onSubmit={saveResult}>
         <div className="score-field">
@@ -426,9 +461,9 @@ function MatchDetail({ matchId }: { matchId: number }) {
     </section> : <section className="match-result">
       <div className="result-heading">
         <div><span className="eyebrow">Final result</span><h4>{match.winner} won</h4><p>{match.completedAt ? `Completed ${new Date(match.completedAt).toLocaleString()}` : 'Completed'}</p></div>
-        <button className="button button-secondary" onClick={editResult} disabled={reopenResult.isPending || submitResult.isPending} data-testid={`button-edit-result-${matchId}`}>
+        {isAdmin && <button className="button button-secondary" onClick={editResult} disabled={reopenResult.isPending || submitResult.isPending} data-testid={`button-edit-result-${matchId}`}>
           {reopenResult.isPending ? 'Reopening…' : 'Edit result'}
-        </button>
+        </button>}
       </div>
       <div className="final-score"><span>Team A</span><strong>{match.scoreA}</strong><span className="score-divider">–</span><strong>{match.scoreB}</strong><span>Team B</span></div>
       {resultError && <div className="form-error result-error" role="alert">{resultError}</div>}
@@ -441,13 +476,13 @@ function MatchDetail({ matchId }: { matchId: number }) {
           ].map(({ player, team }) => {
             const change = match.eloChanges.find((entry) => entry.playerId === player.id);
             const playedPosition = player.assignedPosition ?? legacyRoleAssignments.get(player.id)?.assignedPosition ?? '—';
-            const changeAmount = change?.changeAmount ?? 0;
+            const changeAmount = change?.changeAmount ?? null;
             return <tr key={`${team}-${player.id}`}>
               <td><strong>{player.name}</strong><small>{team}</small></td>
               <td>{playedPosition}</td>
-              <td>{change?.eloBefore ?? '—'}</td>
-              <td>{change?.eloAfter ?? '—'}</td>
-              <td className={changeAmount > 0 ? 'elo-change-positive' : changeAmount < 0 ? 'elo-change-negative' : ''}>{change ? `${changeAmount > 0 ? '+' : ''}${changeAmount}` : '—'}</td>
+              <td>{change ? change.eloBefore ?? 'Private' : '—'}</td>
+              <td>{change ? change.eloAfter ?? 'Private' : '—'}</td>
+              <td className={changeAmount !== null && changeAmount > 0 ? 'elo-change-positive' : changeAmount !== null && changeAmount < 0 ? 'elo-change-negative' : ''}>{!change ? '—' : changeAmount === null ? 'Private' : `${changeAmount > 0 ? '+' : ''}${changeAmount}`}</td>
             </tr>;
           })}</tbody>
         </table>
@@ -460,16 +495,17 @@ function MatchDetail({ matchId }: { matchId: number }) {
 }
 
 function MatchCard({ match, expanded, onToggle }: { match: Match; expanded: boolean; onToggle: () => void }) {
+  const { isAdmin } = useAccess();
   const completed = match.status === 'completed';
   return <article className="panel match-card" data-testid={`card-match-${match.id}`}>
     <div className="match-card-head"><span className="match-label">Roster / {String(match.id).padStart(3, '0')} · {new Date(match.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span><span className={`match-badge ${completed ? 'completed' : ''}`}>{completed ? 'Completed' : 'Upcoming'}</span></div>
     <div className="versus-row"><div className="versus-team">Team A<span>{match.teamA.length} players</span>{completed && <strong>{match.scoreA}</strong>}</div><span className="versus-word">{completed ? '–' : 'VS'}</span><div className="versus-team">Team B<span>{match.teamB.length} players</span>{completed && <strong>{match.scoreB}</strong>}</div></div>
-    <div className="match-card-foot"><span>{completed ? `${match.winner} won` : 'Match roster saved'}</span><button className="text-button" onClick={onToggle} aria-expanded={expanded} data-testid={`button-view-match-${match.id}`}>{expanded ? 'Hide details' : completed ? 'View results' : 'Enter score'} <ChevronDown size={12} style={{ verticalAlign: 'middle', transform: expanded ? 'rotate(180deg)' : undefined }} /></button></div>
+    <div className="match-card-foot"><span>{completed ? `${match.winner} won` : 'Match roster saved'}</span><button className="text-button" onClick={onToggle} aria-expanded={expanded} data-testid={`button-view-match-${match.id}`}>{expanded ? 'Hide details' : completed ? 'View results' : isAdmin ? 'Enter score' : 'View roster'} <ChevronDown size={12} style={{ verticalAlign: 'middle', transform: expanded ? 'rotate(180deg)' : undefined }} /></button></div>
     {expanded && <MatchDetail matchId={match.id} />}
   </article>;
 }
 
-function MatchesPage() {
+function AdminMatchesPage() {
   const playersQuery = useListPlayers();
   const matchesQuery = useListMatches();
   const createMatch = useCreateMatch();
@@ -485,7 +521,7 @@ function MatchesPage() {
   const [swapSelectionId, setSwapSelectionId] = useState<number | null>(null);
   const [expandedMatch, setExpandedMatch] = useState<number | null>(null);
   const [createError, setCreateError] = useState('');
-  const players = playersQuery.data ?? [];
+  const players: RatedPlayer[] = (playersQuery.data ?? []).filter(isRatedPlayer);
   const selectedIds = new Set(selectedPlayerIds);
   const selectedPlayers = players.filter((player) => selectedIds.has(player.id));
   const profilesFingerprint = JSON.stringify(selectedPlayers.map((p) => [p.id,p.positions,p.elo,p.preferencesConfirmed,p.preferredRolePriority,p.prioritySince]));
@@ -882,6 +918,109 @@ function MatchesPage() {
   </main></Shell>;
 }
 
+function MatchesPage() {
+  const access = useAccess();
+  const matchesQuery = useListMatches();
+  const [expandedMatch, setExpandedMatch] = useState<number | null>(null);
+  if (access.isAdmin) return <AdminMatchesPage />;
+  return <Shell><main className="content">
+    <PageHeader eyebrow="Match day / saved rosters" title="Match rosters" description="Saved club match rosters and final results. Ratings stay private unless shared." />
+    {matchesQuery.isLoading ? <LoadingState /> : matchesQuery.isError ? <ErrorState error={matchesQuery.error} retry={() => void matchesQuery.refetch()} /> :
+      matchesQuery.data?.length ? <div className="match-list">{matchesQuery.data.map((match) => <MatchCard key={match.id} match={match} expanded={expandedMatch === match.id} onToggle={() => setExpandedMatch(expandedMatch === match.id ? null : match.id)} />)}</div> :
+        <section className="panel"><EmptyState title="No match rosters yet" copy="Saved rosters will appear here once an admin builds the first match." /></section>}
+  </main></Shell>;
+}
+
+function UserPortalPage() {
+  const access = useAccess();
+  const viewerQuery = useGetAuthViewer();
+  const playerQuery = useGetPlayer(access.playerId ?? 0, { query: { queryKey: getGetPlayerQueryKey(access.playerId ?? 0), enabled: access.playerId !== null } });
+  const [editing, setEditing] = useState(false);
+  const { notice, setNotice } = useNotice();
+  const player = playerQuery.data;
+  return <Shell><main className="content">
+    <PageHeader eyebrow="Account / my profile" title="My profile" description={access.email ? `Signed in as ${access.email}.` : 'Your SIDEOUT account.'} />
+    {access.status === 'error' ? <section className="panel"><ErrorState error={new Error('We could not verify your account.')} retry={access.retry} /></section> :
+      access.playerId === null ? <section className="panel"><EmptyState title="Linking needed" copy="Your account is not linked to a club player yet. Ask a club admin to link it to your roster profile." action={<button className="button button-secondary" onClick={() => void viewerQuery.refetch()} data-testid="button-check-link">Check again</button>} /></section> :
+        playerQuery.isLoading ? <LoadingState /> : playerQuery.isError || !player ? <section className="panel"><ErrorState error={playerQuery.error} retry={() => void playerQuery.refetch()} /></section> :
+          <section className="panel profile-card" data-testid="card-my-profile">
+            <div className="panel-head"><div><h2 className="panel-title" data-testid="text-my-name">{player.name}</h2><div className="panel-note">PLAYER / {String(player.id).padStart(3, '0')}</div></div><button className="button button-secondary" onClick={() => setEditing(true)} data-testid="button-edit-visibility"><Pencil size={14} /> ELO visibility</button></div>
+            <div className="profile-grid">
+              <div><span className="eyebrow">My ELO</span><strong className="profile-elo" data-testid="text-my-elo">{player.elo === null ? 'Private' : player.elo.toLocaleString()}</strong></div>
+              <div><span className="eyebrow">Leaderboard</span><strong data-testid="text-my-visibility">{player.eloPublic ? 'Shown publicly' : 'Hidden'}</strong></div>
+              <div><span className="eyebrow">Positions</span><div className="tag-list">{player.positions.map((position, index) => <span className="tag" key={position}>{player.preferencesConfirmed ? `${index + 1}. ` : ''}{position}</span>)}</div></div>
+            </div>
+          </section>}
+    <Notice text={notice} />
+    {editing && access.playerId !== null && <PlayerEditor playerId={access.playerId} onClose={() => setEditing(false)} notify={setNotice} />}
+  </main></Shell>;
+}
+
+function AdminPage() {
+  const access = useAccess();
+  const queryClient = useQueryClient();
+  const accountsQuery = useListAdminAccounts();
+  const accessQuery = useListAdminAccess();
+  const playersQuery = useListPlayers();
+  const linkAccount = useUpdateAccountLink();
+  const grant = useGrantAdminAccess();
+  const revoke = useRevokeAdminAccess();
+  const { notice, setNotice } = useNotice();
+  const [email, setEmail] = useState('');
+  const [error, setError] = useState('');
+  if (!access.isAdmin) return <Redirect to="/" />;
+  const players = playersQuery.data ?? [];
+  const accounts = accountsQuery.data ?? [];
+  const done = (text: string) => async () => { await refreshEverything(queryClient); setError(''); setNotice(text); };
+  function link(accountId: string, value: string) {
+    linkAccount.mutate({ accountId, data: { playerId: value === '' ? null : Number(value) } }, { onSuccess: done(value === '' ? 'Account unlinked.' : 'Account linked.'), onError: (e) => setError(messageFor(e)) });
+  }
+  function submitGrant(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const clean = email.trim().toLowerCase();
+    if (!clean || !clean.includes('@')) return setError('Enter a valid email address.');
+    grant.mutate({ data: { email: clean } }, { onSuccess: async () => { setEmail(''); await done(`Admin access granted to ${clean}.`)(); }, onError: (e) => setError(messageFor(e)) });
+  }
+  function revokeAccess(target: string) {
+    if (!window.confirm(`Revoke admin access for ${target}?`)) return;
+    revoke.mutate({ email: target }, { onSuccess: done(`Admin access revoked for ${target}.`), onError: (e) => setError(messageFor(e)) });
+  }
+  return <Shell><main className="content">
+    <PageHeader eyebrow="Admin / access" title="Admin access" description="Link registered accounts to roster players and manage who can administer the club." />
+    {error && <div className="form-error" role="alert" data-testid="text-admin-error">{error}</div>}
+    <section className="panel" aria-label="Account links">
+      <div className="panel-head"><div><h2 className="panel-title">Account links</h2><div className="panel-note">Each verified account can own one roster player</div></div></div>
+      {accountsQuery.isLoading ? <LoadingState /> : accountsQuery.isError ? <ErrorState error={accountsQuery.error} retry={() => void accountsQuery.refetch()} /> : accounts.length === 0 ? <EmptyState title="No registered accounts yet" copy="Accounts appear here after people sign up and verify their email." /> :
+        <div className="table-wrap"><table className="data-table"><thead><tr><th>Account</th><th>Role</th><th>Linked player</th></tr></thead>
+          <tbody>{accounts.map((account) => <tr key={account.id} data-testid={`row-account-${account.id}`}>
+            <td><div className="player-name">{account.email ?? 'No email'}</div></td>
+            <td>{account.isAdmin ? 'Admin' : 'Member'}</td>
+            <td><select className="select-input" value={account.playerId ?? ''} disabled={linkAccount.isPending} onChange={(event) => link(account.id, event.target.value)} aria-label={`Linked player for ${account.email ?? account.id}`} data-testid={`select-link-${account.id}`}><option value="">Not linked</option>{players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></td>
+          </tr>)}</tbody></table></div>}
+    </section>
+    <section className="panel" style={{ marginTop: 20 }} aria-label="Admin grants">
+      <div className="panel-head"><div><h2 className="panel-title">Admin email access</h2><div className="panel-note">Grant access ahead of sign-up; bootstrap admins cannot be revoked</div></div></div>
+      <form className="grant-form" onSubmit={submitGrant}><input type="email" placeholder="name@example.com" value={email} onChange={(event) => setEmail(event.target.value)} aria-label="Admin email" data-testid="input-admin-email" /><button className="button button-primary" type="submit" disabled={grant.isPending} data-testid="button-grant-admin"><Plus size={14} /> Grant access</button></form>
+      {accessQuery.isLoading ? <LoadingState lines={2} /> : accessQuery.isError ? <ErrorState error={accessQuery.error} retry={() => void accessQuery.refetch()} /> : (accessQuery.data ?? []).length === 0 ? <EmptyState title="No admin grants" copy="Grant an email to give someone admin access." /> :
+        <div className="table-wrap"><table className="data-table"><thead><tr><th>Email</th><th>Type</th><th style={{ textAlign: 'right' }}>Actions</th></tr></thead>
+          <tbody>{(accessQuery.data ?? []).map((entry) => <tr key={entry.email} data-testid={`row-grant-${entry.email}`}><td><div className="player-name">{entry.email}</div></td><td>{entry.bootstrap ? 'Bootstrap' : 'Granted'}</td>
+            <td><div className="row-actions">{!entry.bootstrap && <button className="button button-quiet button-danger" onClick={() => revokeAccess(entry.email)} disabled={revoke.isPending} aria-label={`Revoke ${entry.email}`} data-testid={`button-revoke-${entry.email}`}><Trash2 size={15} /></button>}</div></td></tr>)}</tbody></table></div>}
+    </section>
+    <Notice text={notice} />
+  </main></Shell>;
+}
+
+function HomeRoute() {
+  const { isLoaded, isSignedIn } = useAuth();
+  if (isLoaded && isSignedIn) return <Redirect to="/user-portal" />;
+  return <LeaderboardPage />;
+}
+
+function SignedInOnly({ children }: { children: ReactNode }) {
+  const access = useAccess();
+  return access.signedIn ? <>{children}</> : <Redirect to="/" />;
+}
+
 function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
@@ -889,16 +1028,18 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
 
 function Router() {
   return <RoutedErrorBoundary><Switch>
-    <Route path="/" component={PlayersPage} />
+    <Route path="/" component={HomeRoute} />
     <Route path="/players" component={PlayersPage} />
     <Route path="/matches" component={MatchesPage} />
     <Route path="/leaderboard" component={LeaderboardPage} />
+    <Route path="/user-portal">{() => <SignedInOnly><UserPortalPage /></SignedInOnly>}</Route>
+    <Route path="/admin" component={AdminPage} />
     <Route component={NotFound} />
   </Switch></RoutedErrorBoundary>;
 }
 
 function App() {
-  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router /></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>;
+  return <WouterRouter base={basePath}><ClerkShell><QueryClientProvider client={queryClient}><AuthBridge><TooltipProvider><Router /><Toaster /></TooltipProvider></AuthBridge></QueryClientProvider></ClerkShell></WouterRouter>;
 }
 
 export default App;

@@ -14,7 +14,7 @@ A local-first volleyball roster and match setup app for managing player position
 ## Stack
 
 - Web: React + Vite with the generated API client
-- API: Python 3.11 + Flask
+- API: Python 3.11 + Flask, behind a narrowly scoped Clerk/Express authentication gateway
 - Database: SQLite at `artifacts/api-server/data/volleyball.sqlite3`
 - API contract: OpenAPI 3.1 with Orval-generated client types and hooks
 
@@ -25,11 +25,14 @@ A local-first volleyball roster and match setup app for managing player position
 - `artifacts/volleyball-manager/src/index.css` — web app styles
 - `artifacts/api-server/app.py` — Flask routes, validation, and SQLite schema
 - `lib/api-spec/openapi.yaml` — source of truth for API routes and response types
-- `main.py` — project-root entry point for the Flask service
+- `main.py` — managed entry point for the authentication gateway; Gunicorn still imports its Flask app
 
 ## Architecture decisions
 
 - SQLite is intentional; do not replace it with the workspace PostgreSQL database.
+- Clerk verifies identity only. Preserve Flask's domain routes and matching behavior; run the API through its managed gateway, not a standalone public Gunicorn listener. The gateway supervises Flask on a private Unix socket and signs each forwarded request.
+- ELO visibility defaults to public. Read-time privacy protects player details, historical snapshots and rating audits; matching/results continue to use real ratings. The leaderboard filters public players before its deterministic ten-player limit.
+- Only admins manage player ownership and future administrator grants. Owners may change their own ELO visibility, not ratings or match results. Clear cached private data whenever the signed-in identity or permissions change.
 - Match rosters save player details and the assigned role as snapshots so later player edits or deletions do not rewrite a saved roster.
 - The match builder supports manual assignment and exact role-first, same-role ELO balancing with post-balance swaps. Roles not listed on a profile may be Filled by the best available ELO player and are reported by role.
 - Completed results apply the existing K=32 ELO calculation; reopening restores ratings and reverses priority events. Later dependent results must be reopened first.

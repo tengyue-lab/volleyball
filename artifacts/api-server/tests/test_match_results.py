@@ -10,6 +10,7 @@ API_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_DIR))
 
 from app import calculate_elo_updates, create_app, initialize_database, replay_priority  # noqa: E402
+from auth_client import SignedClient
 
 
 ROLE_FORMATION = [
@@ -27,7 +28,7 @@ class MatchResultTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         database_path = Path(self.temp_dir.name) / "volleyball-test.sqlite3"
         self.app = create_app(database_path)
-        self.client = self.app.test_client()
+        self.client = SignedClient(self.app)
         self.player_ids = []
         for index in range(12):
             elo = 1050 if index < 6 else 1000
@@ -281,7 +282,7 @@ class MatchResultTests(unittest.TestCase):
         self.complete(filled)
         self.assertTrue(self.profile(target)["preferredRolePriority"])
         reopened_app = create_app(self.app.config["DATABASE_PATH"])
-        self.assertTrue(reopened_app.test_client().get(f"/api/players/{target}").get_json()["preferredRolePriority"])
+        self.assertTrue(SignedClient(reopened_app).get(f"/api/players/{target}").get_json()["preferredRolePriority"])
         self.assertEqual(self.client.post(f"/api/matches/{filled['id']}/reopen").status_code, 200)
         self.assertFalse(self.profile(target)["preferredRolePriority"])
 
@@ -386,8 +387,10 @@ class MigrationTests(unittest.TestCase):
                 conn.execute("INSERT INTO matches VALUES (1, ?, '[]', NULL, NULL, 'upcoming', '2026-01-01')", (json.dumps(snapshot),))
             initialize_database(path)
             initialize_database(path)
-            client = create_app(path).test_client()
+            client = SignedClient(create_app(path))
             self.assertEqual(client.get("/api/players/1").get_json()["positions"], original_positions)
+            self.assertTrue(client.get("/api/players/1").get_json()["eloPublic"])
+            self.assertEqual(client.get("/api/players/1").get_json()["elo"], 1000)
             self.assertFalse(client.get("/api/players/1").get_json()["preferencesConfirmed"])
             self.assertEqual(client.get("/api/matches/1").get_json()["teamA"], snapshot)
             with sqlite3.connect(path) as conn:

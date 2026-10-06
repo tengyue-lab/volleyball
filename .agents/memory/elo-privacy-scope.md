@@ -14,3 +14,9 @@ Clerk is the required authentication provider. Its layer only gates access; it m
 **Why:** The user explicitly clarified that adding authentication must preserve the existing domain backend.
 
 **How to apply:** Keep Flask authoritative for its current domain routes and preserve existing matchmaking logic. Any authentication transport adapter must remain limited to verified identity and access gating.
+
+“Do not publish automatically. Deployment is my action.”
+
+**Why:** The user explicitly reserved publishing this app for themselves.
+
+**How to apply:** Finish and verify changes in preview without publishing automatically.

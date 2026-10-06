@@ -11,9 +11,12 @@ export interface EloHistoryEntry {
   id: number;
   playerId: number;
   matchId: number;
-  eloBefore: number;
-  eloAfter: number;
-  changeAmount: number;
+  /** @nullable */
+  eloBefore: number | null;
+  /** @nullable */
+  eloAfter: number | null;
+  /** @nullable */
+  changeAmount: number | null;
   action: EloHistoryEntryAction;
   createdAt: Date;
 }

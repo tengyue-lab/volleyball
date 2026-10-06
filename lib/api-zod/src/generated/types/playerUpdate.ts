@@ -20,4 +20,5 @@ export interface PlayerUpdate {
   positions?: Position[];
   /** @minimum 0 */
   elo?: number;
+  eloPublic?: boolean;
 }

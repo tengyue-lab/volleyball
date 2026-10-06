@@ -24,7 +24,12 @@ export interface Player {
   id: number;
   name: string;
   positions: Position[];
-  elo: number;
+  /**
+     * Null when this viewer cannot see the rating.
+     * @nullable
+     */
+  elo: number | null;
+  eloPublic: boolean;
   createdAt: string;
   preferencesConfirmed: boolean;
   preferredRolePriority: boolean;
@@ -45,6 +50,7 @@ export interface PlayerInput {
   positions: Position[];
   /** @minimum 0 */
   elo?: number;
+  eloPublic?: boolean;
 }
 
 export interface PlayerUpdate {
@@ -60,6 +66,7 @@ export interface PlayerUpdate {
   positions?: Position[];
   /** @minimum 0 */
   elo?: number;
+  eloPublic?: boolean;
 }
 
 export type MatchStatus = typeof MatchStatus[keyof typeof MatchStatus];
@@ -96,7 +103,8 @@ export interface MatchPlayerSnapshot {
   id: number;
   name: string;
   positions: Position[];
-  elo: number;
+  /** @nullable */
+  elo: number | null;
   createdAt?: string;
   preferencesConfirmed?: boolean;
   preferredRolePriority?: boolean;
@@ -120,9 +128,12 @@ export interface EloHistoryEntry {
   id: number;
   playerId: number;
   matchId: number;
-  eloBefore: number;
-  eloAfter: number;
-  changeAmount: number;
+  /** @nullable */
+  eloBefore: number | null;
+  /** @nullable */
+  eloAfter: number | null;
+  /** @nullable */
+  changeAmount: number | null;
   action: EloHistoryEntryAction;
   createdAt: string;
 }
@@ -188,5 +199,39 @@ export interface MatchResultInput {
   scoreA: number;
   /** @minimum 0 */
   scoreB: number;
+}
+
+export interface AuthViewer {
+  signedIn: boolean;
+  isAdmin: boolean;
+  /** @nullable */
+  userId: string | null;
+  /** @nullable */
+  email: string | null;
+  /** @nullable */
+  playerId: number | null;
+}
+
+export interface AppAccount {
+  id: string;
+  /** @nullable */
+  email: string | null;
+  isAdmin: boolean;
+  /** @nullable */
+  playerId: number | null;
+}
+
+export interface AccountLinkUpdate {
+  /** @nullable */
+  playerId: number | null;
+}
+
+export interface AdminAccess {
+  email: string;
+  bootstrap: boolean;
+}
+
+export interface AdminAccessInput {
+  email: string;
 }
 

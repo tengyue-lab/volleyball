@@ -20,6 +20,11 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AccountLinkUpdate,
+  AdminAccess,
+  AdminAccessInput,
+  AppAccount,
+  AuthViewer,
   EloHistoryEntry,
   HealthStatus,
   Match,
@@ -56,6 +61,452 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getGetAuthViewerUrl = () => {
+
+
+
+
+  return `/api/auth/me`
+}
+
+export const getAuthViewer = async ( options?: Parameters<typeof customFetch>[1]): Promise<AuthViewer> => {
+
+  return customFetch<AuthViewer>(getGetAuthViewerUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAuthViewerQueryKey = () => {
+    return [
+    `/api/auth/me`
+    ] as const;
+    }
+
+
+export const getGetAuthViewerQueryOptions = <TData = Awaited<ReturnType<typeof getAuthViewer>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAuthViewer>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAuthViewerQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAuthViewer>>> = ({ signal }) => getAuthViewer({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAuthViewer>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAuthViewerQueryResult = NonNullable<Awaited<ReturnType<typeof getAuthViewer>>>
+export type GetAuthViewerQueryError = ErrorType<unknown>
+
+
+
+export function useGetAuthViewer<TData = Awaited<ReturnType<typeof getAuthViewer>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAuthViewer>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAuthViewerQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListAdminAccountsUrl = () => {
+
+
+
+
+  return `/api/admin/accounts`
+}
+
+export const listAdminAccounts = async ( options?: Parameters<typeof customFetch>[1]): Promise<AppAccount[]> => {
+
+  return customFetch<AppAccount[]>(getListAdminAccountsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminAccountsQueryKey = () => {
+    return [
+    `/api/admin/accounts`
+    ] as const;
+    }
+
+
+export const getListAdminAccountsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminAccounts>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminAccounts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminAccountsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminAccounts>>> = ({ signal }) => listAdminAccounts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminAccounts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminAccountsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminAccounts>>>
+export type ListAdminAccountsQueryError = ErrorType<unknown>
+
+
+
+export function useListAdminAccounts<TData = Awaited<ReturnType<typeof listAdminAccounts>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminAccounts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminAccountsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAccountLinkUrl = (accountId: string,) => {
+
+
+
+
+  return `/api/admin/accounts/${accountId}`
+}
+
+export const updateAccountLink = async (accountId: string,
+    accountLinkUpdate: AccountLinkUpdate, options?: Parameters<typeof customFetch>[1]): Promise<AppAccount> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AppAccount>(getUpdateAccountLinkUrl(accountId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(accountLinkUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateAccountLinkMutationKey = () => ['updateAccountLink'] as const;
+
+export const getUpdateAccountLinkMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAccountLink>>, TError,UpdateAccountLinkMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAccountLink>>, TError,UpdateAccountLinkMutationVariables, TContext> => {
+
+const mutationKey = getUpdateAccountLinkMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAccountLink>>, UpdateAccountLinkMutationVariables> = (props) => {
+          const {accountId,data} = props ?? {};
+
+          return  updateAccountLink(accountId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAccountLinkMutationResult = NonNullable<Awaited<ReturnType<typeof updateAccountLink>>>
+    export type UpdateAccountLinkMutationBody = BodyType<AccountLinkUpdate>
+    export type UpdateAccountLinkMutationError = ErrorType<unknown>
+    export type UpdateAccountLinkMutationVariables = {accountId: string;data: BodyType<AccountLinkUpdate>}
+
+    export const useUpdateAccountLink = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAccountLink>>, TError,UpdateAccountLinkMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAccountLink>>,
+        TError,
+        UpdateAccountLinkMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateAccountLinkMutationOptions(options));
+    }
+
+export const getListAdminAccessUrl = () => {
+
+
+
+
+  return `/api/admin/admin-access`
+}
+
+export const listAdminAccess = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminAccess[]> => {
+
+  return customFetch<AdminAccess[]>(getListAdminAccessUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminAccessQueryKey = () => {
+    return [
+    `/api/admin/admin-access`
+    ] as const;
+    }
+
+
+export const getListAdminAccessQueryOptions = <TData = Awaited<ReturnType<typeof listAdminAccess>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminAccess>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminAccessQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminAccess>>> = ({ signal }) => listAdminAccess({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminAccess>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminAccessQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminAccess>>>
+export type ListAdminAccessQueryError = ErrorType<unknown>
+
+
+
+export function useListAdminAccess<TData = Awaited<ReturnType<typeof listAdminAccess>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminAccess>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminAccessQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGrantAdminAccessUrl = () => {
+
+
+
+
+  return `/api/admin/admin-access`
+}
+
+export const grantAdminAccess = async (adminAccessInput: AdminAccessInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminAccess> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AdminAccess>(getGrantAdminAccessUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminAccessInput)
+  }
+);}
+
+
+
+
+
+export const getGrantAdminAccessMutationKey = () => ['grantAdminAccess'] as const;
+
+export const getGrantAdminAccessMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof grantAdminAccess>>, TError,GrantAdminAccessMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof grantAdminAccess>>, TError,GrantAdminAccessMutationVariables, TContext> => {
+
+const mutationKey = getGrantAdminAccessMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof grantAdminAccess>>, GrantAdminAccessMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  grantAdminAccess(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GrantAdminAccessMutationResult = NonNullable<Awaited<ReturnType<typeof grantAdminAccess>>>
+    export type GrantAdminAccessMutationBody = BodyType<AdminAccessInput>
+    export type GrantAdminAccessMutationError = ErrorType<unknown>
+    export type GrantAdminAccessMutationVariables = {data: BodyType<AdminAccessInput>}
+
+    export const useGrantAdminAccess = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof grantAdminAccess>>, TError,GrantAdminAccessMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof grantAdminAccess>>,
+        TError,
+        GrantAdminAccessMutationVariables,
+        TContext
+      > => {
+      return useMutation(getGrantAdminAccessMutationOptions(options));
+    }
+
+export const getRevokeAdminAccessUrl = (email: string,) => {
+
+
+
+
+  return `/api/admin/admin-access/${email}`
+}
+
+export const revokeAdminAccess = async (email: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getRevokeAdminAccessUrl(email),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getRevokeAdminAccessMutationKey = () => ['revokeAdminAccess'] as const;
+
+export const getRevokeAdminAccessMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeAdminAccess>>, TError,RevokeAdminAccessMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokeAdminAccess>>, TError,RevokeAdminAccessMutationVariables, TContext> => {
+
+const mutationKey = getRevokeAdminAccessMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeAdminAccess>>, RevokeAdminAccessMutationVariables> = (props) => {
+          const {email} = props ?? {};
+
+          return  revokeAdminAccess(email,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeAdminAccessMutationResult = NonNullable<Awaited<ReturnType<typeof revokeAdminAccess>>>
+
+    export type RevokeAdminAccessMutationError = ErrorType<unknown>
+    export type RevokeAdminAccessMutationVariables = {email: string}
+
+    export const useRevokeAdminAccess = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeAdminAccess>>, TError,RevokeAdminAccessMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revokeAdminAccess>>,
+        TError,
+        RevokeAdminAccessMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRevokeAdminAccessMutationOptions(options));
+    }
 
 export const getHealthCheckUrl = () => {
 

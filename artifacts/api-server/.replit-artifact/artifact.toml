@@ -15,13 +15,14 @@ run = "cd ../.. && uv run python main.py"
 [services.production]
 
 [services.production.build]
-args = ["uv", "sync", "--no-dev"]
+args = ["sh", "-c", "uv sync --no-dev && pnpm --filter @workspace/api-server run build"]
 
 [services.production.run]
-args = ["uv", "run", "gunicorn", "--bind", "0.0.0.0:8080", "main:app"]
+args = ["node", "./artifacts/api-server/dist/auth-gateway.mjs"]
 
 [services.production.run.env]
 PORT = "8080"
+NODE_ENV = "production"
 
 [services.production.health.startup]
 path = "/api/healthz"

@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap');
+@layer theme, base, clerk, components, utilities;
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @plugin "@tailwindcss/typography";
@@ -595,3 +596,9 @@ button:focus-visible,input:focus-visible{outline:3px solid hsl(var(--accent)/.55
   .result-heading .button{width:100%}
   .final-score{gap:8px}
 }
+.auth-screen{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:16px;background:hsl(var(--background))}.auth-loading{min-height:100dvh;display:grid;place-items:center;color:hsl(var(--muted-foreground));font-size:12px}
+.nav-button{background:transparent;border:0;width:100%;text-align:left;font-family:inherit}.private-rating{color:hsl(var(--muted-foreground));font-style:italic}
+.check-row{display:flex!important;align-items:center;gap:10px;cursor:pointer}.form-field .check-row input{width:16px;height:16px;accent-color:hsl(var(--primary))}
+.profile-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:24px;padding:24px 21px}.profile-elo{display:block;font:500 34px var(--app-font-mono);letter-spacing:-.04em;color:#24483b}
+.select-input{padding:9px 10px;border:1px solid hsl(var(--input));border-radius:6px;background:hsl(var(--background));color:hsl(var(--foreground));font-size:12px;min-width:200px}
+.grant-form{display:flex;gap:10px;padding:18px 21px;border-bottom:1px solid hsl(var(--border));flex-wrap:wrap}.grant-form input{flex:1;min-width:220px;padding:10px 12px;border:1px solid hsl(var(--input));border-radius:6px;background:hsl(var(--background));color:hsl(var(--foreground))}

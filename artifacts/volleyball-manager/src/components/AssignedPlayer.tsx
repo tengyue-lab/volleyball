@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { DragEvent as ReactDragEvent } from 'react';
 import { ArrowLeftRight, Lock, LockOpen, X } from 'lucide-react';
-import type { Player } from '@workspace/api-client-react';
+import type { RatedPlayer as Player } from '@/auth';
 import { MATCH_POSITIONS } from '@/match-balancing';
 import type { MatchPosition, MatchPositionAssignment } from '@/match-balancing';
 import './assigned-player.css';
