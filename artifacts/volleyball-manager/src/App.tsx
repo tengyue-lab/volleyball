@@ -33,7 +33,7 @@ import {
 } from '@workspace/api-client-react';
 import type { Match, Player, PlayerInput, PlayerUpdate, Position as PositionType } from '@workspace/api-client-react';
 import { ArrowLeftRight, LogIn, LogOut, ShieldCheck, UserRound, CalendarDays, Check, ChevronDown, ClipboardList, Menu, Pencil, Plus, Search, Trophy, Trash2, Users, WandSparkles, X } from 'lucide-react';
-import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
+import { Link, Route, Switch, useLocation, useSearch, Router as WouterRouter } from 'wouter';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -337,12 +337,12 @@ function PlayersPage() {
         <EmptyState title="Start your club roster" copy="Add the players who turn up each week. You can keep more than one position on every profile." action={access.isAdmin ? <button className="button button-primary" onClick={() => setEditor('new')} data-testid="button-empty-add-player"><Plus size={14} /> Add first player</button> : undefined} /> :
           filteredPlayers.length === 0 ? <EmptyState title="No players match that search" copy="Try another player name or playing position." /> :
             <div className="table-wrap"><table className="data-table" role="table" aria-label="Player roster">
-              <thead role="rowgroup"><tr role="row"><th role="columnheader" scope="col">Player</th><th role="columnheader" scope="col">Positions</th><th role="columnheader" scope="col">ELO rating</th><th role="columnheader" scope="col" style={{ textAlign: 'right' }}>Actions</th></tr></thead>
+              <thead role="rowgroup"><tr role="row"><th role="columnheader" scope="col">Player</th><th role="columnheader" scope="col">Positions</th><th role="columnheader" scope="col">ELO rating</th>{access.isAdmin && <th role="columnheader" scope="col" style={{ textAlign: 'right' }}>Actions</th>}</tr></thead>
               <tbody role="rowgroup">{filteredPlayers.map((player) => <tr role="row" key={player.id} data-testid={`row-player-${player.id}`}>
                 <td role="cell" data-label="Player"><div className="player-name">{player.name}</div><div className="player-id">PLAYER / {String(player.id).padStart(3, '0')}</div>{player.preferredRolePriority && <div className="priority-indicator">Priority: Preferred role next match</div>}</td>
                 <td role="cell" data-label="Positions">{!player.preferencesConfirmed && <div className="legacy-indicator">Confirm preferences before next match</div>}<div className="tag-list">{player.positions.map((position, index) => <span className="tag" key={position}>{player.preferencesConfirmed ? `${index + 1}. ` : ''}{position}</span>)}</div></td>
                 <td role="cell" data-label="ELO rating" className="rating" data-testid={`text-player-elo-${player.id}`}>{player.elo === null ? <span className="private-rating">Private</span> : player.elo.toLocaleString()}</td>
-                <td role="cell" data-label="Actions"><div className="row-actions">{access.isAdmin && <button className="button button-quiet" onClick={() => setEditor(player.id)} aria-label={`Edit ${player.name}`} data-testid={`button-edit-player-${player.id}`}><Pencil size={14} /></button>}{access.isAdmin && <button className="button button-quiet button-danger" onClick={() => removePlayer(player)} aria-label={`Delete ${player.name}`} disabled={deletePlayer.isPending} data-testid={`button-delete-player-${player.id}`}><Trash2 size={15} /></button>}</div></td>
+                {access.isAdmin && <td role="cell" data-label="Actions"><div className="row-actions"><button className="button button-quiet" onClick={() => setEditor(player.id)} aria-label={`Edit ${player.name}`} data-testid={`button-edit-player-${player.id}`}><Pencil size={14} /></button><button className="button button-quiet button-danger" onClick={() => removePlayer(player)} aria-label={`Delete ${player.name}`} disabled={deletePlayer.isPending} data-testid={`button-delete-player-${player.id}`}><Trash2 size={15} /></button></div></td>}
               </tr>)}</tbody>
             </table></div>}
     </section>
@@ -395,6 +395,7 @@ function TeamMetrics({ team, players, total }: { team: 'A' | 'B'; players: Playe
 }
 
 function MatchDetail({ matchId }: { matchId: number }) {
+  const [, navigate] = useLocation();
   const { isAdmin } = useAccess();
   const query = useGetMatch(matchId, { query: { queryKey: getGetMatchQueryKey(matchId) } });
   const queryClient = useQueryClient();
@@ -464,6 +465,7 @@ function MatchDetail({ matchId }: { matchId: number }) {
       onSuccess: async (updated) => {
         await onMatchUpdated(updated);
         setResultError('');
+        navigate(`/match-history?match=${updated.id}`);
       },
       onError: (error) => setResultError(messageFor(error)),
     });
@@ -475,6 +477,7 @@ function MatchDetail({ matchId }: { matchId: number }) {
         await onMatchUpdated(updated);
         setScoreA('');
         setScoreB('');
+        navigate(`/current-match?match=${updated.id}`);
       },
       onError: (error) => setResultError(messageFor(error)),
     });
@@ -977,7 +980,13 @@ function CreateMatchPage() {
 
 function MatchCollectionPage({ type }: { type: 'current' | 'history' }) {
   const matchesQuery = useListMatches();
-  const [expandedMatch, setExpandedMatch] = useState<number | null>(null);
+  const search = useSearch();
+  const requestedMatchId = Number(new URLSearchParams(search).get('match'));
+  const initialMatchId = Number.isInteger(requestedMatchId) && requestedMatchId > 0 ? requestedMatchId : null;
+  const [expandedMatch, setExpandedMatch] = useState<number | null>(initialMatchId);
+  useEffect(() => {
+    setExpandedMatch(initialMatchId);
+  }, [initialMatchId]);
   const isCurrent = type === 'current';
   const matches = (matchesQuery.data ?? [])
     .filter((match) => match.status === (isCurrent ? 'upcoming' : 'completed'))
