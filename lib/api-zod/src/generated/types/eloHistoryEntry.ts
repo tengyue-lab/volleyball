@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EloHistoryEntryAction } from './eloHistoryEntryAction';
+import type { EloHistoryEntryKUsed } from './eloHistoryEntryKUsed';
+import type { EloHistoryEntryRankMovement } from './eloHistoryEntryRankMovement';
+import type { RankLabel } from './rankLabel';
 
 export interface EloHistoryEntry {
   id: number;
@@ -17,6 +20,29 @@ export interface EloHistoryEntry {
   eloAfter: number | null;
   /** @nullable */
   changeAmount: number | null;
+  /**
+     * Original K used, never recalculated on reversal; null for legacy rows.
+     * @nullable
+     */
+  kUsed: EloHistoryEntryKUsed;
+  rankBefore: RankLabel | null;
+  rankAfter: RankLabel | null;
+  /**
+     * Canonical rank-order change; null when hidden or legacy.
+     * @nullable
+     */
+  rankMovement: EloHistoryEntryRankMovement;
+  /**
+     * Null if never recorded on a legacy audit.
+     * @minimum 0
+     * @nullable
+     */
+  matchesPlayedBefore: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  matchesPlayedAfter: number | null;
   action: EloHistoryEntryAction;
   createdAt: Date;
 }

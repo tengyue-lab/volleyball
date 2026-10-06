@@ -52,6 +52,7 @@ import { ClerkShell } from '@/clerk-shell';
 import NotFound from '@/pages/not-found';
 import RankedPositionInput from '@/components/RankedPositionInput';
 import AssignedPlayer from '@/components/AssignedPlayer';
+import { RankBadge, RankTransition } from '@/components/RankBadge';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchInterval: 5000, staleTime: 0, refetchIntervalInBackground: false, retry: 1 } } });
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -157,7 +158,7 @@ function PlayerEditor({ playerId, onClose, notify }: { playerId: number | null; 
   const createPlayer = useCreatePlayer();
   const updatePlayer = useUpdatePlayer();
   const [name, setName] = useState('');
-  const [elo, setElo] = useState('1000');
+  const [elo, setElo] = useState('800');
   const [eloPublic, setEloPublic] = useState(true);
   const [selectedPositions, setSelectedPositions] = useState<PositionType[]>([]);
   const [formError, setFormError] = useState('');
@@ -175,7 +176,7 @@ function PlayerEditor({ playerId, onClose, notify }: { playerId: number | null; 
     if (playerId === null) {
       initializedFor.current = null;
       setName('');
-      setElo('1000');
+      setElo('800');
       setEloPublic(false);
       setSelectedPositions([]);
     }
@@ -233,7 +234,7 @@ function PlayerEditor({ playerId, onClose, notify }: { playerId: number | null; 
             </form> :
             <form className="modal-body" onSubmit={submit}>
               <div className="form-field"><label htmlFor="player-name">Player name</label><input id="player-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={80} autoFocus placeholder="e.g. Jordan Lee" data-testid="input-player-name" /></div>
-              <div className="form-field"><label htmlFor="player-elo">{playerId === null ? 'Starting ELO' : 'ELO'}</label><input id="player-elo" type="number" min="0" step="1" value={elo} onChange={(event) => setElo(event.target.value)} data-testid="input-player-elo" /><div className="field-hint">New players start at 1000. Ratings can be adjusted here.</div></div>
+              <div className="form-field"><label htmlFor="player-elo">{playerId === null ? 'Starting ELO' : 'ELO'}</label><input id="player-elo" type="number" min="0" step="1" value={elo} onChange={(event) => setElo(event.target.value)} data-testid="input-player-elo" /><div className="field-hint">New players start at 800. Ratings can be adjusted here.</div></div>
               {visibility}
               <fieldset className="form-field" style={{ border: 0, padding: 0, marginLeft: 0, marginRight: 0 }}>
                 <legend className="field-label">Ranked position preferences</legend>
@@ -323,7 +324,7 @@ function LeaderboardPage() {
               <td className="rank-cell"><span className={index < 3 ? 'rank-top' : ''}>{index + 1}</span></td>
               <td><div className="player-name">{player.name}</div></td>
               <td><div className="tag-list">{player.positions[0] && <span className="tag">{player.positions[0]}</span>}</div></td>
-              <td className="elo-cell"><div className="elo-value"><span>{player.elo.toLocaleString()}</span><span>{topRating > 0 ? Math.round((player.elo / topRating) * 100) : 0}%</span></div><div className="elo-meter"><span style={{ width: `${topRating > 0 ? Math.max(5, (player.elo / topRating) * 100) : 0}%` }} /></div></td>
+              <td className="elo-cell"><div className="leader-rank-text"><RankBadge rank={player.rank} rating={player.elo} provisional={player.provisional} testId={`badge-rank-${player.id}`} /></div><div className="elo-meter"><span style={{ width: `${topRating > 0 ? Math.max(5, (player.elo / topRating) * 100) : 0}%` }} /></div></td>
             </tr>)}</tbody>
           </table></div>}
     </section>
@@ -469,7 +470,7 @@ function MatchDetail({ matchId }: { matchId: number }) {
       {resultError && <div className="form-error result-error" role="alert">{resultError}</div>}
       {match.eloChanges.length ? <div className="table-wrap result-table-wrap">
         <table className="data-table result-table">
-          <thead><tr><th>Player</th><th>Position played</th><th>ELO before</th><th>ELO after</th><th>Change</th></tr></thead>
+          <thead><tr><th>Player</th><th>Position played</th><th>Rank</th><th>ELO before</th><th>ELO after</th><th>Change</th></tr></thead>
           <tbody>{[
             ...match.teamA.map((player) => ({ player, team: 'Team A' })),
             ...match.teamB.map((player) => ({ player, team: 'Team B' })),
@@ -480,6 +481,7 @@ function MatchDetail({ matchId }: { matchId: number }) {
             return <tr key={`${team}-${player.id}`}>
               <td><strong>{player.name}</strong><small>{team}</small></td>
               <td>{playedPosition}</td>
+              <td>{!change ? '—' : change.eloAfter === null && change.eloBefore === null ? 'Private' : <RankTransition before={change.rankBefore} after={change.rankAfter} movement={change.rankMovement} provisional={change.matchesPlayedAfter !== null && change.matchesPlayedAfter < 10} />}</td>
               <td>{change ? change.eloBefore ?? 'Private' : '—'}</td>
               <td>{change ? change.eloAfter ?? 'Private' : '—'}</td>
               <td className={changeAmount !== null && changeAmount > 0 ? 'elo-change-positive' : changeAmount !== null && changeAmount < 0 ? 'elo-change-negative' : ''}>{!change ? '—' : changeAmount === null ? 'Private' : `${changeAmount > 0 ? '+' : ''}${changeAmount}`}</td>
@@ -947,6 +949,8 @@ function UserPortalPage() {
             <div className="panel-head"><div><h2 className="panel-title" data-testid="text-my-name">{player.name}</h2><div className="panel-note">PLAYER / {String(player.id).padStart(3, '0')}</div></div><button className="button button-secondary" onClick={() => setEditing(true)} data-testid="button-edit-visibility"><Pencil size={14} /> ELO visibility</button></div>
             <div className="profile-grid">
               <div><span className="eyebrow">My ELO</span><strong className="profile-elo" data-testid="text-my-elo">{player.elo === null ? 'Private' : player.elo.toLocaleString()}</strong></div>
+              <div><span className="eyebrow">Rank</span>{player.elo === null ? <strong>Private</strong> : <RankBadge rank={player.rank} provisional={player.provisional} testId="badge-my-rank" />}</div>
+              <div><span className="eyebrow">Matches played</span><strong data-testid="text-my-matches">{player.matchesPlayed}</strong>{player.provisional && <div className="field-hint" data-testid="text-my-placement">Placement: {player.matchesPlayed} / 10 matches.</div>}</div>
               <div><span className="eyebrow">Leaderboard</span><strong data-testid="text-my-visibility">{player.eloPublic ? 'Shown publicly' : 'Hidden'}</strong></div>
               <div><span className="eyebrow">Positions</span><div className="tag-list">{player.positions.map((position, index) => <span className="tag" key={position}>{player.preferencesConfirmed ? `${index + 1}. ` : ''}{position}</span>)}</div></div>
             </div>

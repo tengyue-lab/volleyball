@@ -63,7 +63,7 @@ class PrivacyTests(unittest.TestCase):
         changed = self.client.patch(f"/api/players/{created['id']}", json={"name": "Still private"}).get_json()
         self.assertFalse(changed["eloPublic"])
         self.assertEqual(changed["positions"], ["Libero", "Setter"])
-        self.assertEqual(changed["elo"], 1000)
+        self.assertEqual(changed["elo"], 800)
 
     def test_private_profile_owner_admin_other_and_anonymous(self):
         target = self.player_ids[0]
@@ -125,7 +125,7 @@ class PrivacyTests(unittest.TestCase):
         match = self.create_match()
         self.assertEqual(match["teamA"][5]["elo"], 1050)
         self.complete(match)
-        self.assertEqual(self.profile(target)["elo"], 1064)
+        self.assertEqual(self.profile(target)["elo"], 1076)
         self.assertTrue(self.profile(target)["preferredRolePriority"])
         self.assertIsNone(self.anonymous().get(f"/api/players/{target}").get_json()["elo"])
         self.assertEqual(self.client.post(f"/api/matches/{match['id']}/reopen").status_code, 200)

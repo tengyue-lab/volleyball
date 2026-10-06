@@ -78,12 +78,19 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary List all players
  */
+export const listPlayersResponseMatchesPlayedMin = 0;
+
+
+
 export const ListPlayersResponseItem = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int().nullable().describe('Null when this viewer cannot see the rating.'),
   "eloPublic": zod.boolean(),
+  "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "matchesPlayed": zod.number().int().min(listPlayersResponseMatchesPlayedMin),
+  "provisional": zod.boolean().describe('True below ten completed progression matches, including zero.'),
   "createdAt": zod.coerce.date(),
   "preferencesConfirmed": zod.boolean(),
   "preferredRolePriority": zod.boolean(),
@@ -99,7 +106,7 @@ export const createPlayerBodyNameMax = 80;
 
 export const createPlayerBodyPositionsMax = 5;
 
-export const createPlayerBodyEloDefault = 1000;
+export const createPlayerBodyEloDefault = 800;
 export const createPlayerBodyEloMin = 0;
 
 export const createPlayerBodyEloPublicDefault = true;
@@ -111,12 +118,19 @@ export const CreatePlayerBody = zod.object({
   "eloPublic": zod.boolean().default(createPlayerBodyEloPublicDefault)
 })
 
+export const createPlayerResponseMatchesPlayedMin = 0;
+
+
+
 export const CreatePlayerResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int().nullable().describe('Null when this viewer cannot see the rating.'),
   "eloPublic": zod.boolean(),
+  "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "matchesPlayed": zod.number().int().min(createPlayerResponseMatchesPlayedMin),
+  "provisional": zod.boolean().describe('True below ten completed progression matches, including zero.'),
   "createdAt": zod.coerce.date(),
   "preferencesConfirmed": zod.boolean(),
   "preferredRolePriority": zod.boolean(),
@@ -131,12 +145,19 @@ export const GetPlayerParams = zod.object({
   "playerId": zod.coerce.number().int()
 })
 
+export const getPlayerResponseMatchesPlayedMin = 0;
+
+
+
 export const GetPlayerResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int().nullable().describe('Null when this viewer cannot see the rating.'),
   "eloPublic": zod.boolean(),
+  "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "matchesPlayed": zod.number().int().min(getPlayerResponseMatchesPlayedMin),
+  "provisional": zod.boolean().describe('True below ten completed progression matches, including zero.'),
   "createdAt": zod.coerce.date(),
   "preferencesConfirmed": zod.boolean(),
   "preferredRolePriority": zod.boolean(),
@@ -166,12 +187,19 @@ export const UpdatePlayerBody = zod.object({
   "eloPublic": zod.boolean().optional()
 })
 
+export const updatePlayerResponseMatchesPlayedMin = 0;
+
+
+
 export const UpdatePlayerResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int().nullable().describe('Null when this viewer cannot see the rating.'),
   "eloPublic": zod.boolean(),
+  "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "matchesPlayed": zod.number().int().min(updatePlayerResponseMatchesPlayedMin),
+  "provisional": zod.boolean().describe('True below ten completed progression matches, including zero.'),
   "createdAt": zod.coerce.date(),
   "preferencesConfirmed": zod.boolean(),
   "preferredRolePriority": zod.boolean(),
@@ -196,6 +224,12 @@ export const GetPlayerEloHistoryParams = zod.object({
   "playerId": zod.coerce.number().int()
 })
 
+export const getPlayerEloHistoryResponseMatchesPlayedBeforeMin = 0;
+
+export const getPlayerEloHistoryResponseMatchesPlayedAfterMin = 0;
+
+
+
 export const GetPlayerEloHistoryResponseItem = zod.object({
   "id": zod.number().int(),
   "playerId": zod.number().int(),
@@ -203,6 +237,12 @@ export const GetPlayerEloHistoryResponseItem = zod.object({
   "eloBefore": zod.number().int().nullable(),
   "eloAfter": zod.number().int().nullable(),
   "changeAmount": zod.number().int().nullable(),
+  "kUsed": zod.union([zod.literal(20),zod.literal(32),zod.literal(40),zod.literal(60),zod.literal(null)]).nullable().describe('Original K used, never recalculated on reversal; null for legacy rows.'),
+  "rankBefore": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "rankAfter": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "rankMovement": zod.union([zod.literal('promotion'),zod.literal('demotion'),zod.literal('unchanged'),zod.literal(null)]).nullable().describe('Canonical rank-order change; null when hidden or legacy.'),
+  "matchesPlayedBefore": zod.number().int().min(getPlayerEloHistoryResponseMatchesPlayedBeforeMin).nullable().describe('Null if never recorded on a legacy audit.'),
+  "matchesPlayedAfter": zod.number().int().min(getPlayerEloHistoryResponseMatchesPlayedAfterMin).nullable(),
   "action": zod.enum(['result', 'reversal']),
   "createdAt": zod.coerce.date()
 })
@@ -212,12 +252,19 @@ export const GetPlayerEloHistoryResponse = zod.array(GetPlayerEloHistoryResponse
 /**
  * @summary List players ranked by ELO
  */
+export const getLeaderboardResponseMatchesPlayedMin = 0;
+
+
+
 export const GetLeaderboardResponseItem = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int().nullable().describe('Null when this viewer cannot see the rating.'),
   "eloPublic": zod.boolean(),
+  "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "matchesPlayed": zod.number().int().min(getLeaderboardResponseMatchesPlayedMin),
+  "provisional": zod.boolean().describe('True below ten completed progression matches, including zero.'),
   "createdAt": zod.coerce.date(),
   "preferencesConfirmed": zod.boolean(),
   "preferredRolePriority": zod.boolean(),
@@ -229,6 +276,16 @@ export const GetLeaderboardResponse = zod.array(GetLeaderboardResponseItem)
 /**
  * @summary List matches and team rosters
  */
+export const listMatchesResponseTeamAItemMatchesPlayedMin = 0;
+
+export const listMatchesResponseTeamBItemMatchesPlayedMin = 0;
+
+export const listMatchesResponseEloChangesItemMatchesPlayedBeforeMin = 0;
+
+export const listMatchesResponseEloChangesItemMatchesPlayedAfterMin = 0;
+
+
+
 export const ListMatchesResponseItem = zod.object({
   "id": zod.number().int(),
   "teamA": zod.array(zod.object({
@@ -236,6 +293,9 @@ export const ListMatchesResponseItem = zod.object({
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int().nullable(),
+  "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullish().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "matchesPlayed": zod.number().int().min(listMatchesResponseTeamAItemMatchesPlayedMin).optional(),
+  "provisional": zod.boolean().optional(),
   "createdAt": zod.coerce.date().optional(),
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
@@ -249,6 +309,9 @@ export const ListMatchesResponseItem = zod.object({
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int().nullable(),
+  "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullish().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "matchesPlayed": zod.number().int().min(listMatchesResponseTeamBItemMatchesPlayedMin).optional(),
+  "provisional": zod.boolean().optional(),
   "createdAt": zod.coerce.date().optional(),
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
@@ -270,6 +333,12 @@ export const ListMatchesResponseItem = zod.object({
   "eloBefore": zod.number().int().nullable(),
   "eloAfter": zod.number().int().nullable(),
   "changeAmount": zod.number().int().nullable(),
+  "kUsed": zod.union([zod.literal(20),zod.literal(32),zod.literal(40),zod.literal(60),zod.literal(null)]).nullable().describe('Original K used, never recalculated on reversal; null for legacy rows.'),
+  "rankBefore": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "rankAfter": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "rankMovement": zod.union([zod.literal('promotion'),zod.literal('demotion'),zod.literal('unchanged'),zod.literal(null)]).nullable().describe('Canonical rank-order change; null when hidden or legacy.'),
+  "matchesPlayedBefore": zod.number().int().min(listMatchesResponseEloChangesItemMatchesPlayedBeforeMin).nullable().describe('Null if never recorded on a legacy audit.'),
+  "matchesPlayedAfter": zod.number().int().min(listMatchesResponseEloChangesItemMatchesPlayedAfterMin).nullable(),
   "action": zod.enum(['result', 'reversal']),
   "createdAt": zod.coerce.date()
 }))
@@ -312,6 +381,16 @@ export const CreateMatchBody = zod.object({
 })).min(createMatchBodyTeamBAssignmentsMin).max(createMatchBodyTeamBAssignmentsMax)
 })
 
+export const createMatchResponseTeamAItemMatchesPlayedMin = 0;
+
+export const createMatchResponseTeamBItemMatchesPlayedMin = 0;
+
+export const createMatchResponseEloChangesItemMatchesPlayedBeforeMin = 0;
+
+export const createMatchResponseEloChangesItemMatchesPlayedAfterMin = 0;
+
+
+
 export const CreateMatchResponse = zod.object({
   "id": zod.number().int(),
   "teamA": zod.array(zod.object({
@@ -319,6 +398,9 @@ export const CreateMatchResponse = zod.object({
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int().nullable(),
+  "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullish().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "matchesPlayed": zod.number().int().min(createMatchResponseTeamAItemMatchesPlayedMin).optional(),
+  "provisional": zod.boolean().optional(),
   "createdAt": zod.coerce.date().optional(),
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
@@ -332,6 +414,9 @@ export const CreateMatchResponse = zod.object({
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int().nullable(),
+  "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullish().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "matchesPlayed": zod.number().int().min(createMatchResponseTeamBItemMatchesPlayedMin).optional(),
+  "provisional": zod.boolean().optional(),
   "createdAt": zod.coerce.date().optional(),
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
@@ -353,6 +438,12 @@ export const CreateMatchResponse = zod.object({
   "eloBefore": zod.number().int().nullable(),
   "eloAfter": zod.number().int().nullable(),
   "changeAmount": zod.number().int().nullable(),
+  "kUsed": zod.union([zod.literal(20),zod.literal(32),zod.literal(40),zod.literal(60),zod.literal(null)]).nullable().describe('Original K used, never recalculated on reversal; null for legacy rows.'),
+  "rankBefore": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "rankAfter": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "rankMovement": zod.union([zod.literal('promotion'),zod.literal('demotion'),zod.literal('unchanged'),zod.literal(null)]).nullable().describe('Canonical rank-order change; null when hidden or legacy.'),
+  "matchesPlayedBefore": zod.number().int().min(createMatchResponseEloChangesItemMatchesPlayedBeforeMin).nullable().describe('Null if never recorded on a legacy audit.'),
+  "matchesPlayedAfter": zod.number().int().min(createMatchResponseEloChangesItemMatchesPlayedAfterMin).nullable(),
   "action": zod.enum(['result', 'reversal']),
   "createdAt": zod.coerce.date()
 }))
@@ -366,6 +457,16 @@ export const GetMatchParams = zod.object({
   "matchId": zod.coerce.number().int()
 })
 
+export const getMatchResponseTeamAItemMatchesPlayedMin = 0;
+
+export const getMatchResponseTeamBItemMatchesPlayedMin = 0;
+
+export const getMatchResponseEloChangesItemMatchesPlayedBeforeMin = 0;
+
+export const getMatchResponseEloChangesItemMatchesPlayedAfterMin = 0;
+
+
+
 export const GetMatchResponse = zod.object({
   "id": zod.number().int(),
   "teamA": zod.array(zod.object({
@@ -373,6 +474,9 @@ export const GetMatchResponse = zod.object({
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int().nullable(),
+  "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullish().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "matchesPlayed": zod.number().int().min(getMatchResponseTeamAItemMatchesPlayedMin).optional(),
+  "provisional": zod.boolean().optional(),
   "createdAt": zod.coerce.date().optional(),
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
@@ -386,6 +490,9 @@ export const GetMatchResponse = zod.object({
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int().nullable(),
+  "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullish().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "matchesPlayed": zod.number().int().min(getMatchResponseTeamBItemMatchesPlayedMin).optional(),
+  "provisional": zod.boolean().optional(),
   "createdAt": zod.coerce.date().optional(),
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
@@ -407,6 +514,12 @@ export const GetMatchResponse = zod.object({
   "eloBefore": zod.number().int().nullable(),
   "eloAfter": zod.number().int().nullable(),
   "changeAmount": zod.number().int().nullable(),
+  "kUsed": zod.union([zod.literal(20),zod.literal(32),zod.literal(40),zod.literal(60),zod.literal(null)]).nullable().describe('Original K used, never recalculated on reversal; null for legacy rows.'),
+  "rankBefore": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "rankAfter": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "rankMovement": zod.union([zod.literal('promotion'),zod.literal('demotion'),zod.literal('unchanged'),zod.literal(null)]).nullable().describe('Canonical rank-order change; null when hidden or legacy.'),
+  "matchesPlayedBefore": zod.number().int().min(getMatchResponseEloChangesItemMatchesPlayedBeforeMin).nullable().describe('Null if never recorded on a legacy audit.'),
+  "matchesPlayedAfter": zod.number().int().min(getMatchResponseEloChangesItemMatchesPlayedAfterMin).nullable(),
   "action": zod.enum(['result', 'reversal']),
   "createdAt": zod.coerce.date()
 }))
@@ -431,6 +544,16 @@ export const SubmitMatchResultBody = zod.object({
   "scoreB": zod.number().int().min(submitMatchResultBodyScoreBMin)
 })
 
+export const submitMatchResultResponseTeamAItemMatchesPlayedMin = 0;
+
+export const submitMatchResultResponseTeamBItemMatchesPlayedMin = 0;
+
+export const submitMatchResultResponseEloChangesItemMatchesPlayedBeforeMin = 0;
+
+export const submitMatchResultResponseEloChangesItemMatchesPlayedAfterMin = 0;
+
+
+
 export const SubmitMatchResultResponse = zod.object({
   "id": zod.number().int(),
   "teamA": zod.array(zod.object({
@@ -438,6 +561,9 @@ export const SubmitMatchResultResponse = zod.object({
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int().nullable(),
+  "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullish().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "matchesPlayed": zod.number().int().min(submitMatchResultResponseTeamAItemMatchesPlayedMin).optional(),
+  "provisional": zod.boolean().optional(),
   "createdAt": zod.coerce.date().optional(),
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
@@ -451,6 +577,9 @@ export const SubmitMatchResultResponse = zod.object({
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int().nullable(),
+  "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullish().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "matchesPlayed": zod.number().int().min(submitMatchResultResponseTeamBItemMatchesPlayedMin).optional(),
+  "provisional": zod.boolean().optional(),
   "createdAt": zod.coerce.date().optional(),
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
@@ -472,6 +601,12 @@ export const SubmitMatchResultResponse = zod.object({
   "eloBefore": zod.number().int().nullable(),
   "eloAfter": zod.number().int().nullable(),
   "changeAmount": zod.number().int().nullable(),
+  "kUsed": zod.union([zod.literal(20),zod.literal(32),zod.literal(40),zod.literal(60),zod.literal(null)]).nullable().describe('Original K used, never recalculated on reversal; null for legacy rows.'),
+  "rankBefore": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "rankAfter": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "rankMovement": zod.union([zod.literal('promotion'),zod.literal('demotion'),zod.literal('unchanged'),zod.literal(null)]).nullable().describe('Canonical rank-order change; null when hidden or legacy.'),
+  "matchesPlayedBefore": zod.number().int().min(submitMatchResultResponseEloChangesItemMatchesPlayedBeforeMin).nullable().describe('Null if never recorded on a legacy audit.'),
+  "matchesPlayedAfter": zod.number().int().min(submitMatchResultResponseEloChangesItemMatchesPlayedAfterMin).nullable(),
   "action": zod.enum(['result', 'reversal']),
   "createdAt": zod.coerce.date()
 }))
@@ -485,6 +620,16 @@ export const ReopenMatchResultParams = zod.object({
   "matchId": zod.coerce.number().int()
 })
 
+export const reopenMatchResultResponseTeamAItemMatchesPlayedMin = 0;
+
+export const reopenMatchResultResponseTeamBItemMatchesPlayedMin = 0;
+
+export const reopenMatchResultResponseEloChangesItemMatchesPlayedBeforeMin = 0;
+
+export const reopenMatchResultResponseEloChangesItemMatchesPlayedAfterMin = 0;
+
+
+
 export const ReopenMatchResultResponse = zod.object({
   "id": zod.number().int(),
   "teamA": zod.array(zod.object({
@@ -492,6 +637,9 @@ export const ReopenMatchResultResponse = zod.object({
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int().nullable(),
+  "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullish().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "matchesPlayed": zod.number().int().min(reopenMatchResultResponseTeamAItemMatchesPlayedMin).optional(),
+  "provisional": zod.boolean().optional(),
   "createdAt": zod.coerce.date().optional(),
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
@@ -505,6 +653,9 @@ export const ReopenMatchResultResponse = zod.object({
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
   "elo": zod.number().int().nullable(),
+  "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullish().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "matchesPlayed": zod.number().int().min(reopenMatchResultResponseTeamBItemMatchesPlayedMin).optional(),
+  "provisional": zod.boolean().optional(),
   "createdAt": zod.coerce.date().optional(),
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
@@ -526,6 +677,12 @@ export const ReopenMatchResultResponse = zod.object({
   "eloBefore": zod.number().int().nullable(),
   "eloAfter": zod.number().int().nullable(),
   "changeAmount": zod.number().int().nullable(),
+  "kUsed": zod.union([zod.literal(20),zod.literal(32),zod.literal(40),zod.literal(60),zod.literal(null)]).nullable().describe('Original K used, never recalculated on reversal; null for legacy rows.'),
+  "rankBefore": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "rankAfter": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "rankMovement": zod.union([zod.literal('promotion'),zod.literal('demotion'),zod.literal('unchanged'),zod.literal(null)]).nullable().describe('Canonical rank-order change; null when hidden or legacy.'),
+  "matchesPlayedBefore": zod.number().int().min(reopenMatchResultResponseEloChangesItemMatchesPlayedBeforeMin).nullable().describe('Null if never recorded on a legacy audit.'),
+  "matchesPlayedAfter": zod.number().int().min(reopenMatchResultResponseEloChangesItemMatchesPlayedAfterMin).nullable(),
   "action": zod.enum(['result', 'reversal']),
   "createdAt": zod.coerce.date()
 }))

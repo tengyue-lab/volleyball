@@ -3,3 +3,4 @@
 - [ELO privacy scope](elo-privacy-scope.md) — user approved sign-in, player ownership and admin access to enforce private ratings.
 - [Vite runtime dependencies](vite-runtime-dependencies.md) — matching installed React versions do not guarantee matching prebundled browser runtimes.
 - [Match cadence](volleyball-product-context.md) — players play roughly 3–4 matches per week.
+- [Browser-test cleanup](browser-test-cleanup.md) — close test contexts before deleting fixtures; live authentication polling can recreate QA accounts.

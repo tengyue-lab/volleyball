@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Position } from './position';
+import type { RankLabel } from './rankLabel';
 
 export interface Player {
   id: number;
@@ -17,6 +18,11 @@ export interface Player {
      */
   elo: number | null;
   eloPublic: boolean;
+  rank: RankLabel | null;
+  /** @minimum 0 */
+  readonly matchesPlayed: number;
+  /** True below ten completed progression matches, including zero. */
+  provisional: boolean;
   createdAt: Date;
   preferencesConfirmed: boolean;
   preferredRolePriority: boolean;

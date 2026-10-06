@@ -20,6 +20,35 @@ export const Position = {
   Libero: 'Libero',
 } as const;
 
+/**
+ * Derived from ELO, null when hidden or not recorded in legacy history.
+ * @nullable
+ */
+export type RankLabel = typeof RankLabel[keyof typeof RankLabel] | null;
+
+
+export const RankLabel = {
+  Iron_3: 'Iron 3',
+  Iron_2: 'Iron 2',
+  Iron_1: 'Iron 1',
+  Bronze_3: 'Bronze 3',
+  Bronze_2: 'Bronze 2',
+  Bronze_1: 'Bronze 1',
+  Silver_3: 'Silver 3',
+  Silver_2: 'Silver 2',
+  Silver_1: 'Silver 1',
+  Gold_3: 'Gold 3',
+  Gold_2: 'Gold 2',
+  Gold_1: 'Gold 1',
+  Platinum_3: 'Platinum 3',
+  Platinum_2: 'Platinum 2',
+  Platinum_1: 'Platinum 1',
+  Diamond_3: 'Diamond 3',
+  Diamond_2: 'Diamond 2',
+  Diamond_1: 'Diamond 1',
+  Masters: 'Masters',
+} as const;
+
 export interface Player {
   id: number;
   name: string;
@@ -30,6 +59,11 @@ export interface Player {
      */
   elo: number | null;
   eloPublic: boolean;
+  rank: RankLabel | null;
+  /** @minimum 0 */
+  readonly matchesPlayed: number;
+  /** True below ten completed progression matches, including zero. */
+  provisional: boolean;
   createdAt: string;
   preferencesConfirmed: boolean;
   preferredRolePriority: boolean;
@@ -105,6 +139,10 @@ export interface MatchPlayerSnapshot {
   positions: Position[];
   /** @nullable */
   elo: number | null;
+  rank?: RankLabel | null;
+  /** @minimum 0 */
+  matchesPlayed?: number;
+  provisional?: boolean;
   createdAt?: string;
   preferencesConfirmed?: boolean;
   preferredRolePriority?: boolean;
@@ -115,6 +153,33 @@ export interface MatchPlayerSnapshot {
   /** @nullable */
   preferenceRank?: number | null;
 }
+
+/**
+ * Original K used, never recalculated on reversal; null for legacy rows.
+ * @nullable
+ */
+export type EloHistoryEntryKUsed = typeof EloHistoryEntryKUsed[keyof typeof EloHistoryEntryKUsed] | null;
+
+
+export const EloHistoryEntryKUsed = {
+  NUMBER_20: 20,
+  NUMBER_32: 32,
+  NUMBER_40: 40,
+  NUMBER_60: 60,
+} as const;
+
+/**
+ * Canonical rank-order change; null when hidden or legacy.
+ * @nullable
+ */
+export type EloHistoryEntryRankMovement = typeof EloHistoryEntryRankMovement[keyof typeof EloHistoryEntryRankMovement] | null;
+
+
+export const EloHistoryEntryRankMovement = {
+  promotion: 'promotion',
+  demotion: 'demotion',
+  unchanged: 'unchanged',
+} as const;
 
 export type EloHistoryEntryAction = typeof EloHistoryEntryAction[keyof typeof EloHistoryEntryAction];
 
@@ -134,6 +199,29 @@ export interface EloHistoryEntry {
   eloAfter: number | null;
   /** @nullable */
   changeAmount: number | null;
+  /**
+     * Original K used, never recalculated on reversal; null for legacy rows.
+     * @nullable
+     */
+  kUsed: EloHistoryEntryKUsed;
+  rankBefore: RankLabel | null;
+  rankAfter: RankLabel | null;
+  /**
+     * Canonical rank-order change; null when hidden or legacy.
+     * @nullable
+     */
+  rankMovement: EloHistoryEntryRankMovement;
+  /**
+     * Null if never recorded on a legacy audit.
+     * @minimum 0
+     * @nullable
+     */
+  matchesPlayedBefore: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  matchesPlayedAfter: number | null;
   action: EloHistoryEntryAction;
   createdAt: string;
 }

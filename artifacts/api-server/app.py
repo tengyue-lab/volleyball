@@ -16,6 +16,7 @@ from typing import Any, Iterator
 
 from flask import Flask, current_app, jsonify, request
 from privacy_auth import initialize_auth_schema, install_privacy
+from rating_progression import STARTING_ELO, is_provisional, k_for_matches, rank_for_elo, rank_movement
 
 
 POSITIONS = (
@@ -36,7 +37,6 @@ SIX_PLAYER_ROLE_COUNTS = Counter(
 )
 SEVEN_PLAYER_ROLE_COUNTS = SIX_PLAYER_ROLE_COUNTS.copy()
 SEVEN_PLAYER_ROLE_COUNTS["Libero"] = 1
-ELO_K_FACTOR = 32
 DEFAULT_DATABASE = Path(__file__).resolve().parent / "data" / "volleyball.sqlite3"
 
 
@@ -58,7 +58,7 @@ def initialize_database(database_path: str) -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 positions_json TEXT NOT NULL,
-                elo INTEGER NOT NULL DEFAULT 1000 CHECK (elo >= 0),
+                elo INTEGER NOT NULL DEFAULT 800 CHECK (elo >= 0),
                 created_at TEXT NOT NULL
             );
 
@@ -99,6 +99,21 @@ def initialize_database(database_path: str) -> None:
         if "completed_at" not in match_columns:
             connection.execute("ALTER TABLE matches ADD COLUMN completed_at TEXT")
         player_columns = {row[1] for row in connection.execute("PRAGMA table_info(players)")}
+        if "matches_played" not in player_columns:
+            connection.execute(
+                "ALTER TABLE players ADD COLUMN matches_played INTEGER NOT NULL DEFAULT 0 "
+                "CHECK (matches_played >= 0)"
+            )
+        history_columns = {row[1] for row in connection.execute("PRAGMA table_info(elo_history)")}
+        # Nullable on legacy rows: do not invent placement history or rewrite audits.
+        for column, definition in (
+            ("k_used", "INTEGER CHECK (k_used IN (20, 32, 40, 60))"),
+            ("rank_before", "TEXT"), ("rank_after", "TEXT"),
+            ("matches_played_before", "INTEGER CHECK (matches_played_before >= 0)"),
+            ("matches_played_after", "INTEGER CHECK (matches_played_after >= 0)"),
+        ):
+            if column not in history_columns:
+                connection.execute(f"ALTER TABLE elo_history ADD COLUMN {column} {definition}")
         if "preferences_confirmed" not in player_columns:
             connection.execute("ALTER TABLE players ADD COLUMN preferences_confirmed INTEGER NOT NULL DEFAULT 0")
         if "priority_since" not in player_columns:
@@ -202,6 +217,9 @@ def serialize_player(row: sqlite3.Row) -> dict[str, Any]:
         "name": row["name"],
         "positions": json.loads(row["positions_json"]),
         "elo": row["elo"],
+        "rank": rank_for_elo(row["elo"]),
+        "matchesPlayed": row["matches_played"],
+        "provisional": is_provisional(row["matches_played"]),
         "eloPublic": bool(row["elo_public"]),
         "createdAt": row["created_at"],
         "preferencesConfirmed": bool(row["preferences_confirmed"]),
@@ -218,6 +236,12 @@ def serialize_elo_history_row(row: sqlite3.Row) -> dict[str, Any]:
         "eloBefore": row["elo_before"],
         "eloAfter": row["elo_after"],
         "changeAmount": row["change_amount"],
+        "kUsed": row["k_used"],
+        "rankBefore": row["rank_before"],
+        "rankAfter": row["rank_after"],
+        "rankMovement": rank_movement(row["rank_before"], row["rank_after"]),
+        "matchesPlayedBefore": row["matches_played_before"],
+        "matchesPlayedAfter": row["matches_played_after"],
         "action": row["action"],
         "createdAt": row["created_at"],
     }
@@ -264,8 +288,8 @@ def calculate_elo_updates(
     team_a_players: list[dict[str, Any]],
     team_b_players: list[dict[str, Any]],
     winner: str,
-) -> list[dict[str, int]]:
-    """Calculate each player's standard K=32 ELO change from pre-match team averages.
+) -> list[dict[str, Any]]:
+    """Calculate per-player progression changes from pre-match team averages.
 
     Keep this calculation separate from request handling so the K-factor and
     expected-score formula are straightforward to review and adjust. Ratings
@@ -291,8 +315,10 @@ def calculate_elo_updates(
     ):
         for player in players:
             old_elo = player["elo"]
+            matches_before = player["matchesPlayed"]
+            k_used = k_for_matches(matches_before)
             rounded_elo = math.floor(
-                old_elo + ELO_K_FACTOR * (actual - expected) + 0.5
+                old_elo + k_used * (actual - expected) + 0.5
             )
             new_elo = max(0, rounded_elo)
             updates.append(
@@ -301,6 +327,11 @@ def calculate_elo_updates(
                     "eloBefore": old_elo,
                     "eloAfter": new_elo,
                     "changeAmount": new_elo - old_elo,
+                    "kUsed": k_used,
+                    "rankBefore": rank_for_elo(old_elo),
+                    "rankAfter": rank_for_elo(new_elo),
+                    "matchesPlayedBefore": matches_before,
+                    "matchesPlayedAfter": matches_before + 1,
                 }
             )
     return updates
@@ -381,7 +412,7 @@ def validate_player_fields(
             return None, "ELO must be a whole number greater than or equal to 0."
         normalized["elo"] = elo
     elif not partial:
-        normalized["elo"] = 1000
+        normalized["elo"] = STARTING_ELO
 
     if "eloPublic" in body:
         if type(body["eloPublic"]) is not bool:
@@ -711,15 +742,16 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             completion_order = connection.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM elo_history").fetchone()[0]
             for update in elo_updates:
                 connection.execute(
-                    "UPDATE players SET elo = ? WHERE id = ?",
-                    (update["eloAfter"], update["playerId"]),
+                    "UPDATE players SET elo = ?, matches_played = ? WHERE id = ?",
+                    (update["eloAfter"], update["matchesPlayedAfter"], update["playerId"]),
                 )
                 connection.execute(
                     """
                     INSERT INTO elo_history (
                         player_id, match_id, elo_before, elo_after,
-                        change_amount, action, created_at
-                    ) VALUES (?, ?, ?, ?, ?, 'result', ?)
+                        change_amount, action, created_at,
+                        k_used, rank_before, rank_after, matches_played_before, matches_played_after
+                    ) VALUES (?, ?, ?, ?, ?, 'result', ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         update["playerId"],
@@ -728,6 +760,11 @@ def create_app(database_path: str | Path | None = None) -> Flask:
                         update["eloAfter"],
                         update["changeAmount"],
                         completed_at,
+                        update["kUsed"],
+                        update["rankBefore"],
+                        update["rankAfter"],
+                        update["matchesPlayedBefore"],
+                        update["matchesPlayedAfter"],
                     ),
                 )
             for assignment in connection.execute("SELECT * FROM assignment_audit WHERE match_id = ?", (match_id,)).fetchall():
@@ -804,17 +841,26 @@ def create_app(database_path: str | Path | None = None) -> Flask:
                     else change["eloAfter"]
                 )
                 restored_elo = change["eloBefore"]
+                recorded_counter = change["matchesPlayedBefore"]
+                # Legacy results predate the progression counter. They never
+                # incremented it, so their rating-only reversal leaves it alone.
+                before_counter = (
+                    current_player["matches_played"] if current_player is not None
+                    else change["matchesPlayedAfter"]
+                ) if recorded_counter is not None else None
                 if current_player is not None:
                     connection.execute(
-                        "UPDATE players SET elo = ? WHERE id = ?",
-                        (restored_elo, player_id),
+                        "UPDATE players SET elo = ?, matches_played = ? WHERE id = ?",
+                        (restored_elo, recorded_counter if recorded_counter is not None
+                         else current_player["matches_played"], player_id),
                     )
                 connection.execute(
                     """
                     INSERT INTO elo_history (
                         player_id, match_id, elo_before, elo_after,
-                        change_amount, action, created_at
-                    ) VALUES (?, ?, ?, ?, ?, 'reversal', ?)
+                        change_amount, action, created_at,
+                        k_used, rank_before, rank_after, matches_played_before, matches_played_after
+                    ) VALUES (?, ?, ?, ?, ?, 'reversal', ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         player_id,
@@ -823,6 +869,11 @@ def create_app(database_path: str | Path | None = None) -> Flask:
                         restored_elo,
                         restored_elo - before_reversal,
                         reversed_at,
+                        change["kUsed"],
+                        rank_for_elo(before_reversal) if change["rankAfter"] is not None else None,
+                        change["rankBefore"],
+                        before_counter,
+                        recorded_counter,
                     ),
                 )
             connection.execute(

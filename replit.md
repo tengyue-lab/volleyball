@@ -30,16 +30,17 @@ A local-first volleyball roster and match setup app for managing player position
 ## Architecture decisions
 
 - SQLite is intentional; do not replace it with the workspace PostgreSQL database.
+- Progression migrations are additive only. Older player tables can retain their original SQL ELO default; application creation always inserts its explicit 800 default rather than rebuilding those tables. Never silently backfill unknown placement counters from legacy audits.
 - Clerk verifies identity only. Preserve Flask's domain routes and matching behavior; run the API through its managed gateway, not a standalone public Gunicorn listener. The gateway supervises Flask on a private Unix socket and signs each forwarded request.
 - ELO visibility defaults to public. Read-time privacy protects player details, historical snapshots and rating audits; matching/results continue to use real ratings. The leaderboard filters public players before its deterministic ten-player limit.
 - Only admins manage player ownership and future administrator grants. Owners may change their own ELO visibility, not ratings or match results. Clear cached private data whenever the signed-in identity or permissions change.
 - Match rosters save player details and the assigned role as snapshots so later player edits or deletions do not rewrite a saved roster.
 - The match builder supports manual assignment and exact role-first, same-role ELO balancing with post-balance swaps. Roles not listed on a profile may be Filled by the best available ELO player and are reported by role.
-- Completed results apply the existing K=32 ELO calculation; reopening restores ratings and reverses priority events. Later dependent results must be reopened first.
+- Completed results preserve the team-average ELO formula, with per-player K=60/40/32/20 for matches 1–10/11–30/31–60/61+. Audits record K, rank and match counts alongside ELO. Reopening restores exact recorded ratings/counters and reverses priority events; later dependent results must be reopened first. Legacy rating-only audits keep unknown new metadata and do not change progression counters on reversal.
 
 ## Product
 
-- Players rank 1–5 unique preferences; legacy profiles keep their lists but must explicitly save ranked preferences before a new match. One- and two-role profiles show a non-blocking suggestion to add more preferences. New players start at ELO 1000; leaderboard sorts by ELO.
+- Players rank 1–5 unique preferences; legacy profiles keep their lists but must explicitly save ranked preferences before a new match. One- and two-role profiles show a non-blocking suggestion to add more preferences. New players default to ELO 800 (Bronze 3), with ten-match placement. Current ranks are derived centrally from ELO, never stored separately; private ranks are masked wherever ELO is masked. Public provisional players remain eligible for the top-ten leaderboard.
 - Phase 2: create upcoming matches from 12, 13, or 14 selected players, with exact six-player roles (1 Setter, 2 Outside Hitters, 2 Middle Blockers, 1 Opposite). Seven-player sides add 1 assigned Libero role.
 - Match creation supports a selected player pool, auto-balancing or manual assignment, Preferred/Filled role badges and shortage warnings, live team ELO totals/averages, and player swaps. For 13, auto-balance gives the Libero to the lower-ELO six-player core when possible.
 - Upcoming scores are null. Completed Filled assignments grant priority; a later completed Preferred assignment clears it. Saving rosters or balancing never changes priority.

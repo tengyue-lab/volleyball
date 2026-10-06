@@ -70,14 +70,14 @@ class MatchResultTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         return response.get_json()["elo"]
 
-    def test_calculation_uses_team_average_and_k_factor_32(self):
-        team_a = [{"id": 1, "elo": 1000}, {"id": 2, "elo": 1000}]
-        team_b = [{"id": 3, "elo": 1000}, {"id": 4, "elo": 1000}]
+    def test_calculation_uses_team_average_and_established_k_factor_32(self):
+        team_a = [{"id": 1, "elo": 1000, "matchesPlayed": 30}, {"id": 2, "elo": 1000, "matchesPlayed": 30}]
+        team_b = [{"id": 3, "elo": 1000, "matchesPlayed": 30}, {"id": 4, "elo": 1000, "matchesPlayed": 30}]
 
         updates = calculate_elo_updates(team_a, team_b, "Team A")
 
         self.assertEqual(
-            updates,
+            [{key: update[key] for key in ("playerId", "eloBefore", "eloAfter", "changeAmount")} for update in updates],
             [
                 {"playerId": 1, "eloBefore": 1000, "eloAfter": 1016, "changeAmount": 16},
                 {"playerId": 2, "eloBefore": 1000, "eloAfter": 1016, "changeAmount": 16},
@@ -85,6 +85,8 @@ class MatchResultTests(unittest.TestCase):
                 {"playerId": 4, "eloBefore": 1000, "eloAfter": 984, "changeAmount": -16},
             ],
         )
+        self.assertTrue(all(update["kUsed"] == 32 for update in updates))
+        self.assertTrue(all(update["matchesPlayedAfter"] == 31 for update in updates))
 
     def test_tie_is_rejected_without_changing_match_or_ratings(self):
         match = self.create_match()
@@ -113,10 +115,10 @@ class MatchResultTests(unittest.TestCase):
         self.assertEqual((result["scoreA"], result["scoreB"]), (3, 1))
         self.assertIsNotNone(result["completedAt"])
         self.assertEqual(len(result["eloChanges"]), 12)
-        self.assertTrue(all(row["changeAmount"] == 14 for row in result["eloChanges"][:6]))
-        self.assertTrue(all(row["changeAmount"] == -14 for row in result["eloChanges"][6:]))
-        self.assertEqual(self.player_elo(self.player_ids[0]), 1064)
-        self.assertEqual(self.player_elo(self.player_ids[6]), 986)
+        self.assertTrue(all(row["changeAmount"] == 26 for row in result["eloChanges"][:6]))
+        self.assertTrue(all(row["changeAmount"] == -26 for row in result["eloChanges"][6:]))
+        self.assertEqual(self.player_elo(self.player_ids[0]), 1076)
+        self.assertEqual(self.player_elo(self.player_ids[6]), 974)
 
         locked = self.client.post(
             f"/api/matches/{match['id']}/result", json={"scoreA": 1, "scoreB": 3}
@@ -145,9 +147,9 @@ class MatchResultTests(unittest.TestCase):
             f"/api/players/{self.player_ids[0]}/elo-history"
         ).get_json()
         self.assertEqual([entry["action"] for entry in full_history], ["result", "reversal"])
-        self.assertEqual(full_history[1]["eloBefore"], 1064)
+        self.assertEqual(full_history[1]["eloBefore"], 1076)
         self.assertEqual(full_history[1]["eloAfter"], 1050)
-        self.assertEqual(full_history[1]["changeAmount"], -14)
+        self.assertEqual(full_history[1]["changeAmount"], -26)
 
     def test_later_match_must_be_reversed_before_an_earlier_result(self):
         first_match = self.create_match()
@@ -163,7 +165,7 @@ class MatchResultTests(unittest.TestCase):
 
         blocked = self.client.post(f"/api/matches/{first_match['id']}/reopen")
         self.assertEqual(blocked.status_code, 409)
-        self.assertEqual(self.player_elo(self.player_ids[0]), 1044)
+        self.assertEqual(self.player_elo(self.player_ids[0]), 1037)
 
         reverse_second = self.client.post(f"/api/matches/{second_match['id']}/reopen")
         self.assertEqual(reverse_second.status_code, 200)

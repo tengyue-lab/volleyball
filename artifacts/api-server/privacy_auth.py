@@ -153,10 +153,13 @@ def install_privacy(app, database):
                 return value
             result = {key: project(item) for key, item in value.items()}
             if "positions" in result and "elo" in result and result.get("id") not in visible:
-                result["elo"] = None
+                for key in ("elo", "rank"):
+                    if key in result:
+                        result[key] = None
             if "eloBefore" in result and result.get("playerId") not in visible:
-                for key in ("eloBefore", "eloAfter", "changeAmount"):
-                    result[key] = None
+                for key in ("eloBefore", "eloAfter", "changeAmount", "rankBefore", "rankAfter", "rankMovement"):
+                    if key in result:
+                        result[key] = None
             return result
 
         response.set_data(app.json.dumps(project(response.get_json())))

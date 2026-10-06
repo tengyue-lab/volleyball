@@ -7,6 +7,7 @@
  */
 import type { MatchPlayerSnapshotAssignmentStatus } from './matchPlayerSnapshotAssignmentStatus';
 import type { Position } from './position';
+import type { RankLabel } from './rankLabel';
 
 /**
  * Immutable played roster. New ranking and priority fields are optional because older snapshots are never rewritten.
@@ -17,6 +18,10 @@ export interface MatchPlayerSnapshot {
   positions: Position[];
   /** @nullable */
   elo: number | null;
+  rank?: RankLabel | null;
+  /** @minimum 0 */
+  matchesPlayed?: number;
+  provisional?: boolean;
   createdAt?: Date;
   preferencesConfirmed?: boolean;
   preferredRolePriority?: boolean;

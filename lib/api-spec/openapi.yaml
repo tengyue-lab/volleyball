@@ -361,7 +361,7 @@ components:
         - Libero
     Player:
       type: object
-      required: [id, name, positions, elo, eloPublic, createdAt, preferencesConfirmed, preferredRolePriority, prioritySince]
+      required: [id, name, positions, elo, rank, matchesPlayed, provisional, eloPublic, createdAt, preferencesConfirmed, preferredRolePriority, prioritySince]
       properties:
         id:
           type: integer
@@ -376,6 +376,15 @@ components:
           description: Null when this viewer cannot see the rating.
         eloPublic:
           type: boolean
+        rank:
+          $ref: "#/components/schemas/RankLabel"
+        matchesPlayed:
+          type: integer
+          minimum: 0
+          readOnly: true
+        provisional:
+          type: boolean
+          description: True below ten completed progression matches, including zero.
         createdAt:
           type: string
           format: date-time
@@ -403,7 +412,7 @@ components:
             $ref: "#/components/schemas/Position"
         elo:
           type: integer
-          default: 1000
+          default: 800
           minimum: 0
         eloPublic:
           type: boolean
@@ -479,6 +488,13 @@ components:
             $ref: "#/components/schemas/Position"
         elo:
           type: ["integer", "null"]
+        rank:
+          $ref: "#/components/schemas/RankLabel"
+        matchesPlayed:
+          type: integer
+          minimum: 0
+        provisional:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -555,7 +571,7 @@ components:
           minimum: 0
     EloHistoryEntry:
       type: object
-      required: [id, playerId, matchId, eloBefore, eloAfter, changeAmount, action, createdAt]
+      required: [id, playerId, matchId, eloBefore, eloAfter, changeAmount, action, createdAt, kUsed, rankBefore, rankAfter, rankMovement, matchesPlayedBefore, matchesPlayedAfter]
       properties:
         id:
           type: integer
@@ -569,6 +585,25 @@ components:
           type: ["integer", "null"]
         changeAmount:
           type: ["integer", "null"]
+        kUsed:
+          type: ["integer", "null"]
+          enum: [20, 32, 40, 60, null]
+          description: Original K used, never recalculated on reversal; null for legacy rows.
+        rankBefore:
+          $ref: "#/components/schemas/RankLabel"
+        rankAfter:
+          $ref: "#/components/schemas/RankLabel"
+        rankMovement:
+          type: ["string", "null"]
+          enum: [promotion, demotion, unchanged, null]
+          description: Canonical rank-order change; null when hidden or legacy.
+        matchesPlayedBefore:
+          type: ["integer", "null"]
+          minimum: 0
+          description: Null if never recorded on a legacy audit.
+        matchesPlayedAfter:
+          type: ["integer", "null"]
+          minimum: 0
         action:
           type: string
           enum: [result, reversal]
@@ -584,6 +619,10 @@ components:
         userId: {type: ["string", "null"]}
         email: {type: ["string", "null"]}
         playerId: {type: ["integer", "null"]}
+    RankLabel:
+      type: ["string", "null"]
+      description: Derived from ELO, null when hidden or not recorded in legacy history.
+      enum: [Iron 3, Iron 2, Iron 1, Bronze 3, Bronze 2, Bronze 1, Silver 3, Silver 2, Silver 1, Gold 3, Gold 2, Gold 1, Platinum 3, Platinum 2, Platinum 1, Diamond 3, Diamond 2, Diamond 1, Masters, null]
     AppAccount:
       type: object
       required: [id, email, isAdmin, playerId]
