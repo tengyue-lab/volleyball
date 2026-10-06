@@ -1,0 +1,97 @@
+Update the post-match flow so that after entering and saving a 
+match score, the app returns to the player selection step with 
+the same 12–14 players still selected. Do not rebuild anything 
+or modify unrelated functionality. Inspect the current match 
+completion and result entry flow first, then explain how it 
+works before implementing.
+
+NEW POST-MATCH BEHAVIOR
+
+After a match is completed (score entered and saved, ELO updated):
+
+1. Show the existing match result screen with:
+   - Final score
+   - Team rosters with positions
+   - ELO changes (before/after)
+   - Rank changes and promotions/demotions
+   - Provisional badge updates if applicable
+
+2. At the bottom of the result screen, show two clear actions:
+   - "Next Match" (primary) — starts a new match with the same 
+     12–14 players pre-selected.
+   - "Start Over" (secondary) — returns to the date picker with 
+     no players selected, for a fresh session.
+
+3. When I press "Next Match":
+   - Return to the player selection step (Step 2 of the flow).
+   - The same 12–14 players from the just-completed match are 
+     already selected.
+   - The selection counter shows e.g. "Selected: 13 / 12–14."
+   - A new date is required: default to today, or to the next 
+     logical date if the previous match was on a past date.
+   - I can add, remove, or swap players before continuing.
+   - Search, filter, and sort controls still work as before.
+   - Selections persist when filters change.
+
+4. When I press "Start Over":
+   - Return to the date picker (Step 1).
+   - Clear all player selections.
+   - Reset any draft state for the previous match.
+
+5. The match that was just completed must already be fully saved 
+   (score, ELO, rank, history, snapshots, audit rows) before the 
+   "Next Match" or "Start Over" buttons become active. Do not 
+   allow starting a new match if the previous result failed to 
+   save.
+
+6. If the previous match is reversed or edited later (via the 
+   existing Edit Result flow), the "Next Match" roster is NOT 
+   affected. The roster carried forward is a snapshot of who 
+   played, not a live reference.
+
+EDGE CASES
+
+- If some players from the previous match are now ineligible 
+  (e.g., deleted, marked unavailable, or their profile changed), 
+  still pre-select them if they exist, but show a small warning 
+  next to the affected players, e.g., "Profile updated since 
+  last match."
+- If fewer than 12 of the previous players still exist, 
+  pre-select the remaining ones and show the counter as 
+  "Selected: 10 / 12–14" with Continue disabled until the 
+  minimum is met.
+- If the previous match had 13 or 14 players and the user 
+  deselects some, the counter and Continue validation adjust 
+  as before.
+
+WHAT NOT TO CHANGE
+
+- Auto-balance algorithm, ranked preferences, Lock + Fill
+- ELO calculation, privacy rules, rank and provisional logic
+- Leaderboard, Players tab, Match History, Current Match
+- Authentication, admin controls, account linking
+- Existing result entry, reversal, and audit history
+
+Add tests for:
+- After saving a result, the result screen shows "Next Match" 
+  and "Start Over."
+- "Next Match" returns to player selection with the same 
+  12–14 players pre-selected.
+- The date resets (defaults to today) on "Next Match."
+- "Start Over" returns to the date picker with no selections.
+- "Next Match" is disabled until the previous match is fully 
+  saved.
+- Reversing the previous match does not change the "Next Match" 
+  roster.
+- Deleted or changed players from the previous match are 
+  handled gracefully with a warning.
+
+First inspect the current flow and explain:
+1. How result entry currently completes and saves.
+2. Where the match completion route and redirect currently go.
+3. How to pass the just-played roster forward to the player 
+   selection step without breaking existing state.
+4. Where the "Next Match" and "Start Over" actions should live 
+   in the UI.
+
+Only after explaining, implement the changes.
