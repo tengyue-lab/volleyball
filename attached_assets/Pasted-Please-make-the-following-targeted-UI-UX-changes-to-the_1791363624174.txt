@@ -1,0 +1,122 @@
+Please make the following targeted UI/UX changes to the existing **Create Match** flow.
+
+IMPORTANT:
+- Do NOT rebuild the app.
+- Do NOT change the matchmaking algorithm.
+- Do NOT change the ELO calculation system.
+- Do NOT change authentication or permissions.
+- Do NOT modify unrelated pages or UI.
+- Preserve all existing functionality unless specifically requested below.
+
+## 1. Remove the redundant "Next Game" button
+
+On the first step of Create Match, where the user selects the match date, there are currently two actions that effectively do the same thing:
+
+- "Next Game"
+- "Continue to players"
+
+Remove the **"Next Game"** button.
+
+Keep **"Continue to players"** as the single action for progressing to player selection.
+
+Make sure removing "Next Game" does not remove or break any required state-setting or date-selection logic.
+
+---
+
+## 2. Split Player Selection and Team Selection into separate steps
+
+Currently, after selecting approximately 12–14 players, the Create Match page expands downward and shows the Team A / Team B selection interface on the same long page.
+
+Change this so Create Match behaves like a multi-step flow.
+
+The flow should be:
+
+**Step 1 — Date**
+
+Select the match date.
+
+Button:
+**Continue to players**
+
+↓
+
+**Step 2 — Players**
+
+Select the players participating in the match.
+
+Keep the existing player selection functionality.
+
+Once enough players have been selected, provide the existing appropriate action to continue/generate teams.
+
+↓
+
+**Step 3 — Teams**
+
+Display the Team A / Team B selection and balancing interface here.
+
+The Teams section should NOT simply appear underneath the player-selection interface and make the page very long.
+
+It should behave like another mini-step/tab within Create Match.
+
+The goal is to keep the Create Match interface compact and easy to navigate.
+
+Preserve the selected players when moving between the Players and Teams steps.
+
+If the user navigates back from Teams to Players, their existing player selections should still be there.
+
+Do not unnecessarily recreate or duplicate match-session state. Reuse the existing session/state architecture where possible.
+
+---
+
+## 3. Remove the "ELO Balancer" button
+
+Remove the separate **"ELO Balancer"** button from the Teams step.
+
+The existing **Auto Balance Teams / Fill** functionality already performs team balancing, so the extra ELO Balancer action is unnecessary and confusing.
+
+IMPORTANT:
+
+Do NOT remove the underlying ELO-aware balancing logic used by the existing automatic team balancing.
+
+This request is only to remove the redundant **ELO Balancer UI button/action**.
+
+The existing automatic balancing functionality should continue working normally.
+
+---
+
+## UX expectations
+
+The Create Match flow should feel like:
+
+**Date → Players → Teams**
+
+rather than one increasingly long page.
+
+Keep the existing styling/design system. Do not redesign the entire Create Match page.
+
+Make the smallest clean changes necessary to achieve this.
+
+---
+
+## Before finishing
+
+Please:
+
+1. Run the existing automated tests.
+2. Verify the frontend builds successfully.
+3. Manually verify the Create Match flow:
+   - Date → Players works.
+   - Players → Teams works.
+   - Selected players are preserved between steps.
+   - Going back does not unexpectedly clear selections.
+   - Auto Balance Teams / Fill still works.
+   - ELO-aware balancing behavior has not been removed.
+   - The redundant ELO Balancer button is gone.
+4. Do not deploy the app.
+
+When finished, tell me:
+- Which files you changed.
+- What you changed in each file.
+- Whether all tests passed.
+- Whether the build passed.
+- Any assumptions you had to make.
