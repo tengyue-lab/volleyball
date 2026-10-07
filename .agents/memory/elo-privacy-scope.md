@@ -20,3 +20,9 @@ Clerk is the required authentication provider. Its layer only gates access; it m
 **Why:** The user explicitly reserved publishing this app for themselves.
 
 **How to apply:** Finish and verify changes in preview without publishing automatically.
+
+The public social leaderboard should show rank tier only (not numbered places), player name and provisional status, without numeric ELO or preferences. Match-history ELO information is admin-only, enforced in API responses as well as the UI. Players navigation and the Players page are admin-only; the normal user's own Profile must remain available.
+
+**Why:** The user explicitly requested these public-display restrictions and clarified that leaderboard rank means tier only.
+
+**How to apply:** Preserve leaderboard ranking calculations and the user's own current Profile access. Restrict public display/data responses without changing stored ratings, authentication architecture, or result/deletion/reversal behavior.
