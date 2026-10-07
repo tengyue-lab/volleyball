@@ -1,0 +1,318 @@
+Please make a targeted fix to **Create Match → Teams → Manual Selection**.
+
+The current manual-selection flow is almost correct. Do NOT redesign it or change unrelated functionality.
+
+There are two related changes needed:
+
+1. Fix swapping after **Fill** assigns roles.
+2. Rename and change **Clear Locks** to **Clear Roles**.
+
+IMPORTANT:
+- Do NOT change the matchmaking algorithm.
+- Do NOT change ELO calculations.
+- Do NOT change Generate Balanced Teams.
+- Do NOT change the existing Clear Selection button or its behavior.
+- Do NOT change player preferences.
+- Do NOT redesign the Teams UI.
+- Do NOT deploy.
+
+# 1. Fix Swap behavior after Fill
+
+Current behavior:
+
+In Manual Selection, I can manually place players into Team A and Team B.
+
+When I click **Fill**, the app assigns roles to the players correctly.
+
+This part is working and should remain unchanged.
+
+However, after Fill has assigned roles, if I click Swap and swap players, all of the assigned roles reset back to:
+
+**Pending Role**
+
+This is incorrect.
+
+## Desired behavior
+
+Once **Fill** has assigned roles to the players, those assigned roles should remain intact when players are swapped.
+
+After roles have been assigned, the manual Swap functionality should behave the same way as the existing swap functionality used after **Generate Balanced Teams / Auto Balance**.
+
+Specifically:
+
+**A player with an assigned role may only swap with a player on the opposite team who has the SAME assigned role.**
+
+Example:
+
+Team A:
+- John — Setter
+- Alex — Outside
+- Ben — Middle
+
+Team B:
+- Chris — Setter
+- David — Outside
+- Sam — Middle
+
+If I click Swap on:
+
+**John — Setter**
+
+the only valid swap option should be:
+
+**Chris — Setter**
+
+The swap icons/options for David and Sam should not be shown as valid options.
+
+John ↔ Chris should swap teams while BOTH remain Setter.
+
+The other players and their roles should remain completely unchanged.
+
+## Same-role swap examples
+
+Setter ↔ Setter
+= Allowed
+
+Outside ↔ Outside
+= Allowed
+
+Middle ↔ Middle
+= Allowed
+
+Opposite ↔ Opposite
+= Allowed
+
+Libero ↔ Libero
+= Allowed
+
+Setter ↔ Outside
+= Not allowed
+
+Middle ↔ Opposite
+= Not allowed
+
+etc.
+
+The UI should hide or disable invalid swap options in the same way the existing Auto Balance team swap functionality handles same-role swaps.
+
+If possible, reuse the same role-compatibility logic rather than creating two different definitions of a valid role swap.
+
+## Important distinction
+
+Before roles have been assigned and players are still:
+
+**Pending Role**
+
+the existing manual swap behavior can remain.
+
+But once players have assigned roles — whether assigned manually or through **Fill** — swapping must respect those assigned roles.
+
+Do NOT treat a role assigned by Fill as temporary information that gets discarded during a swap.
+
+A role assigned by Fill should be preserved during team swaps just like any other assigned role.
+
+Most importantly:
+
+**Swapping two players must NEVER cause unrelated players' roles to reset to Pending Role.**
+
+A swap should only exchange the two players between Team A and Team B while preserving their assigned roles and all other role assignments.
+
+---
+
+# 2. Rename "Clear Locks" to "Clear Roles"
+
+Currently there is a button called:
+
+**Clear Locks**
+
+It only clears roles/positions that were manually locked by the admin.
+
+This is no longer the behavior I want.
+
+Rename:
+
+**Clear Locks**
+
+to:
+
+**Clear Roles**
+
+## New Clear Roles behavior
+
+Clear Roles should remove ALL currently assigned roles in the manual team-selection screen.
+
+This includes roles assigned through:
+
+- Manual role locking/selection by the admin
+- The **Fill** function
+
+After clicking **Clear Roles**, all players currently on Team A and Team B should remain on their existing teams, but their roles should become:
+
+**Pending Role**
+
+Example before:
+
+Team A:
+- John — Setter
+- Alex — Outside
+- Ben — Middle
+
+Team B:
+- Chris — Setter
+- David — Outside
+- Sam — Middle
+
+Click:
+
+**Clear Roles**
+
+Result:
+
+Team A:
+- John — Pending Role
+- Alex — Pending Role
+- Ben — Pending Role
+
+Team B:
+- Chris — Pending Role
+- David — Pending Role
+- Sam — Pending Role
+
+Nobody should move teams.
+
+---
+
+# 3. Clear Roles must work after Fill
+
+Currently Clear Locks can be greyed out if the admin has not manually locked a position.
+
+For example:
+
+- Admin manually assigns players to Team A and Team B.
+- Admin does NOT manually lock any positions.
+- Admin clicks Fill.
+- Fill assigns everyone's roles.
+- Clear Locks remains unavailable because there were no manual locks.
+
+Fix this.
+
+If ANY player currently has an assigned role, **Clear Roles should be available**.
+
+It should not matter whether the role came from:
+
+- the admin manually assigning/locking it, or
+- the Fill function.
+
+The availability condition should effectively be:
+
+**At least one player currently has a non-Pending role → Clear Roles available**
+
+If every player is already Pending Role, Clear Roles may be disabled.
+
+---
+
+# 4. Do NOT change Clear Selection
+
+There is a separate button:
+
+**Clear Selection**
+
+Do NOT change this button.
+
+Its current behavior is correct.
+
+The two controls should have clearly different responsibilities:
+
+**Clear Roles**
+→ Keep Team A and Team B exactly as they are.
+→ Keep the selected player pool.
+→ Reset assigned roles to Pending Role.
+
+**Clear Selection**
+→ Keep its CURRENT existing behavior exactly as it is.
+
+Do not combine these actions.
+
+---
+
+# Expected Manual Selection flow
+
+Example:
+
+I select 14 players.
+
+I manually place them into Team A and Team B.
+
+Roles initially show:
+
+**Pending Role**
+
+I click:
+
+**Fill**
+
+The app assigns appropriate roles.
+
+Now all players have roles.
+
+I click Swap on a Setter.
+
+Only the Setter on the opposite team should be available as a valid swap.
+
+I swap them.
+
+Expected:
+- The two Setters exchange teams.
+- Both remain Setters.
+- Everyone else's assigned role remains unchanged.
+- Nobody unexpectedly becomes Pending Role.
+
+Then I click:
+
+**Clear Roles**
+
+Expected:
+- Nobody changes teams.
+- Nobody is removed from the selected player pool.
+- Every player's role changes to Pending Role.
+- I remain on the Teams step.
+
+I can then manually assign roles again or use Fill again.
+
+---
+
+# Implementation guidance
+
+Please inspect the current state model before changing anything.
+
+It appears that the manual swap operation may currently be triggering/reusing logic that clears or recalculates role assignments.
+
+Do not do that after roles have already been assigned.
+
+A same-role swap should preserve the existing role state and only exchange team membership.
+
+Also, please reuse the existing same-role swap rules from the automatically balanced teams where practical, so manual teams and automatically balanced teams do not develop inconsistent swap behavior.
+
+Make the smallest targeted changes necessary.
+
+# Test these scenarios
+
+1. Manually create Team A and Team B.
+2. Click Fill.
+3. Verify everyone receives a role.
+4. Click Swap on a Setter.
+5. Verify only the opposite team's Setter is a valid swap candidate.
+6. Swap the Setters.
+7. Verify both remain Setter.
+8. Verify every other player's role remains unchanged.
+9. Verify different-role swaps are unavailable.
+10. Click Clear Roles.
+11. Verify every assigned role becomes Pending Role.
+12. Verify Team A and Team B membership does not change.
+13. Verify the selected player pool does not change.
+14. Verify Clear Roles works even if all roles originally came from Fill and there were no manually locked roles.
+15. Verify Clear Selection continues to behave exactly as it did before this change.
+16. Verify Fill can be used again after Clear Roles.
+17. Run the relevant automated tests and frontend build.
+
+Do not deploy.
