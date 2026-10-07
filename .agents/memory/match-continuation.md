@@ -21,6 +21,12 @@ When several saved upcoming rosters exist, the admin explicitly chooses which ro
 
 **How to apply:** Keep this distinct from Next Game, which starts a new match using the latest completed match's eligible pool. Reset targets only the selected saved draft; other upcoming rosters remain, so Current Match becomes empty only when no upcoming rosters remain.
 
+The Create Match “Next Game” action remains a standalone previous-roster shortcut, separate from the normal Date → Players progression.
+
+**Why:** The user explicitly chose to keep roster reuse separate from continuing the new-match flow.
+
+**How to apply:** Present Next Game as its own previous-match roster card while keeping Date → Players as the normal progression.
+
 Admins must be able to delete unplayed drafts and completed matches. Completed deletion must first use the existing exact result reversal, restoring ELO, rank, matches played and priority. Remove the deleted match's associated audit rows only after that reversal, leaving no orphan records.
 
 **Why:** The user explicitly requested safe completed-match deletion and no orphan audit rows. This supersedes the earlier rule that draft reset retained assignment metadata after deleting its match.
