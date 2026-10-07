@@ -901,6 +901,21 @@ function AdminMatchesPage() {
     setLocks([]); setBalanceResult(null); setSwapSelectionId(null); setCreateError('');
   }
 
+  function clearTeamAssignments() {
+    setTeamA([]);
+    setTeamB([]);
+    setLocks([]);
+    setBalanceResult(null);
+    setBalancedProfiles('');
+    setSwapSelectionId(null);
+    setCreateError('');
+  }
+
+  function clearPlayerSelection() {
+    setSelectedPlayerIds([]);
+    clearTeamAssignments();
+  }
+
   function changeMode(next: 'auto' | 'manual') {
     if (next === mode) return;
     if (locks.length) { setCreateError('Clear Locks or unlock every player before switching modes.'); return; }
@@ -1070,9 +1085,9 @@ function AdminMatchesPage() {
                     </label>;
                   })}
                 </div>}
-              {draft.step === 'players' && <div className="pool-actions">
+              {stepVisibility.players && <div className="pool-actions">
                 <button className="button button-primary touch-44" disabled={!canContinue} onClick={() => setDraft((current) => updateMatchSessionStep(current, 'teams'))} data-testid="button-players-continue">Continue to teams</button>
-                <button className="button button-quiet" disabled={poolCount === 0 || locks.length > 0} onClick={() => { setSelectedPlayerIds([]); setTeamA([]); setTeamB([]); setBalanceResult(null); setSwapSelectionId(null); }} data-testid="button-clear-pool">Clear selection</button>
+                <button className="button button-quiet" disabled={poolCount === 0 || locks.length > 0} onClick={clearPlayerSelection} data-testid="button-clear-pool">Clear selection</button>
                 {!canContinue && <small>Select 12–14 players with confirmed preferences, including at least one Setter, and a valid date.</small>}
               </div>}
             </div>
@@ -1089,15 +1104,16 @@ function AdminMatchesPage() {
               <button className={`mode-button ${mode === 'auto' ? 'active' : ''}`} aria-pressed={mode === 'auto'} onClick={() => changeMode('auto')} data-testid="button-mode-auto"><WandSparkles size={14} />Auto-Balance</button>
               <button className={`mode-button ${mode === 'manual' ? 'active' : ''}`} aria-pressed={mode === 'manual'} onClick={() => changeMode('manual')} data-testid="button-mode-manual"><Users size={14} />Manual Assign</button>
             </div>
-            {mode === 'auto' && <div className="pool-actions">
-              <button className="button button-primary touch-44" onClick={autoBalance} disabled={poolCount < 12 || poolCount > 14} data-testid="button-auto-balance"><WandSparkles size={14} />Auto-Balance Teams</button>
-              <button className="button button-quiet touch-44" onClick={() => { setSelectedPlayerIds([]); setTeamA([]); setTeamB([]); setBalanceResult(null); setSwapSelectionId(null); }} disabled={poolCount === 0} data-testid="button-clear-pool">Clear selection</button>
+            {stepVisibility.teams && mode === 'auto' && <div className="pool-actions">
+              <button className="button button-primary touch-44" onClick={autoBalance} disabled={poolCount < 12 || poolCount > 14} data-testid="button-auto-balance"><WandSparkles size={14} />Generate Balanced Teams</button>
+              <button className="button button-quiet touch-44" onClick={clearTeamAssignments} disabled={teamA.length === 0 && teamB.length === 0 && locks.length === 0} data-testid="button-clear-teams">Clear Selection</button>
             </div>}
-            {mode === 'manual' && <>
+            {stepVisibility.teams && mode === 'manual' && <>
               <div className="manual-assign-head"><strong>Manual assignment</strong><span>Place players with + A / + B and lock preferred roles. Fill may move any unlocked player.</span></div>
               <div className="pool-actions">
-                <button className="button button-primary" onClick={fillManualTeams} data-testid="button-fill"><WandSparkles size={14} />Fill</button>
-                <button className="button button-secondary" onClick={clearLocks} disabled={!locks.length} data-testid="button-clear-locks">Clear Locks</button>
+                <button className="button button-primary touch-44" onClick={fillManualTeams} data-testid="button-fill"><WandSparkles size={14} />Fill</button>
+                <button className="button button-secondary touch-44" onClick={clearLocks} disabled={!locks.length} data-testid="button-clear-locks">Clear Locks</button>
+                <button className="button button-quiet touch-44" onClick={clearTeamAssignments} disabled={teamA.length === 0 && teamB.length === 0 && locks.length === 0} data-testid="button-clear-teams">Clear Selection</button>
                 <small>{locks.length} locked · locked teams and positions stay fixed</small>
               </div>
               {(lockError || createError) && <div className="position-warning" role="alert" data-testid="warning-manual-locks"><strong>Manual roster needs attention</strong><span>{lockError || createError}</span></div>}

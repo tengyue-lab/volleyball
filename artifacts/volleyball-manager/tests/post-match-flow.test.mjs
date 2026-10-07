@@ -47,6 +47,8 @@ test('Create Match keeps Date, Players and Teams as distinct stages', () => {
   const dateStart = createMatchSource.indexOf('<section className="panel session-date"');
   const dateEnd = createMatchSource.indexOf('</section>', dateStart);
   const dateMarkup = createMatchSource.slice(dateStart, dateEnd);
+  const balanceButtonMarker = createMatchSource.indexOf('data-testid="button-auto-balance"');
+  const balanceButton = createMatchSource.slice(createMatchSource.lastIndexOf('<button', balanceButtonMarker), createMatchSource.indexOf('</button>', balanceButtonMarker));
 
   assert.ok(shortcutStart >= 0 && shortcutEnd > shortcutStart && shortcutStart < dateStart);
   assert.match(createMatchSource.slice(shortcutStart, shortcutEnd), /data-testid="button-next-game"/);
@@ -58,7 +60,27 @@ test('Create Match keeps Date, Players and Teams as distinct stages', () => {
   assert.match(createMatchSource, /data-testid="button-auto-balance"/);
   assert.match(createMatchSource, /data-testid="button-fill"/);
   assert.match(createMatchSource, /balanceMatchTeams\(selectedPlayers\)/);
+  assert.match(balanceButton, /onClick=\{autoBalance\}/);
+  assert.match(balanceButton, /Generate Balanced Teams/);
   assert.doesNotMatch(createMatchSource, /button-elo-balance|function eloBalance/);
+});
+
+test('Players Clear Selection and Teams Clear Selection have separate effects', () => {
+  const teamClear = createMatchSource.match(/function clearTeamAssignments\(\) \{([\s\S]*?)\n  \}/)?.[1] ?? '';
+  const playerClear = createMatchSource.match(/function clearPlayerSelection\(\) \{([\s\S]*?)\n  \}/)?.[1] ?? '';
+
+  assert.match(teamClear, /setTeamA\(\[\]\)/);
+  assert.match(teamClear, /setTeamB\(\[\]\)/);
+  assert.match(teamClear, /setLocks\(\[\]\)/);
+  assert.match(teamClear, /setBalanceResult\(null\)/);
+  assert.doesNotMatch(teamClear, /setSelectedPlayerIds|setDraft|updateMatchSessionStep/);
+
+  assert.match(playerClear, /setSelectedPlayerIds\(\[\]\)/);
+  assert.match(playerClear, /clearTeamAssignments\(\)/);
+  assert.match(createMatchSource, /onClick=\{clearPlayerSelection\}[^>]*data-testid="button-clear-pool"/);
+  assert.equal((createMatchSource.match(/onClick=\{clearTeamAssignments\}[^>]*data-testid="button-clear-teams"/g) ?? []).length, 2);
+  assert.match(createMatchSource, /stepVisibility\.teams && mode === 'auto'/);
+  assert.match(createMatchSource, /stepVisibility\.teams && mode === 'manual'/);
 });
 
 test('moving between Create Match stages preserves the selected roster and date', () => {

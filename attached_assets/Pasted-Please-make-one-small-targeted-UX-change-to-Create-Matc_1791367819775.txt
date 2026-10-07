@@ -1,0 +1,75 @@
+Please make one small targeted UX change to **Create Match → Step 3: Teams**.
+
+Do not change the matchmaking/balancing algorithm, player-selection logic, ELO calculations, or unrelated UI.
+
+## 1. Rename "Auto Balance Teams"
+
+In the Teams step, rename the button:
+
+**Auto Balance Teams**
+
+to:
+
+**Generate Balanced Teams**
+
+This should use exactly the same existing balancing functionality. This is only a label/UI change.
+
+Do NOT modify how the balancing algorithm works.
+
+## 2. Fix "Clear Selection" in the Teams step
+
+There is currently a **Clear Selection** action in the Teams step.
+
+Right now, this appears to clear the selected player pool as well, which forces the user to go back to the Players step and select all participating players again.
+
+Change this behavior.
+
+When **Clear Selection** is clicked from the Teams step:
+
+- Clear all current assignments from **Team A and Team B**.
+- Keep the full selected player pool intact.
+- Do NOT deselect/remove the players chosen in Step 2: Players.
+- The same selected players should immediately become available again for team assignment.
+- The user should remain on the **Teams** step.
+- The user should be able to manually rebuild the teams or click **Generate Balanced Teams** again without returning to the Players step.
+
+In other words, there are now two different concepts:
+
+**Players step → Clear Selection**
+- Clears the selected match roster/player pool.
+- Existing behavior can remain.
+
+**Teams step → Clear Selection**
+- Clears ONLY Team A / Team B assignments.
+- Does NOT clear the selected match roster/player pool.
+
+Please make sure these two actions are handled separately and do not accidentally share a reset function that clears the entire match session.
+
+## Expected flow
+
+Example:
+
+I select 14 players in the **Players** step.
+
+I continue to **Teams**.
+
+I click **Generate Balanced Teams**.
+
+The 14 players are assigned between Team A and Team B.
+
+I click **Clear Selection**.
+
+Expected result:
+
+- Team A becomes empty.
+- Team B becomes empty.
+- All 14 selected players remain part of the match.
+- All 14 are available for team assignment again.
+- I stay on the Teams step.
+- I can click Generate Balanced Teams again or manually assign teams.
+
+I should NOT have to return to Players and select those 14 players again.
+
+Please make the smallest targeted change necessary.
+
+Run the relevant tests/build after making the change and do not deploy.
