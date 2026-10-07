@@ -1,0 +1,272 @@
+Please update what happens after a match is successfully created/saved from:
+
+**Create Match → Teams**
+
+The current Create Match flow is working well. Do NOT redesign it or change the team-building functionality.
+
+This task is specifically about what happens AFTER the admin successfully creates/saves a match.
+
+IMPORTANT:
+- Do NOT change the matchmaking algorithm.
+- Do NOT change ELO calculations.
+- Do NOT change player position preferences.
+- Do NOT change Generate Balanced Teams.
+- Do NOT change Fill, Swap, Clear Roles, or Clear Selection.
+- Do NOT change authentication or permissions.
+- Do NOT modify unrelated pages.
+- Do NOT deploy.
+
+## Current problem
+
+When a match is successfully created/saved, the Create Match workflow currently resets too much and sends the admin back to the beginning/date section.
+
+This is inconvenient when running consecutive matches with mostly the same group of players.
+
+## Desired behavior after creating a match
+
+When the admin successfully creates/saves a match:
+
+1. Save the match normally using the existing backend/API logic.
+2. The newly created match should become the match shown in **Current Match**, exactly as it does through the existing match system.
+3. Show a success popup/modal:
+
+**Match Created**
+
+with a short confirmation such as:
+
+**The match has been created successfully.**
+
+Include a simple button such as:
+
+**OK**
+
+Do not navigate away automatically while showing the confirmation.
+
+## After closing the Match Created popup
+
+After the admin closes the popup:
+
+**Remain inside Create Match → Teams.**
+
+Do NOT automatically return to:
+- Date
+- Players
+- Current Match
+- Match History
+
+The admin should remain on the Teams step.
+
+However, prepare the Teams step for creating another match.
+
+## Preserve the selected player pool
+
+This is important.
+
+The players selected in:
+
+**Step 2 — Players**
+
+should remain selected after the match is created.
+
+Example:
+
+I selected 14 players for today's volleyball social.
+
+I create Match 1.
+
+After Match 1 is successfully saved and I close the Match Created popup:
+
+- Those same 14 players should still be the selected player pool.
+- I should NOT need to go back and select all 14 players again.
+
+This allows me to quickly create another match using the same group.
+
+## Reset the team setup only
+
+After the match is successfully created, reset the team-building state for the next match.
+
+The selected roster remains.
+
+But reset the previous Team A / Team B setup so the admin can create fresh teams.
+
+In other words:
+
+**KEEP:**
+- Selected match date/session context where appropriate
+- Selected player pool/roster
+- The admin on the Teams step
+
+**RESET:**
+- Previous Team A assignments
+- Previous Team B assignments
+- Previous role assignments for that completed team setup
+- Previous temporary manual team-building state
+- Previous swap state
+- Any temporary team-generation state that should not carry into the next match
+
+Players should become available again for building the next Team A and Team B.
+
+Do NOT remove them from the selected roster.
+
+## Important: Do not use the existing full-session reset
+
+Please inspect the existing save/create-match flow.
+
+The current implementation may be calling something similar to a full session reset/freshSession after saving the match.
+
+If that full reset is what sends the user back to Date and clears the selected roster, do NOT use that full reset for a normal successful match creation.
+
+Instead, create/use a more targeted reset that clears only the team-building state while preserving the date/session and selected roster required for another match.
+
+Do not unnecessarily rewrite the existing match-session architecture.
+
+## Start Over button
+
+There should be one clear:
+
+**Start Over**
+
+action available in the Create Match flow.
+
+Start Over is different from creating another match.
+
+When the admin intentionally clicks **Start Over**:
+
+- Return Create Match to Step 1 — Date.
+- Clear the current Create Match workflow/session as appropriate.
+- Clear the selected player roster.
+- Clear Team A and Team B.
+- Clear temporary role/team-building state.
+
+This is the explicit way to begin a completely new Create Match session.
+
+Do NOT automatically perform Start Over after saving a match.
+
+## Expected workflow
+
+Example:
+
+### Match 1
+
+Admin chooses date.
+
+↓
+
+Admin selects 14 players.
+
+↓
+
+Admin goes to Teams.
+
+↓
+
+Admin creates Team A and Team B.
+
+↓
+
+Admin clicks Create/Save Match.
+
+↓
+
+Match is saved.
+
+↓
+
+Popup:
+
+**Match Created**
+
+**The match has been created successfully.**
+
+↓
+
+Admin clicks OK.
+
+↓
+
+Admin remains on:
+
+**Create Match → Teams**
+
+The same 14-player roster is still selected.
+
+The old Team A / Team B setup has been cleared/reset.
+
+All 14 selected players are available to build the next match.
+
+↓
+
+Admin creates new Team A and Team B.
+
+↓
+
+Admin saves Match 2.
+
+↓
+
+Same process repeats.
+
+This should allow an admin to create several matches for the same volleyball session without repeatedly selecting the same players.
+
+## Current Match
+
+Each newly saved match should continue to integrate with the existing **Current Match** functionality.
+
+Do not redesign Current Match as part of this task.
+
+Do not change score entry or match completion behavior yet.
+
+That will be handled separately.
+
+## Data integrity
+
+Please be careful that this UI/session change does NOT:
+
+- Create duplicate matches.
+- Save a match twice.
+- Lose the newly created match.
+- Clear the selected player roster.
+- Modify player ELO.
+- Modify player position preferences.
+- Accidentally carry Team A/B assignments into the next match.
+- Accidentally carry temporary role assignments into the next match.
+- Trigger match completion logic.
+- Affect Match History.
+
+Only reset the temporary team-building state after the backend confirms that the match was successfully created.
+
+If saving the match fails, do NOT reset the teams or selected roster. Show/retain the existing error behavior so the admin can retry.
+
+## Test these scenarios
+
+Please test:
+
+1. Select a date.
+2. Select 12–14 players.
+3. Build Team A and Team B.
+4. Save/create the match.
+5. Verify only ONE match is created.
+6. Verify the Match Created confirmation appears.
+7. Close the confirmation.
+8. Verify the admin remains on the Teams step.
+9. Verify the same selected player roster remains selected.
+10. Verify Team A and Team B have been reset for the next match.
+11. Verify temporary role assignments/team state are reset appropriately.
+12. Verify another match can immediately be created from the same roster.
+13. Verify the second match is saved as a separate match.
+14. Verify Current Match receives the newly created match correctly.
+15. Verify Start Over returns the admin to the Date step and clears the Create Match workflow.
+16. Verify a failed match-save does NOT clear the current teams/roster.
+17. Run the existing automated tests.
+18. Verify the frontend builds successfully.
+
+Make the smallest targeted changes necessary.
+
+When finished, tell me:
+- Which files were changed.
+- What was changed in each file.
+- Whether all tests passed.
+- Whether the build passed.
+- Any assumptions you made.
+
+Do not deploy.

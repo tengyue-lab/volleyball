@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
 
-export default function ConfirmDialog({ title, children, confirmLabel, pendingLabel, tone = 'danger', pending = false, error = '', onConfirm, onCancel, testId }: {
+export default function ConfirmDialog({ title, children, confirmLabel, pendingLabel, tone = 'danger', pending = false, error = '', hideCancel = false, onConfirm, onCancel, testId }: {
   title: string; children: React.ReactNode; confirmLabel: string; pendingLabel?: string; tone?: 'danger' | 'warning';
-  pending?: boolean; error?: string; onConfirm: () => void; onCancel: () => void; testId: string;
+  pending?: boolean; error?: string; hideCancel?: boolean; onConfirm: () => void; onCancel: () => void; testId: string;
 }) {
   const dialog = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -25,7 +25,7 @@ export default function ConfirmDialog({ title, children, confirmLabel, pendingLa
         <div className="confirm-copy">{children}</div>
         {error && <div className="form-error" role="alert" data-testid={`${testId}-error`}>{error}</div>}
         <div className="modal-actions">
-          <button type="button" className="button button-secondary touch-44" onClick={onCancel} disabled={pending} data-testid={`${testId}-cancel`}>Cancel</button>
+          {!hideCancel && <button type="button" className="button button-secondary touch-44" onClick={onCancel} disabled={pending} data-testid={`${testId}-cancel`}>Cancel</button>}
           <button type="button" className={`button touch-44 ${tone === 'danger' ? 'button-warn' : 'button-primary'}`} onClick={onConfirm} disabled={pending} data-testid={`${testId}-confirm`}>{pending ? pendingLabel ?? 'Working…' : confirmLabel}</button>
         </div>
       </div>

@@ -63,7 +63,7 @@ import MatchHistoryDetails from '@/components/MatchHistoryDetails';
 import LeaderboardTable from '@/components/LeaderboardTable';
 import SavedRosterSummary, { rosterLabel } from '@/components/SavedRosterSummary';
 import { MatchSessionProvider, useMatchSession } from '@/match-session-context';
-import { clearDeletedMatchSession, restoreFailedDeletionSession, draftEditable, editSession, freshSession, nextGameSession, reconcileSession, selectionCanContinue, updateMatchSessionStep, validMatchDate, visiblePool } from '@/match-session';
+import { clearDeletedMatchSession, restoreFailedDeletionSession, draftEditable, editSession, nextGameSession, reconcileSession, selectionCanContinue, updateMatchSessionStep, validMatchDate, visiblePool } from '@/match-session';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchInterval: 5000, staleTime: 0, refetchIntervalInBackground: false, retry: 1 } } });
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -645,7 +645,7 @@ function AdminMatchesPage() {
   const [confirmStartOver, setConfirmStartOver] = useState(false);
   const [summaryError, setSummaryError] = useState('');
   const queryClient = useQueryClient();
-  const { notice, setNotice } = useNotice();
+  const { notice } = useNotice();
   const [mode, setMode] = useState<'auto' | 'manual'>('auto');
   const selectedPlayerIds = draft.selectedPlayerIds;
   const setSelectedPlayerIds = (value: number[] | ((current: number[]) => number[])) => {
@@ -662,6 +662,8 @@ function AdminMatchesPage() {
   const [locks, setLocks] = useState<MatchLock[]>([]);
   const [swapSelectionId, setSwapSelectionId] = useState<number | null>(null);
   const [createError, setCreateError] = useState('');
+  const [createdMatchId, setCreatedMatchId] = useState<number | null>(null);
+  const saveInFlight = useRef(false);
   const players: RatedPlayer[] = (playersQuery.data ?? []).filter(isRatedPlayer);
   const carried = reconcileSession(draft, playersQuery.data ?? []);
   const savedPreferencesUnchanged = draft.sourcePlayers.every((previous) => {
@@ -979,7 +981,7 @@ function AdminMatchesPage() {
     } catch (error) { setCreateError(messageFor(error)); }
   }
 
-  const busy = createMatch.isPending || updateDraft.isPending || deleteDraft.isPending;
+  const busy = createMatch.isPending || updateDraft.isPending || deleteDraft.isPending || createdMatchId !== null;
   const upcomingRosters = (matchesQuery.data ?? []).filter((m) => m.status === 'upcoming').sort((x, y) => new Date(y.createdAt).getTime() - new Date(x.createdAt).getTime() || y.id - x.id);
   const effectiveTargetId = upcomingRosters.length === 1 ? upcomingRosters[0].id : upcomingRosters.some((m) => m.id === targetId) ? targetId : null;
   const targetMatch = upcomingRosters.find((m) => m.id === effectiveTargetId) ?? null;
@@ -1021,8 +1023,31 @@ function AdminMatchesPage() {
     });
   }
 
+  function matchSaved(saved: Match) {
+    queryClient.setQueryData(getGetMatchQueryKey(saved.id), saved);
+    queryClient.setQueryData<Match[]>(getListMatchesQueryKey(), (current) =>
+      current ? [saved, ...current.filter((match) => match.id !== saved.id)] : current);
+    setTargetId(saved.id);
+    setCreatedMatchId(saved.id);
+    void queryClient.invalidateQueries({ queryKey: getListMatchesQueryKey() });
+  }
+
+  function dismissMatchCreated() {
+    clearTeamAssignments();
+    setSavedRolesInvalidated(true);
+    setDraft((current) => ({ ...current, step: 'teams', editingMatchId: null, savedRoster: null }));
+    setCreatedMatchId(null);
+    saveInFlight.current = false;
+  }
+
+  function matchSaveFailed(error: unknown) {
+    saveInFlight.current = false;
+    setCreateError(messageFor(error));
+  }
+
   function saveMatch() {
-    if (!isRosterValid || !roleAssignments || !canContinue || draft.step !== 'teams' || busy) return;
+    if (!isRosterValid || !roleAssignments || !canContinue || draft.step !== 'teams' || busy || saveInFlight.current) return;
+    saveInFlight.current = true;
     setCreateError('');
     const toApi = (list: typeof roleAssignments.teamAAssignments) => list.map((assignment) => ({
       playerId: assignment.playerId,
@@ -1040,33 +1065,14 @@ function AdminMatchesPage() {
     const editingId = draft.editingMatchId;
     if (editingId !== null) {
       updateDraft.mutate({ matchId: editingId, data }, {
-        onSuccess: async (updated) => {
-          queryClient.setQueryData(getGetMatchQueryKey(editingId), updated);
-          await queryClient.invalidateQueries({ queryKey: getListMatchesQueryKey() });
-          startOver();
-        },
-        onError: (error) => setCreateError(messageFor(error)),
+        onSuccess: matchSaved,
+        onError: matchSaveFailed,
       });
       return;
     }
     createMatch.mutate({ data }, {
-      onSuccess: async () => {
-        await queryClient.invalidateQueries({ queryKey: getListMatchesQueryKey() });
-        setSelectedPlayerIds([]);
-        setTeamA([]);
-        setTeamB([]);
-        setBalanceResult(null);
-        setBalancedProfiles('');
-        setLocks([]);
-        setSwapSelectionId(null);
-        setMode('auto');
-        setPoolSearch('');
-        setPoolPosition('');
-        setPoolSort('name');
-        setDraft((current) => freshSession(current.generation));
-        setNotice('Upcoming match roster saved.');
-      },
-      onError: (error) => setCreateError(messageFor(error)),
+      onSuccess: matchSaved,
+      onError: matchSaveFailed,
     });
   }
 
@@ -1239,6 +1245,7 @@ function AdminMatchesPage() {
     </div>
     <Notice text={notice} />
     {confirmStartOver && <ConfirmDialog testId="dialog-start-over" title="Start over?" tone="warning" confirmLabel="Start Over" onCancel={() => setConfirmStartOver(false)} onConfirm={() => { setConfirmStartOver(false); startOver(); }}><p>This clears the {poolCount} selected {poolCount === 1 ? 'player' : 'players'}, assignments and locks. No saved match is deleted.</p></ConfirmDialog>}
+    {createdMatchId !== null && <ConfirmDialog testId="dialog-match-created" title="Match Created" tone="warning" confirmLabel="OK" hideCancel onCancel={dismissMatchCreated} onConfirm={dismissMatchCreated}><p>The match has been created successfully.</p></ConfirmDialog>}
     {resetTarget && <ConfirmDialog testId="dialog-reset-match" title="Reset Current Match?" confirmLabel="Reset Current Match" pendingLabel="Resetting…" pending={deleteDraft.isPending} error={resetError} onCancel={() => setResetTarget(null)} onConfirm={confirmReset}><p><strong>{rosterLabel(resetTarget)}</strong> will be deleted. This cannot be undone.</p></ConfirmDialog>}
   </main></Shell>;
 }

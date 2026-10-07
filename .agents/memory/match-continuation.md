@@ -1,6 +1,6 @@
 ---
 name: Match continuation decisions
-description: Why next-match carry-forward copies membership but uses live ratings and remains memory-only.
+description: Why match creation retains the social-session roster, while next-match carry-forward uses live ratings and remains memory-only.
 ---
 
 Carry forward the played pool, not the previous teams, assignments, locks, ratings or priority state. Use current player profiles and ratings to build the next match.
@@ -26,6 +26,12 @@ The Create Match “Next Game” action remains a standalone previous-roster sho
 **Why:** The user explicitly chose to keep roster reuse separate from continuing the new-match flow.
 
 **How to apply:** Present Next Game as its own previous-match roster card while keeping Date → Players as the normal progression.
+
+Successful Create Match saves retain the date, selected player pool and Teams step. Show “Match Created”; when it closes, clear only temporary teams, roles, locks and swap/generation state so the next save creates a separate upcoming match. An explicit Start Over is the full-session reset. Failed saves retain the complete working setup.
+
+**Why:** The user runs consecutive matches with mostly the same social-session players and does not want to repeatedly select the roster or return to Date after each save.
+
+**How to apply:** Distinguish successful roster creation/saving from score entry or match completion. An explicitly continued saved roster is still edited in place, but after its successful save the subsequent setup must no longer target that saved roster for editing.
 
 Admins must be able to delete unplayed drafts and completed matches. Completed deletion must first use the existing exact result reversal, restoring ELO, rank, matches played and priority. Remove the deleted match's associated audit rows only after that reversal, leaving no orphan records.
 
