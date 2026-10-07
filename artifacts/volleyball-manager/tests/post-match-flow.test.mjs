@@ -11,6 +11,7 @@ import {
 
 const now = new Date(2026, 9, 7, 0, 15);
 const createMatchSource = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
+const assignedPlayerSource = await readFile(new URL('../src/components/AssignedPlayer.tsx', import.meta.url), 'utf8');
 const pool = Array.from({ length: 14 }, (_, i) => ({
   id: i + 1, name: `Player ${String(i + 1).padStart(2, '0')}`,
   positions: i < 2 ? ['Setter', 'Opposite'] : ['Outside Hitter'],
@@ -81,6 +82,13 @@ test('Players Clear Selection and Teams Clear Selection have separate effects', 
   assert.equal((createMatchSource.match(/onClick=\{clearTeamAssignments\}[^>]*data-testid="button-clear-teams"/g) ?? []).length, 2);
   assert.match(createMatchSource, /stepVisibility\.teams && mode === 'auto'/);
   assert.match(createMatchSource, /stepVisibility\.teams && mode === 'manual'/);
+});
+
+test('Lock Position menu renders each player’s saved preferences through the ordered filter', () => {
+  assert.match(assignedPlayerSource, /preferredLockPositions\(player\.positions\)/);
+  assert.match(assignedPlayerSource, /lockOptions\.map\(\(position\) => <button/);
+  assert.match(assignedPlayerSource, /onClick=\{\(\) => choose\(position\)\}/);
+  assert.doesNotMatch(assignedPlayerSource, /MATCH_POSITIONS\.map/);
 });
 
 test('moving between Create Match stages preserves the selected roster and date', () => {

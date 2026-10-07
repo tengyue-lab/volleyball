@@ -1,0 +1,65 @@
+Please make one small targeted change to **Create Match → Teams → Manual Team Selection → Lock Position**.
+
+Do not change the matchmaking algorithm, ELO balancing, player selection, or unrelated UI.
+
+## Change Lock Position options
+
+Currently, when manually assigning teams and using **Lock Position** for a player, the user can select from positions that may not be part of that player's position preferences.
+
+Change this behavior.
+
+When opening **Lock Position** for a player, only show positions that are included in that specific player's saved position preferences.
+
+For example:
+
+If a player's preferences are:
+
+1. Setter
+2. Outside
+3. Opposite
+
+Then their Lock Position options should only be:
+
+- Setter
+- Outside
+- Opposite
+
+Do NOT show:
+- Middle
+- Libero
+
+The available Lock Position choices should be dynamically based on each player's actual saved preferences.
+
+## Important
+
+Preserve the player's preference order when displaying the options.
+
+So if their preferences are:
+
+1. Middle
+2. Opposite
+3. Outside
+
+The Lock Position options should appear in that same order:
+
+1. Middle
+2. Opposite
+3. Outside
+
+Do not automatically lock the player to their first preference. The user should still manually choose which of the player's preferred positions to lock.
+
+Do not modify the player's saved preferences from this screen.
+
+Do not change how locked positions are handled by the existing team-balancing logic. This change is specifically about restricting which positions can be selected when manually locking a player's position.
+
+Make the smallest targeted change necessary.
+
+After making the change, verify that:
+- Each player's Lock Position menu only shows their own preferences.
+- Preference order is preserved.
+- Different players correctly show different options.
+- Existing locked-position functionality still works.
+- Generate Balanced Teams still works normally.
+- No player preference data is modified.
+
+Run the relevant tests/build and do not deploy.

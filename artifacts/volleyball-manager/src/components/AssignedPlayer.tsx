@@ -2,8 +2,8 @@ import { useState } from 'react';
 import type { DragEvent as ReactDragEvent } from 'react';
 import { ArrowLeftRight, Lock, LockOpen, X } from 'lucide-react';
 import type { RatedPlayer as Player } from '@/auth';
-import { MATCH_POSITIONS } from '@/match-balancing';
 import type { MatchPosition, MatchPositionAssignment } from '@/match-balancing';
+import { preferredLockPositions } from '@/match-lock-options';
 import './assigned-player.css';
 
 const ABBR: Record<MatchPosition, string> = {
@@ -50,6 +50,7 @@ export default function AssignedPlayer({
   const isSelectedForSwap = swapSelectionId === player.id;
   const isSwapTarget = swapSelectionId !== null && swapSelectionTeam !== team;
   const swapLabel = isSelectedForSwap ? 'Cancel' : isSwapTarget ? 'Swap' : 'Choose';
+  const lockOptions = preferredLockPositions(player.positions);
 
   const choose = (position: MatchPosition) => {
     const ok = onLock ? onLock(position) : false;
@@ -95,7 +96,7 @@ export default function AssignedPlayer({
     </div>
     {manual && open && !locked && <fieldset className="ap-selector-wrap" id={`lock-selector-${player.id}`}>
       <div className="ap-selector" role="group" aria-label={`Select role to lock for ${player.name}`}>
-        {MATCH_POSITIONS.map((position) => <button
+        {lockOptions.map((position) => <button
           key={position}
           type="button"
           className="ap-option"

@@ -5,8 +5,10 @@ import {
   balanceMatchTeams,
   balanceAssignedTeams,
   fillMatchTeams,
+  MATCH_POSITIONS,
   validateMatchLocks,
 } from '../src/match-balancing.ts';
+import { preferredLockPositions } from '../src/match-lock-options.ts';
 
 const OLD_ROLE_POOL = [
   { id: 1, positions: ['Setter'], elo: 500 },
@@ -40,6 +42,17 @@ const SIX_PLAYER_FORMATION = {
   'Middle Blocker': 2,
   Opposite: 1,
 };
+
+test('Lock Position choices follow each player’s own saved preference order without modifying it', () => {
+  const setterPreferences = Object.freeze(['Setter', 'Outside Hitter', 'Opposite']);
+  const middlePreferences = Object.freeze(['Middle Blocker', 'Opposite', 'Outside Hitter']);
+
+  assert.deepEqual(preferredLockPositions(setterPreferences), setterPreferences);
+  assert.deepEqual(preferredLockPositions(middlePreferences), middlePreferences);
+  assert.notDeepEqual(preferredLockPositions(setterPreferences), preferredLockPositions(middlePreferences));
+  assert.deepEqual(preferredLockPositions(['Setter', 'not-a-role', 'Libero']), ['Setter', 'Libero']);
+  assert.deepEqual(MATCH_POSITIONS.filter((position) => !setterPreferences.includes(position)), ['Middle Blocker', 'Libero']);
+});
 
 function assertFormation(assignments, playerCount) {
   const counts = Object.fromEntries(
