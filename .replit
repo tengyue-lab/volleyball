@@ -32,12 +32,12 @@ args = "build"
 name = "test"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "uv run python -m unittest discover -s artifacts/api-server/tests -q && pnpm --filter @workspace/volleyball-manager run test:match-balancing && cd artifacts/volleyball-manager && node --test tests/rank-display.test.mjs"
-
 [workflows.workflow.metadata]
 isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "uv run python -m unittest discover -s artifacts/api-server/tests -q && pnpm --filter @workspace/volleyball-manager run test:match-balancing && pnpm --filter @workspace/volleyball-manager run test:post-match-flow && cd artifacts/volleyball-manager && node --test tests/rank-display.test.mjs"
 
 [[workflows.workflow]]
 name = "typecheck"

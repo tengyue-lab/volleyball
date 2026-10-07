@@ -444,6 +444,10 @@ components:
       type: object
       required: [id, teamA, teamB, scoreA, scoreB, status, winner, completedAt, createdAt, eloChanges]
       properties:
+        matchDate:
+          type: ["string", "null"]
+          format: date
+          description: Scheduled local calendar date; null for legacy rosters.
         id:
           type: integer
         teamA:
@@ -520,6 +524,10 @@ components:
         - teamAAssignments
         - teamBAssignments
       properties:
+        matchDate:
+          type: string
+          format: date
+          description: Optional for existing callers; the creation UI requires a date.
         teamAPlayerIds:
           type: array
           minItems: 6

@@ -287,6 +287,7 @@ export const listMatchesResponseEloChangesItemMatchesPlayedAfterMin = 0;
 
 
 export const ListMatchesResponseItem = zod.object({
+  "matchDate": zod.coerce.date().nullish().describe('Scheduled local calendar date; null for legacy rosters.'),
   "id": zod.number().int(),
   "teamA": zod.array(zod.object({
   "id": zod.number().int(),
@@ -365,6 +366,7 @@ export const createMatchBodyTeamBAssignmentsMax = 7;
 
 
 export const CreateMatchBody = zod.object({
+  "matchDate": zod.coerce.date().optional().describe('Optional for existing callers; the creation UI requires a date.'),
   "teamAPlayerIds": zod.array(zod.number().int()).min(createMatchBodyTeamAPlayerIdsMin).max(createMatchBodyTeamAPlayerIdsMax),
   "teamBPlayerIds": zod.array(zod.number().int()).min(createMatchBodyTeamBPlayerIdsMin).max(createMatchBodyTeamBPlayerIdsMax),
   "teamAAssignments": zod.array(zod.object({
@@ -392,6 +394,7 @@ export const createMatchResponseEloChangesItemMatchesPlayedAfterMin = 0;
 
 
 export const CreateMatchResponse = zod.object({
+  "matchDate": zod.coerce.date().nullish().describe('Scheduled local calendar date; null for legacy rosters.'),
   "id": zod.number().int(),
   "teamA": zod.array(zod.object({
   "id": zod.number().int(),
@@ -468,6 +471,7 @@ export const getMatchResponseEloChangesItemMatchesPlayedAfterMin = 0;
 
 
 export const GetMatchResponse = zod.object({
+  "matchDate": zod.coerce.date().nullish().describe('Scheduled local calendar date; null for legacy rosters.'),
   "id": zod.number().int(),
   "teamA": zod.array(zod.object({
   "id": zod.number().int(),
@@ -555,6 +559,7 @@ export const submitMatchResultResponseEloChangesItemMatchesPlayedAfterMin = 0;
 
 
 export const SubmitMatchResultResponse = zod.object({
+  "matchDate": zod.coerce.date().nullish().describe('Scheduled local calendar date; null for legacy rosters.'),
   "id": zod.number().int(),
   "teamA": zod.array(zod.object({
   "id": zod.number().int(),
@@ -631,6 +636,7 @@ export const reopenMatchResultResponseEloChangesItemMatchesPlayedAfterMin = 0;
 
 
 export const ReopenMatchResultResponse = zod.object({
+  "matchDate": zod.coerce.date().nullish().describe('Scheduled local calendar date; null for legacy rosters.'),
   "id": zod.number().int(),
   "teamA": zod.array(zod.object({
   "id": zod.number().int(),

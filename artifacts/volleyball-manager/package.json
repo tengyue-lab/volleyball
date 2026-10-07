@@ -8,7 +8,8 @@
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:match-balancing": "node --experimental-strip-types --test ./tests/match-balancing.test.mjs"
+    "test:match-balancing": "node --experimental-strip-types --test ./tests/match-balancing.test.mjs",
+    "test:post-match-flow": "node --experimental-strip-types --test ./tests/post-match-flow.test.mjs"
   },
   "devDependencies": {
     "@clerk/react": "^6.17.5",

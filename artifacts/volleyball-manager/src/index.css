@@ -435,6 +435,23 @@
 }
 
 /* Court-side paper / forest palette */
+[hidden]{display:none!important}
+.session-steps{display:flex;gap:12px;list-style:none;padding:0;margin:0 0 18px;flex-wrap:wrap;font-size:12px;color:hsl(var(--muted-foreground))}
+.session-steps li{padding:8px 12px;border:1px solid hsl(var(--border));border-radius:6px}
+.session-steps li[aria-current]{background:#e3eee5;color:#245c4c;border-color:#90b9a5;font-weight:800}
+.session-date{padding:20px;margin-bottom:18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.session-date .form-field{margin:0;flex:1;min-width:0;max-width:300px}
+.session-date input{min-height:44px;min-width:0}
+.pool-toolbar{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
+.pool-toolbar .search,.pool-toolbar select{flex:1;min-width:150px}
+.pool-toolbar .search input{width:100%}
+.carried-warning{font-size:10px;color:#8d491c;flex-basis:100%;padding-left:25px}
+.pool-player:has(.carried-warning){flex-wrap:wrap}
+.post-match-actions{margin-top:20px;padding-top:16px;border-top:1px solid hsl(var(--border))}
+.post-match-actions p{font-size:12px;color:hsl(var(--muted-foreground))}
+.post-match-actions>div{display:flex;flex-wrap:wrap;gap:10px}
+.post-match-actions .button{min-height:44px}
+@media(max-width:680px){.pool-toolbar>*{width:100%;min-width:0!important;flex-basis:100%!important}.post-match-actions .button{flex:1}.session-date .form-field{max-width:none}.content .pool-actions .button{min-height:44px}}
 .priority-indicator{color:#245c4c;font-size:10px;font-weight:700;margin-top:6px}
 .legacy-indicator{color:#8d491c;font-size:10px;margin-bottom:6px}
 :root {
@@ -619,7 +636,8 @@ button:focus-visible,input:focus-visible{outline:3px solid hsl(var(--accent)/.55
 .nav-menu-trigger:hover{border-color:hsl(var(--primary))}
 .nav-menu-panel{
   position:absolute;top:calc(100% + 10px);left:0;
-  width:min(300px,calc(100vw - 28px));max-height:calc(100dvh - 90px);overflow-y:auto;
+  /* 100vw includes the vertical scrollbar; leave room for it and both gutters. */
+  width:min(300px,calc(100vw - 48px));max-height:calc(100dvh - 90px);overflow-y:auto;
   display:grid;gap:4px;padding:8px;border:1px solid hsl(var(--sidebar-border));
   border-radius:12px;background:hsl(var(--sidebar));color:hsl(var(--sidebar-foreground));
   box-shadow:0 12px 36px #172e2933;

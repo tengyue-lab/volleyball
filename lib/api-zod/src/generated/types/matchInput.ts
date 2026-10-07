@@ -8,6 +8,8 @@
 import type { MatchPlayerAssignment } from './matchPlayerAssignment';
 
 export interface MatchInput {
+  /** Optional for existing callers; the creation UI requires a date. */
+  matchDate?: Date;
   /**
      * @minItems 6
      * @maxItems 7

@@ -4,3 +4,4 @@
 - [Vite runtime dependencies](vite-runtime-dependencies.md) — matching installed React versions do not guarantee matching prebundled browser runtimes.
 - [Volleyball product context](volleyball-product-context.md) — 3–4 matches weekly, phone-first use, and all upcoming rosters count as Current Match.
 - [Browser-test cleanup](browser-test-cleanup.md) — close test contexts before deleting fixtures; live authentication polling can recreate QA accounts.
+- [Match continuation](match-continuation.md) — reuse played membership, not old teams or ratings; reload recovery is outside the memory-only session scope.

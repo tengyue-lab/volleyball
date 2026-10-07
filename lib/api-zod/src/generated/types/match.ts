@@ -11,6 +11,11 @@ import type { MatchStatus } from './matchStatus';
 import type { MatchWinner } from './matchWinner';
 
 export interface Match {
+  /**
+     * Scheduled local calendar date; null for legacy rosters.
+     * @nullable
+     */
+  matchDate?: Date | null;
   id: number;
   teamA: MatchPlayerSnapshot[];
   teamB: MatchPlayerSnapshot[];

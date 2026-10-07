@@ -227,6 +227,11 @@ export interface EloHistoryEntry {
 }
 
 export interface Match {
+  /**
+     * Scheduled local calendar date; null for legacy rosters.
+     * @nullable
+     */
+  matchDate?: string | null;
   id: number;
   teamA: MatchPlayerSnapshot[];
   teamB: MatchPlayerSnapshot[];
@@ -260,6 +265,8 @@ export interface MatchPlayerAssignment {
 }
 
 export interface MatchInput {
+  /** Optional for existing callers; the creation UI requires a date. */
+  matchDate?: string;
   /**
      * @minItems 6
      * @maxItems 7

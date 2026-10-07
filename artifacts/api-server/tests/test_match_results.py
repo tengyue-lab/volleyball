@@ -46,7 +46,7 @@ class MatchResultTests(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
-    def create_match(self):
+    def create_match(self, **extra_fields):
         team_a = self.player_ids[:6]
         team_b = self.player_ids[6:]
         body = {
@@ -61,6 +61,7 @@ class MatchResultTests(unittest.TestCase):
                 for player_id, role in zip(team_b, ROLE_FORMATION)
             ],
         }
+        body.update(extra_fields)
         response = self.client.post("/api/matches", json=body)
         self.assertEqual(response.status_code, 201, response.get_json())
         return response.get_json()
@@ -69,6 +70,32 @@ class MatchResultTests(unittest.TestCase):
         response = self.client.get(f"/api/players/{player_id}")
         self.assertEqual(response.status_code, 200)
         return response.get_json()["elo"]
+
+    def test_match_date_is_saved_separately_and_survives_result_and_reversal(self):
+        match = self.create_match(matchDate="2026-10-07")
+        self.assertEqual(match["matchDate"], "2026-10-07")
+        self.assertNotEqual(match["createdAt"], match["matchDate"])
+        completed = self.complete(match)
+        self.assertEqual(completed["matchDate"], match["matchDate"])
+        reopened = self.client.post(f"/api/matches/{match['id']}/reopen").get_json()
+        self.assertEqual(reopened["matchDate"], match["matchDate"])
+        self.assertEqual(reopened["teamA"], match["teamA"])
+
+    def test_existing_match_creation_without_date_remains_compatible(self):
+        self.assertIsNone(self.create_match()["matchDate"])
+
+    def test_invalid_match_dates_do_not_create_a_roster(self):
+        match = self.create_match()
+        body = {
+            "teamAPlayerIds": self.player_ids[:6], "teamBPlayerIds": self.player_ids[6:],
+            "teamAAssignments": [{"playerId": p["id"], "assignedPosition": p["assignedPosition"]} for p in match["teamA"]],
+            "teamBAssignments": [{"playerId": p["id"], "assignedPosition": p["assignedPosition"]} for p in match["teamB"]],
+        }
+        for invalid in ("", "2026-02-29", "2026-13-01", "20261007", None, 20261007, True):
+            response = self.client.post("/api/matches", json={**body, "matchDate": invalid})
+            self.assertEqual(response.status_code, 400)
+            self.assertIn("Match date", response.get_json()["error"])
+        self.assertEqual(len(self.client.get("/api/matches").get_json()), 1)
 
     def test_calculation_uses_team_average_and_established_k_factor_32(self):
         team_a = [{"id": 1, "elo": 1000, "matchesPlayed": 30}, {"id": 2, "elo": 1000, "matchesPlayed": 30}]
@@ -395,6 +422,7 @@ class MigrationTests(unittest.TestCase):
             self.assertEqual(client.get("/api/players/1").get_json()["elo"], 1000)
             self.assertFalse(client.get("/api/players/1").get_json()["preferencesConfirmed"])
             self.assertEqual(client.get("/api/matches/1").get_json()["teamA"], snapshot)
+            self.assertIsNone(client.get("/api/matches/1").get_json()["matchDate"])
             with sqlite3.connect(path) as conn:
                 self.assertEqual(conn.execute("SELECT status FROM assignment_audit").fetchone()[0], "filled")
 

@@ -6,7 +6,7 @@ external database requirement.
 
 from collections import Counter
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import json
 import math
 import os
@@ -98,6 +98,8 @@ def initialize_database(database_path: str) -> None:
             connection.execute("ALTER TABLE matches ADD COLUMN winner TEXT")
         if "completed_at" not in match_columns:
             connection.execute("ALTER TABLE matches ADD COLUMN completed_at TEXT")
+        if "match_date" not in match_columns:
+            connection.execute("ALTER TABLE matches ADD COLUMN match_date TEXT")
         player_columns = {row[1] for row in connection.execute("PRAGMA table_info(players)")}
         if "matches_played" not in player_columns:
             connection.execute(
@@ -261,6 +263,7 @@ def serialize_match(
         "completedAt": row["completed_at"],
         "createdAt": row["created_at"],
         "eloChanges": elo_changes or [],
+        "matchDate": row["match_date"],
     }
 
 
@@ -566,15 +569,23 @@ def create_app(database_path: str | Path | None = None) -> Flask:
         body = request.get_json(silent=True)
         if not isinstance(body, dict):
             return jsonify({"error": "Send match rosters as a JSON object."}), 400
-        if set(body) != {
+        required_fields = {
             "teamAPlayerIds",
             "teamBPlayerIds",
             "teamAAssignments",
             "teamBAssignments",
-        }:
+        }
+        if not required_fields <= set(body) or set(body) - required_fields - {"matchDate"}:
             return jsonify(
                 {"error": "A match must include both team rosters and role assignments."}
             ), 400
+        match_date = body.get("matchDate")
+        if "matchDate" in body:
+            try:
+                if not isinstance(match_date, str) or date.fromisoformat(match_date).isoformat() != match_date:
+                    raise ValueError
+            except (TypeError, ValueError):
+                return jsonify({"error": "Match date must be a valid YYYY-MM-DD date."}), 400
 
         team_a_ids = body["teamAPlayerIds"]
         team_b_ids = body["teamBPlayerIds"]
@@ -664,10 +675,10 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             cursor = connection.execute(
                 """
                 INSERT INTO matches (
-                    team_a_json, team_b_json, score_a, score_b, status, created_at
-                ) VALUES (?, ?, NULL, NULL, 'upcoming', ?)
+                    team_a_json, team_b_json, score_a, score_b, status, created_at, match_date
+                ) VALUES (?, ?, NULL, NULL, 'upcoming', ?, ?)
                 """,
-                (json.dumps(team_a), json.dumps(team_b), created_at),
+                (json.dumps(team_a), json.dumps(team_b), created_at, match_date),
             )
             match_row = connection.execute(
                 "SELECT * FROM matches WHERE id = ?", (cursor.lastrowid,)

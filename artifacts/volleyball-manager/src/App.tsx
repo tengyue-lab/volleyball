@@ -53,6 +53,9 @@ import NotFound from '@/pages/not-found';
 import RankedPositionInput from '@/components/RankedPositionInput';
 import AssignedPlayer from '@/components/AssignedPlayer';
 import { RankBadge, RankTransition } from '@/components/RankBadge';
+import PostMatchActions from '@/components/PostMatchActions';
+import { MatchSessionProvider, useMatchSession } from '@/match-session-context';
+import { freshSession, reconcileSession, resultActionsReady, selectionCanContinue, validMatchDate, visiblePool } from '@/match-session';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchInterval: 5000, staleTime: 0, refetchIntervalInBackground: false, retry: 1 } } });
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -397,6 +400,7 @@ function TeamMetrics({ team, players, total }: { team: 'A' | 'B'; players: Playe
 function MatchDetail({ matchId }: { matchId: number }) {
   const [, navigate] = useLocation();
   const { isAdmin } = useAccess();
+  const { startNext, startOver } = useMatchSession();
   const query = useGetMatch(matchId, { query: { queryKey: getGetMatchQueryKey(matchId) } });
   const queryClient = useQueryClient();
   const submitResult = useSubmitMatchResult();
@@ -544,6 +548,19 @@ function MatchDetail({ matchId }: { matchId: number }) {
     </section>}
     <section><h4>Team A · {match.teamA.length} players</h4>{match.teamA.map(renderPlayer)}</section>
     <section><h4>Team B · {match.teamB.length} players</h4>{match.teamB.map(renderPlayer)}</section>
+    {isAdmin && match.status === 'completed' && <PostMatchActions
+      ready={resultActionsReady(match, submitResult.isPending, reopenResult.isPending) && !query.isFetching}
+      onNext={() => {
+        if (!resultActionsReady(match, submitResult.isPending, reopenResult.isPending) || query.isFetching) return;
+        startNext(match);
+        navigate('/create-match');
+      }}
+      onStartOver={() => {
+        if (!resultActionsReady(match, submitResult.isPending, reopenResult.isPending) || query.isFetching) return;
+        startOver();
+        navigate('/create-match');
+      }}
+    />}
   </div>;
 }
 
@@ -559,12 +576,20 @@ function MatchCard({ match, expanded, onToggle }: { match: Match; expanded: bool
 }
 
 function AdminMatchesPage() {
+  const { draft, setDraft } = useMatchSession();
+  useEffect(() => { window.scrollTo(0, 0); }, []);
   const playersQuery = useListPlayers();
   const createMatch = useCreateMatch();
   const queryClient = useQueryClient();
   const { notice, setNotice } = useNotice();
   const [mode, setMode] = useState<'auto' | 'manual'>('auto');
-  const [selectedPlayerIds, setSelectedPlayerIds] = useState<number[]>([]);
+  const selectedPlayerIds = draft.selectedPlayerIds;
+  const setSelectedPlayerIds = (value: number[] | ((current: number[]) => number[])) => {
+    setDraft((current) => ({ ...current, selectedPlayerIds: typeof value === 'function' ? value(current.selectedPlayerIds) : value }));
+  };
+  const [poolSearch, setPoolSearch] = useState('');
+  const [poolPosition, setPoolPosition] = useState('');
+  const [poolSort, setPoolSort] = useState('name');
   const [teamA, setTeamA] = useState<number[]>([]);
   const [teamB, setTeamB] = useState<number[]>([]);
   const [balanceResult, setBalanceResult] = useState<MatchBalanceResult | null>(null);
@@ -573,6 +598,19 @@ function AdminMatchesPage() {
   const [swapSelectionId, setSwapSelectionId] = useState<number | null>(null);
   const [createError, setCreateError] = useState('');
   const players: RatedPlayer[] = (playersQuery.data ?? []).filter(isRatedPlayer);
+  const carried = reconcileSession(draft, playersQuery.data ?? []);
+  const visiblePlayers = visiblePool(players, poolSearch, poolPosition, poolSort);
+  useEffect(() => {
+    if (!playersQuery.isSuccess) return;
+    const existingIds = new Set(playersQuery.data.map((player) => player.id));
+    setDraft((current) => {
+      const ids = current.selectedPlayerIds.filter((id) => existingIds.has(id));
+      return ids.length === current.selectedPlayerIds.length ? current : { ...current, selectedPlayerIds: ids };
+    });
+    setTeamA((current) => current.some((id) => !existingIds.has(id)) ? current.filter((id) => existingIds.has(id)) : current);
+    setTeamB((current) => current.some((id) => !existingIds.has(id)) ? current.filter((id) => existingIds.has(id)) : current);
+    setLocks((current) => current.some((lock) => !existingIds.has(lock.playerId)) ? current.filter((lock) => existingIds.has(lock.playerId)) : current);
+  }, [playersQuery.data, playersQuery.isSuccess, setDraft]);
   const selectedIds = new Set(selectedPlayerIds);
   const selectedPlayers = players.filter((player) => selectedIds.has(player.id));
   const profilesFingerprint = JSON.stringify(selectedPlayers.map((p) => [p.id,p.positions,p.elo,p.preferencesConfirmed,p.preferredRolePriority,p.prioritySince]));
@@ -603,7 +641,8 @@ function AdminMatchesPage() {
       : [],
   );
   const total = teamA.length + teamB.length;
-  const poolCount = selectedPlayerIds.length;
+  const poolCount = selectedPlayers.length;
+  const canContinue = selectionCanContinue(selectedPlayers) && validMatchDate(draft.matchDate);
   const allSelectedAssigned = poolCount === total && selectedPlayerIds.every((id) => assigned.has(id));
   const teamAElo = teamAPlayers.reduce((sum, player) => sum + player.elo, 0);
   const teamBElo = teamBPlayers.reduce((sum, player) => sum + player.elo, 0);
@@ -798,9 +837,10 @@ function AdminMatchesPage() {
   }
 
   function saveMatch() {
-    if (!isRosterValid || !roleAssignments) return;
+    if (!isRosterValid || !roleAssignments || !canContinue || draft.step !== 'teams') return;
     setCreateError('');
     createMatch.mutate({ data: {
+      matchDate: draft.matchDate,
       teamAPlayerIds: teamA,
       teamBPlayerIds: teamB,
       teamAAssignments: roleAssignments.teamAAssignments.map((assignment) => ({
@@ -822,8 +862,14 @@ function AdminMatchesPage() {
         setTeamA([]);
         setTeamB([]);
         setBalanceResult(null);
+        setBalancedProfiles('');
         setLocks([]);
         setSwapSelectionId(null);
+        setMode('auto');
+        setPoolSearch('');
+        setPoolPosition('');
+        setPoolSort('name');
+        setDraft((current) => freshSession(current.generation));
         setNotice('Upcoming match roster saved.');
       },
       onError: (error) => setCreateError(messageFor(error)),
@@ -832,7 +878,16 @@ function AdminMatchesPage() {
 
   return <Shell><main className="content">
     <PageHeader eyebrow="Match day / roster builder" title="Create Match" description="Choose 12–14 players, assign the exact court roles, then balance teams by ELO or build each side manually." />
-    <div className="summary-strip"><span className="summary-num">{poolCount} / 14</span> players selected <span aria-hidden="true">/</span> choose between 12 and 14</div>
+    <ol className="session-steps" aria-label="Match creation steps">
+      {(['date', 'players', 'teams'] as const).map((step, index) => <li key={step} aria-current={draft.step === step ? 'step' : undefined}>{index + 1}. {step === 'date' ? 'Date' : step === 'players' ? 'Players' : 'Teams'}</li>)}
+    </ol>
+    <div className="summary-strip"><span className="summary-num" data-testid="text-selected-count">Selected: {poolCount} / 12–14</span></div>
+    <section className="panel session-date" aria-label="Match date">
+      <div className="form-field"><label htmlFor="match-date">Match date {draft.step === 'date' ? '· Step 1' : ''}</label><input id="match-date" type="date" required value={draft.matchDate} onChange={(event) => setDraft((current) => ({ ...current, matchDate: event.target.value }))} data-testid="input-match-date" /></div>
+      {draft.step === 'date' && <button className="button button-primary" disabled={!validMatchDate(draft.matchDate)} onClick={() => setDraft((current) => ({ ...current, step: 'players' }))} data-testid="button-date-continue">Continue to players</button>}
+      {!validMatchDate(draft.matchDate) && <p className="form-error" role="alert">Choose a valid match date before continuing.</p>}
+    </section>
+    {playersQuery.isSuccess && carried.missing.length > 0 && <div className="position-warning" role="status" data-testid="warning-missing-players"><strong>Some previous players are no longer on the roster</strong><span>{carried.missing.map((player) => player.name).join(' · ')}</span><small>Select replacements to reach 12–14 players.</small></div>}
     {roleAssignments?.positionShortages.length ? <div className="position-warning" role="alert" data-testid="warning-position-shortage">
       <strong>Some positions were short in this pool</strong>
       <span>{roleAssignments.positionShortages.map((shortage) =>
@@ -840,7 +895,7 @@ function AdminMatchesPage() {
       ).join(' · ')}</span>
       <small>Those slots are still assigned to the highest-ELO available players.</small>
     </div> : null}
-    <div className="match-builder-layout">
+    <div className="match-builder-layout" hidden={draft.step === 'date'}>
       <section className="panel builder-panel" aria-label="Build a match roster">
         <div className="panel-head"><div><h2 className="panel-title">Build a match</h2><div className="panel-note">Select a pool first; team assignments can be automatic or manual</div></div><span className="count-chip">{poolCount} / 14 selected</span></div>
         <div className="builder-intro"><strong>Exact role formation</strong><p>Every side gets 1 Setter, 2 Outside Hitters, 2 Middle Blockers, and 1 Opposite. Seven-player sides add 1 Libero. Auto-Balance preserves these roles while reducing the team ELO gap.</p></div>
@@ -858,31 +913,45 @@ function AdminMatchesPage() {
             </div>
             <div className="pool-selection">
               <div className="pool-selection-head">
-                <div><h3>Select the player pool</h3><p>Choose 12 to 14 players. You can select no more than 14.</p></div>
+                <div><h3>Select the player pool · Step 2</h3><p>Choose 12 to 14 players. You can select no more than 14.</p></div>
                 <span className="count-chip">{poolCount} selected</span>
+              </div>
+              <div className="pool-toolbar">
+                <label className="search"><span className="search-icon"><Search size={13} /></span><input type="search" aria-label="Search match players" placeholder="Search players" value={poolSearch} onChange={(event) => setPoolSearch(event.target.value)} data-testid="input-pool-search" /></label>
+                <select className="select-input" aria-label="Filter match players by position" value={poolPosition} onChange={(event) => setPoolPosition(event.target.value)} data-testid="select-pool-position"><option value="">All positions</option>{positions.map((position) => <option key={position}>{position}</option>)}</select>
+                <select className="select-input" aria-label="Sort match players" value={poolSort} onChange={(event) => setPoolSort(event.target.value)} data-testid="select-pool-sort"><option value="name">Name A–Z</option><option value="name-desc">Name Z–A</option><option value="elo">Highest ELO</option></select>
               </div>
               {players.length === 0 ? <div className="field-hint pool-empty">No players are on the roster yet. <Link href="/players" className="text-button">Add players first</Link>.</div> :
                 <div className="pool-player-list">
-                  {players.map((player) => {
+                  {visiblePlayers.length === 0 && <p className="field-hint">No players match these controls. Your selections are kept.</p>}
+                  {visiblePlayers.map((player) => {
                     const checked = selectedIds.has(player.id);
                     return <label className={`pool-player ${checked ? 'selected' : ''}`} key={player.id} data-testid={`pool-player-${player.id}`}>
                       <input
                         type="checkbox"
                         checked={checked}
-                        disabled={!player.preferencesConfirmed || lockedIds.has(player.id) || (!checked && poolCount >= 14)}
+                        disabled={(!checked && !player.preferencesConfirmed) || lockedIds.has(player.id) || (!checked && poolCount >= 14)}
                         onChange={(event) => togglePoolPlayer(player.id, event.currentTarget.checked)}
                         data-testid={`checkbox-pool-player-${player.id}`}
                       />
                       <span className="pool-player-info"><strong>{player.name}</strong><small>{player.positions.map((p, i) => player.preferencesConfirmed ? `${i + 1}. ${p}` : p).join(' · ')}</small>{!player.preferencesConfirmed && <small>Confirm preferences in Players first</small>}{player.preferredRolePriority && <small className="priority-indicator">Priority: Preferred role next match</small>}</span>
                       <span className="pool-player-elo">ELO {player.elo.toLocaleString()}</span>
+                      {carried.changedIds.has(player.id) && <small className="carried-warning" data-testid={`warning-profile-${player.id}`}>Profile updated since last match.</small>}
                     </label>;
                   })}
                 </div>}
-              {mode === 'auto' && <div className="pool-actions">
+              {draft.step === 'teams' && mode === 'auto' && <div className="pool-actions">
                 <button className="button button-primary" onClick={autoBalance} disabled={poolCount < 12 || poolCount > 14} data-testid="button-auto-balance"><WandSparkles size={14} />Auto-Balance Teams</button>
                 <button className="button button-quiet" onClick={() => { setSelectedPlayerIds([]); setTeamA([]); setTeamB([]); setBalanceResult(null); setSwapSelectionId(null); }} disabled={poolCount === 0} data-testid="button-clear-pool">Clear selection</button>
               </div>}
+              {draft.step === 'players' && <div className="pool-actions">
+                <button className="button button-primary" disabled={!canContinue} onClick={() => setDraft((current) => ({ ...current, step: 'teams' }))} data-testid="button-players-continue">Continue to teams</button>
+                <button className="button button-quiet" disabled={poolCount === 0 || locks.length > 0} onClick={() => { setSelectedPlayerIds([]); setTeamA([]); setTeamB([]); setBalanceResult(null); setSwapSelectionId(null); }} data-testid="button-clear-pool">Clear selection</button>
+                {!canContinue && <small>Select 12–14 players with confirmed preferences, including at least one Setter, and a valid date.</small>}
+              </div>}
             </div>
+            <div hidden={draft.step !== 'teams'}>
+            <div className="pool-actions"><button className="button button-secondary" onClick={() => setDraft((current) => ({ ...current, step: 'players' }))} data-testid="button-back-players">Back to players</button></div>
             <div className="pool-actions"><button className="button button-secondary" disabled={!isRosterValid} onClick={eloBalance} data-testid="button-elo-balance"><ArrowLeftRight size={14} />ELO Balancer</button><small>Same-position swaps only; assigned ranks stay fixed.</small></div>
             {mode === 'manual' && <>
               <div className="manual-assign-head"><strong>Manual assignment</strong><span>Place players with + A / + B and lock preferred roles. Fill may move any unlocked player.</span></div>
@@ -955,7 +1024,8 @@ function AdminMatchesPage() {
               </div>)}
             </div>}
             {createError && <div className="form-error" style={{ margin: '0 18px 12px' }} role="alert">{createError}</div>}
-            <div className="builder-footer"><div className={`validation-note ${isRosterValid ? 'valid' : ''}`} role="status" data-testid="status-roster-validation">{isRosterValid && <Check size={12} style={{ verticalAlign: 'middle', marginRight: 5 }} />}{validation}</div><button className="button button-primary" onClick={saveMatch} disabled={!isRosterValid || createMatch.isPending} data-testid="button-create-match">{createMatch.isPending ? 'Saving roster…' : 'Save upcoming match'}</button></div>
+            <div className="builder-footer"><div className={`validation-note ${isRosterValid ? 'valid' : ''}`} role="status" data-testid="status-roster-validation">{isRosterValid && <Check size={12} style={{ verticalAlign: 'middle', marginRight: 5 }} />}{validation}</div><button className="button button-primary" onClick={saveMatch} disabled={!isRosterValid || !canContinue || createMatch.isPending} data-testid="button-create-match">{createMatch.isPending ? 'Saving roster…' : 'Save upcoming match'}</button></div>
+            </div>
           </>}
       </section>
     </div>
@@ -965,7 +1035,8 @@ function AdminMatchesPage() {
 
 function CreateMatchPage() {
   const access = useAccess();
-  if (access.isAdmin) return <AdminMatchesPage />;
+  const { draft } = useMatchSession();
+  if (access.isAdmin) return <AdminMatchesPage key={draft.generation} />;
   return <Shell><main className="content">
     <PageHeader eyebrow="Match day / roster builder" title="Create Match" description="Build and balance the sides for an upcoming club match." />
     <section className="panel">
@@ -1142,7 +1213,7 @@ function Router() {
 }
 
 function App() {
-  return <WouterRouter base={basePath}><ClerkShell><QueryClientProvider client={queryClient}><AuthBridge><TooltipProvider><Router /><Toaster /></TooltipProvider></AuthBridge></QueryClientProvider></ClerkShell></WouterRouter>;
+  return <WouterRouter base={basePath}><ClerkShell><QueryClientProvider client={queryClient}><AuthBridge><MatchSessionProvider><TooltipProvider><Router /><Toaster /></TooltipProvider></MatchSessionProvider></AuthBridge></QueryClientProvider></ClerkShell></WouterRouter>;
 }
 
 export default App;
