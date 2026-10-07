@@ -250,9 +250,11 @@ def serialize_elo_history_row(row: sqlite3.Row) -> dict[str, Any]:
 
 
 def serialize_match(
-    row: sqlite3.Row, elo_changes: list[dict[str, Any]] | None = None
+    row: sqlite3.Row, elo_changes: list[dict[str, Any]] | None = None,
+    draft_editable: bool = False,
 ) -> dict[str, Any]:
     return {
+        "draftEditable": draft_editable,
         "id": row["id"],
         "teamA": json.loads(row["team_a_json"]),
         "teamB": json.loads(row["team_b_json"]),
@@ -265,6 +267,21 @@ def serialize_match(
         "eloChanges": elo_changes or [],
         "matchDate": row["match_date"],
     }
+
+
+def draft_can_edit(connection: sqlite3.Connection, row: sqlite3.Row) -> bool:
+    """Check authoritative history inside the mutation's immediate transaction."""
+    return (
+        row["status"] == "upcoming"
+        and row["score_a"] is None and row["score_b"] is None
+        and row["completed_at"] is None and row["winner"] is None
+        and connection.execute(
+            "SELECT 1 FROM elo_history WHERE match_id = ? LIMIT 1", (row["id"],)
+        ).fetchone() is None
+        and connection.execute(
+            "SELECT 1 FROM priority_events WHERE match_id = ? LIMIT 1", (row["id"],)
+        ).fetchone() is None
+    )
 
 
 def active_match_elo_changes(
@@ -562,10 +579,12 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             rows = connection.execute(
                 "SELECT * FROM matches ORDER BY id DESC"
             ).fetchall()
-        return jsonify([serialize_match(row) for row in rows])
+            matches = [serialize_match(row, draft_editable=draft_can_edit(connection, row)) for row in rows]
+        return jsonify(matches)
 
     @app.post("/api/matches")
-    def create_match():
+    @app.patch("/api/matches/<int:match_id>")
+    def create_match(match_id: int | None = None):
         body = request.get_json(silent=True)
         if not isinstance(body, dict):
             return jsonify({"error": "Send match rosters as a JSON object."}), 400
@@ -629,6 +648,12 @@ def create_app(database_path: str | Path | None = None) -> Flask:
         placeholders = ",".join("?" for _ in all_ids)
         with database() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            if match_id is not None:
+                existing = connection.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+                if existing is None:
+                    return jsonify({"error": "Match not found."}), 404
+                if not draft_can_edit(connection, existing):
+                    return jsonify({"error": "Only unplayed drafts can be edited. This match has result history."}), 409
             rows = connection.execute(
                 f"SELECT * FROM players WHERE id IN ({placeholders})", all_ids
             ).fetchall()
@@ -672,22 +697,45 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             #
             # ELO changes are applied only when a final score is submitted.
             created_at = utc_now()
-            cursor = connection.execute(
-                """
-                INSERT INTO matches (
-                    team_a_json, team_b_json, score_a, score_b, status, created_at, match_date
-                ) VALUES (?, ?, NULL, NULL, 'upcoming', ?, ?)
-                """,
-                (json.dumps(team_a), json.dumps(team_b), created_at, match_date),
-            )
+            if match_id is None:
+                cursor = connection.execute(
+                    """
+                    INSERT INTO matches (
+                        team_a_json, team_b_json, score_a, score_b, status, created_at, match_date
+                    ) VALUES (?, ?, NULL, NULL, 'upcoming', ?, ?)
+                    """,
+                    (json.dumps(team_a), json.dumps(team_b), created_at, match_date),
+                )
+                match_id = cursor.lastrowid
+            else:
+                connection.execute(
+                    "UPDATE matches SET team_a_json = ?, team_b_json = ?, match_date = ? WHERE id = ?",
+                    (json.dumps(team_a), json.dumps(team_b), match_date, match_id),
+                )
+                # Only never-played draft metadata is synchronized. Result and
+                # reversal audits are never rewritten by this operation.
+                connection.execute("DELETE FROM assignment_audit WHERE match_id = ?", (match_id,))
             match_row = connection.execute(
-                "SELECT * FROM matches WHERE id = ?", (cursor.lastrowid,)
+                "SELECT * FROM matches WHERE id = ?", (match_id,)
             ).fetchone()
             for player in team_a + team_b:
                 connection.execute("INSERT INTO assignment_audit VALUES (?, ?, ?, ?, ?)",
-                    (cursor.lastrowid, player["id"], player["assignedPosition"], player["assignmentStatus"], player["preferenceRank"]))
+                    (match_id, player["id"], player["assignedPosition"], player["assignmentStatus"], player["preferenceRank"]))
 
-        return jsonify(serialize_match(match_row)), 201
+        return jsonify(serialize_match(match_row, draft_editable=True)), 200 if request.method == "PATCH" else 201
+
+    @app.delete("/api/matches/<int:match_id>")
+    def delete_match_draft(match_id: int):
+        with database() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+            if row is None:
+                return jsonify({"error": "Match not found."}), 404
+            if not draft_can_edit(connection, row):
+                return jsonify({"error": "Only unplayed drafts can be deleted. This match has result history."}), 409
+            # Retain even this draft's audit metadata. No cascade or ELO changes.
+            connection.execute("DELETE FROM matches WHERE id = ?", (match_id,))
+        return "", 204
 
     @app.get("/api/matches/<int:match_id>")
     def get_match(match_id: int):
@@ -699,9 +747,10 @@ def create_app(database_path: str | Path | None = None) -> Flask:
                 elo_changes = active_match_elo_changes(connection, match_id)
             else:
                 elo_changes = []
+            editable = row is not None and draft_can_edit(connection, row)
         if row is None:
             return jsonify({"error": "Match not found."}), 404
-        return jsonify(serialize_match(row, elo_changes))
+        return jsonify(serialize_match(row, elo_changes, editable))
 
     @app.post("/api/matches/<int:match_id>/result")
     def submit_match_result(match_id: int):

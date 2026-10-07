@@ -227,6 +227,8 @@ export interface EloHistoryEntry {
 }
 
 export interface Match {
+  /** Upcoming roster has never had a result or completion event. */
+  draftEditable?: boolean;
   /**
      * Scheduled local calendar date; null for legacy rosters.
      * @nullable

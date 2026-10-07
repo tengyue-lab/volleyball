@@ -287,6 +287,7 @@ export const listMatchesResponseEloChangesItemMatchesPlayedAfterMin = 0;
 
 
 export const ListMatchesResponseItem = zod.object({
+  "draftEditable": zod.boolean().optional().describe('Upcoming roster has never had a result or completion event.'),
   "matchDate": zod.coerce.date().nullish().describe('Scheduled local calendar date; null for legacy rosters.'),
   "id": zod.number().int(),
   "teamA": zod.array(zod.object({
@@ -394,6 +395,7 @@ export const createMatchResponseEloChangesItemMatchesPlayedAfterMin = 0;
 
 
 export const CreateMatchResponse = zod.object({
+  "draftEditable": zod.boolean().optional().describe('Upcoming roster has never had a result or completion event.'),
   "matchDate": zod.coerce.date().nullish().describe('Scheduled local calendar date; null for legacy rosters.'),
   "id": zod.number().int(),
   "teamA": zod.array(zod.object({
@@ -471,6 +473,7 @@ export const getMatchResponseEloChangesItemMatchesPlayedAfterMin = 0;
 
 
 export const GetMatchResponse = zod.object({
+  "draftEditable": zod.boolean().optional().describe('Upcoming roster has never had a result or completion event.'),
   "matchDate": zod.coerce.date().nullish().describe('Scheduled local calendar date; null for legacy rosters.'),
   "id": zod.number().int(),
   "teamA": zod.array(zod.object({
@@ -531,6 +534,126 @@ export const GetMatchResponse = zod.object({
 
 
 /**
+ * @summary Update an unplayed draft in place (admin only)
+ */
+export const UpdateMatchDraftParams = zod.object({
+  "matchId": zod.coerce.number().int()
+})
+
+export const updateMatchDraftBodyTeamAPlayerIdsMin = 6;
+export const updateMatchDraftBodyTeamAPlayerIdsMax = 7;
+
+export const updateMatchDraftBodyTeamBPlayerIdsMin = 6;
+export const updateMatchDraftBodyTeamBPlayerIdsMax = 7;
+
+export const updateMatchDraftBodyTeamAAssignmentsMin = 6;
+export const updateMatchDraftBodyTeamAAssignmentsMax = 7;
+
+export const updateMatchDraftBodyTeamBAssignmentsMin = 6;
+export const updateMatchDraftBodyTeamBAssignmentsMax = 7;
+
+
+
+export const UpdateMatchDraftBody = zod.object({
+  "matchDate": zod.coerce.date().optional().describe('Optional for existing callers; the creation UI requires a date.'),
+  "teamAPlayerIds": zod.array(zod.number().int()).min(updateMatchDraftBodyTeamAPlayerIdsMin).max(updateMatchDraftBodyTeamAPlayerIdsMax),
+  "teamBPlayerIds": zod.array(zod.number().int()).min(updateMatchDraftBodyTeamBPlayerIdsMin).max(updateMatchDraftBodyTeamBPlayerIdsMax),
+  "teamAAssignments": zod.array(zod.object({
+  "playerId": zod.number().int(),
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),
+  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "preferenceRank": zod.number().int().nullish()
+})).min(updateMatchDraftBodyTeamAAssignmentsMin).max(updateMatchDraftBodyTeamAAssignmentsMax),
+  "teamBAssignments": zod.array(zod.object({
+  "playerId": zod.number().int(),
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),
+  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "preferenceRank": zod.number().int().nullish()
+})).min(updateMatchDraftBodyTeamBAssignmentsMin).max(updateMatchDraftBodyTeamBAssignmentsMax)
+})
+
+export const updateMatchDraftResponseTeamAItemMatchesPlayedMin = 0;
+
+export const updateMatchDraftResponseTeamBItemMatchesPlayedMin = 0;
+
+export const updateMatchDraftResponseEloChangesItemMatchesPlayedBeforeMin = 0;
+
+export const updateMatchDraftResponseEloChangesItemMatchesPlayedAfterMin = 0;
+
+
+
+export const UpdateMatchDraftResponse = zod.object({
+  "draftEditable": zod.boolean().optional().describe('Upcoming roster has never had a result or completion event.'),
+  "matchDate": zod.coerce.date().nullish().describe('Scheduled local calendar date; null for legacy rosters.'),
+  "id": zod.number().int(),
+  "teamA": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
+  "elo": zod.number().int().nullable(),
+  "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullish().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "matchesPlayed": zod.number().int().min(updateMatchDraftResponseTeamAItemMatchesPlayedMin).optional(),
+  "provisional": zod.boolean().optional(),
+  "createdAt": zod.coerce.date().optional(),
+  "preferencesConfirmed": zod.boolean().optional(),
+  "preferredRolePriority": zod.boolean().optional(),
+  "prioritySince": zod.coerce.date().nullish(),
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
+  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "preferenceRank": zod.number().int().nullish()
+}).describe('Immutable played roster. New ranking and priority fields are optional because older snapshots are never rewritten.')),
+  "teamB": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
+  "elo": zod.number().int().nullable(),
+  "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullish().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "matchesPlayed": zod.number().int().min(updateMatchDraftResponseTeamBItemMatchesPlayedMin).optional(),
+  "provisional": zod.boolean().optional(),
+  "createdAt": zod.coerce.date().optional(),
+  "preferencesConfirmed": zod.boolean().optional(),
+  "preferredRolePriority": zod.boolean().optional(),
+  "prioritySince": zod.coerce.date().nullish(),
+  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
+  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "preferenceRank": zod.number().int().nullish()
+}).describe('Immutable played roster. New ranking and priority fields are optional because older snapshots are never rewritten.')),
+  "scoreA": zod.number().int().nullable(),
+  "scoreB": zod.number().int().nullable(),
+  "status": zod.enum(['upcoming', 'completed']),
+  "winner": zod.union([zod.literal('Team A'),zod.literal('Team B'),zod.literal(null)]).nullable(),
+  "completedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "eloChanges": zod.array(zod.object({
+  "id": zod.number().int(),
+  "playerId": zod.number().int(),
+  "matchId": zod.number().int(),
+  "eloBefore": zod.number().int().nullable(),
+  "eloAfter": zod.number().int().nullable(),
+  "changeAmount": zod.number().int().nullable(),
+  "kUsed": zod.union([zod.literal(20),zod.literal(32),zod.literal(40),zod.literal(60),zod.literal(null)]).nullable().describe('Original K used, never recalculated on reversal; null for legacy rows.'),
+  "rankBefore": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "rankAfter": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "rankMovement": zod.union([zod.literal('promotion'),zod.literal('demotion'),zod.literal('unchanged'),zod.literal(null)]).nullable().describe('Canonical rank-order change; null when hidden or legacy.'),
+  "matchesPlayedBefore": zod.number().int().min(updateMatchDraftResponseEloChangesItemMatchesPlayedBeforeMin).nullable().describe('Null if never recorded on a legacy audit.'),
+  "matchesPlayedAfter": zod.number().int().min(updateMatchDraftResponseEloChangesItemMatchesPlayedAfterMin).nullable(),
+  "action": zod.enum(['result', 'reversal']),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Delete only an unplayed draft, retaining audit rows (admin only)
+ */
+export const DeleteMatchDraftParams = zod.object({
+  "matchId": zod.coerce.number().int()
+})
+
+export const DeleteMatchDraftResponse = zod.void()
+
+
+/**
  * @summary Submit a final score and update player ELO
  */
 export const SubmitMatchResultParams = zod.object({
@@ -559,6 +682,7 @@ export const submitMatchResultResponseEloChangesItemMatchesPlayedAfterMin = 0;
 
 
 export const SubmitMatchResultResponse = zod.object({
+  "draftEditable": zod.boolean().optional().describe('Upcoming roster has never had a result or completion event.'),
   "matchDate": zod.coerce.date().nullish().describe('Scheduled local calendar date; null for legacy rosters.'),
   "id": zod.number().int(),
   "teamA": zod.array(zod.object({
@@ -636,6 +760,7 @@ export const reopenMatchResultResponseEloChangesItemMatchesPlayedAfterMin = 0;
 
 
 export const ReopenMatchResultResponse = zod.object({
+  "draftEditable": zod.boolean().optional().describe('Upcoming roster has never had a result or completion event.'),
   "matchDate": zod.coerce.date().nullish().describe('Scheduled local calendar date; null for legacy rosters.'),
   "id": zod.number().int(),
   "teamA": zod.array(zod.object({

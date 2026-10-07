@@ -8,6 +8,8 @@ import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/reac
 import {
   Position,
   useCreateMatch,
+  useDeleteMatchDraft,
+  useUpdateMatchDraft,
   useGetAuthViewer,
   useGrantAdminAccess,
   useListAdminAccess,
@@ -53,9 +55,11 @@ import NotFound from '@/pages/not-found';
 import RankedPositionInput from '@/components/RankedPositionInput';
 import AssignedPlayer from '@/components/AssignedPlayer';
 import { RankBadge, RankTransition } from '@/components/RankBadge';
-import PostMatchActions from '@/components/PostMatchActions';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import MatchHistoryDetails from '@/components/MatchHistoryDetails';
+import SavedRosterSummary, { rosterLabel } from '@/components/SavedRosterSummary';
 import { MatchSessionProvider, useMatchSession } from '@/match-session-context';
-import { freshSession, reconcileSession, resultActionsReady, selectionCanContinue, validMatchDate, visiblePool } from '@/match-session';
+import { draftEditable, editSession, freshSession, nextGameSession, reconcileSession, selectionCanContinue, validMatchDate, visiblePool } from '@/match-session';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchInterval: 5000, staleTime: 0, refetchIntervalInBackground: false, retry: 1 } } });
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -397,10 +401,41 @@ function TeamMetrics({ team, players, total }: { team: 'A' | 'B'; players: Playe
   </div>;
 }
 
+async function refreshAfterMatchUpdate(queryClient: ReturnType<typeof useQueryClient>, matchId: number, updated: Match) {
+  queryClient.setQueryData(getGetMatchQueryKey(matchId), updated);
+  await Promise.all([
+    refreshEverything(queryClient),
+    queryClient.invalidateQueries({ queryKey: getGetMatchQueryKey(matchId) }),
+    queryClient.invalidateQueries({ queryKey: getListMatchesQueryKey() }),
+    queryClient.invalidateQueries({ queryKey: getListPlayersQueryKey() }),
+    queryClient.invalidateQueries({ queryKey: getGetLeaderboardQueryKey() }),
+    ...[...updated.teamA, ...updated.teamB].flatMap((player) => [
+      queryClient.invalidateQueries({ queryKey: getGetPlayerQueryKey(player.id) }),
+      queryClient.invalidateQueries({ queryKey: getGetPlayerEloHistoryQueryKey(player.id) }),
+    ]),
+  ]);
+}
+
+function EditResultButton({ matchId }: { matchId: number }) {
+  const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
+  const reopen = useReopenMatchResult();
+  const [error, setError] = useState('');
+  return <div className="history-actions">
+    <button className="button button-secondary touch-44" disabled={reopen.isPending} data-testid={`button-edit-result-${matchId}`} onClick={() => {
+      setError('');
+      reopen.mutate({ matchId }, {
+        onSuccess: async (updated) => { await refreshAfterMatchUpdate(queryClient, matchId, updated); navigate(`/current-match?match=${updated.id}`); },
+        onError: (e) => setError(messageFor(e)),
+      });
+    }}><Pencil size={14} />{reopen.isPending ? 'Reopening…' : 'Edit result'}</button>
+    {error && <div className="form-error" role="alert">{error}</div>}
+  </div>;
+}
+
 function MatchDetail({ matchId }: { matchId: number }) {
   const [, navigate] = useLocation();
   const { isAdmin } = useAccess();
-  const { startNext, startOver } = useMatchSession();
   const query = useGetMatch(matchId, { query: { queryKey: getGetMatchQueryKey(matchId) } });
   const queryClient = useQueryClient();
   const submitResult = useSubmitMatchResult();
@@ -438,20 +473,7 @@ function MatchDetail({ matchId }: { matchId: number }) {
   if (query.isLoading) return <div className="state-card">Loading saved roster…</div>;
   if (query.isError || !query.data) return <div className="state-card" role="alert">Roster details could not be loaded. <button className="text-button" onClick={() => void query.refetch()}>Try again</button></div>;
   const match = query.data;
-  const onMatchUpdated = async (updated: Match) => {
-    queryClient.setQueryData(getGetMatchQueryKey(matchId), updated);
-    await Promise.all([
-      refreshEverything(queryClient),
-      queryClient.invalidateQueries({ queryKey: getGetMatchQueryKey(matchId) }),
-      queryClient.invalidateQueries({ queryKey: getListMatchesQueryKey() }),
-      queryClient.invalidateQueries({ queryKey: getListPlayersQueryKey() }),
-      queryClient.invalidateQueries({ queryKey: getGetLeaderboardQueryKey() }),
-      ...[...updated.teamA, ...updated.teamB].flatMap((player) => [
-        queryClient.invalidateQueries({ queryKey: getGetPlayerQueryKey(player.id) }),
-        queryClient.invalidateQueries({ queryKey: getGetPlayerEloHistoryQueryKey(player.id) }),
-      ]),
-    ]);
-  };
+  const onMatchUpdated = (updated: Match) => refreshAfterMatchUpdate(queryClient, matchId, updated);
   function saveResult(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setResultError('');
@@ -548,20 +570,14 @@ function MatchDetail({ matchId }: { matchId: number }) {
     </section>}
     <section><h4>Team A · {match.teamA.length} players</h4>{match.teamA.map(renderPlayer)}</section>
     <section><h4>Team B · {match.teamB.length} players</h4>{match.teamB.map(renderPlayer)}</section>
-    {isAdmin && match.status === 'completed' && <PostMatchActions
-      ready={resultActionsReady(match, submitResult.isPending, reopenResult.isPending) && !query.isFetching}
-      onNext={() => {
-        if (!resultActionsReady(match, submitResult.isPending, reopenResult.isPending) || query.isFetching) return;
-        startNext(match);
-        navigate('/create-match');
-      }}
-      onStartOver={() => {
-        if (!resultActionsReady(match, submitResult.isPending, reopenResult.isPending) || query.isFetching) return;
-        startOver();
-        navigate('/create-match');
-      }}
-    />}
   </div>;
+}
+
+function HistoryDetails({ match }: { match: Match }) {
+  const [opened, setOpened] = useState(false);
+  const detail = useGetMatch(match.id, { query: { queryKey: getGetMatchQueryKey(match.id), enabled: opened } });
+  const eloState = detail.isError ? 'error' : detail.data ? 'ready' : 'loading';
+  return <MatchHistoryDetails match={{ ...match, eloChanges: detail.data?.eloChanges ?? [] }} eloState={opened ? eloState : 'ready'} onEloOpen={() => setOpened(true)} onEloRetry={() => void detail.refetch()} />;
 }
 
 function MatchCard({ match, expanded, onToggle }: { match: Match; expanded: boolean; onToggle: () => void }) {
@@ -570,16 +586,26 @@ function MatchCard({ match, expanded, onToggle }: { match: Match; expanded: bool
   return <article className="panel match-card" data-testid={`card-match-${match.id}`}>
     <div className="match-card-head"><span className="match-label">Roster / {String(match.id).padStart(3, '0')} · {new Date(match.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span><span className={`match-badge ${completed ? 'completed' : ''}`}>{completed ? 'Completed' : 'Upcoming'}</span></div>
     <div className="versus-row"><div className="versus-team">Team A<span>{match.teamA.length} players</span>{completed && <strong>{match.scoreA}</strong>}</div><span className="versus-word">{completed ? '–' : 'VS'}</span><div className="versus-team">Team B<span>{match.teamB.length} players</span>{completed && <strong>{match.scoreB}</strong>}</div></div>
-    <div className="match-card-foot"><span>{completed ? `${match.winner} won` : 'Match roster saved'}</span><button className="text-button" onClick={onToggle} aria-expanded={expanded} data-testid={`button-view-match-${match.id}`}>{expanded ? 'Hide details' : completed ? 'View results' : isAdmin ? 'Enter score' : 'View roster'} <ChevronDown size={12} style={{ verticalAlign: 'middle', transform: expanded ? 'rotate(180deg)' : undefined }} /></button></div>
-    {expanded && <MatchDetail matchId={match.id} />}
+    <div className="match-card-foot"><span>{completed ? `${match.winner} won` : 'Match roster saved'}</span>{!completed && <button className="text-button" onClick={onToggle} aria-expanded={expanded} data-testid={`button-view-match-${match.id}`}>{expanded ? 'Hide details' : completed ? 'View results' : isAdmin ? 'Enter score' : 'View roster'} <ChevronDown size={12} style={{ verticalAlign: 'middle', transform: expanded ? 'rotate(180deg)' : undefined }} /></button>}</div>
+    {completed && <HistoryDetails match={match} />}
+    {completed && isAdmin && <EditResultButton matchId={match.id} />}
+    {!completed && expanded && <MatchDetail matchId={match.id} />}
   </article>;
 }
 
 function AdminMatchesPage() {
-  const { draft, setDraft } = useMatchSession();
+  const { draft, setDraft, startOver, replaceSession } = useMatchSession();
   useEffect(() => { window.scrollTo(0, 0); }, []);
   const playersQuery = useListPlayers();
+  const matchesQuery = useListMatches();
   const createMatch = useCreateMatch();
+  const updateDraft = useUpdateMatchDraft();
+  const deleteDraft = useDeleteMatchDraft();
+  const [targetId, setTargetId] = useState<number | null>(null);
+  const [resetTarget, setResetTarget] = useState<Match | null>(null);
+  const [resetError, setResetError] = useState('');
+  const [confirmStartOver, setConfirmStartOver] = useState(false);
+  const [summaryError, setSummaryError] = useState('');
   const queryClient = useQueryClient();
   const { notice, setNotice } = useNotice();
   const [mode, setMode] = useState<'auto' | 'manual'>('auto');
@@ -590,8 +616,8 @@ function AdminMatchesPage() {
   const [poolSearch, setPoolSearch] = useState('');
   const [poolPosition, setPoolPosition] = useState('');
   const [poolSort, setPoolSort] = useState('name');
-  const [teamA, setTeamA] = useState<number[]>([]);
-  const [teamB, setTeamB] = useState<number[]>([]);
+  const [teamA, setTeamA] = useState<number[]>(() => [...(draft.savedRoster?.teamAIds ?? [])]);
+  const [teamB, setTeamB] = useState<number[]>(() => [...(draft.savedRoster?.teamBIds ?? [])]);
   const [balanceResult, setBalanceResult] = useState<MatchBalanceResult | null>(null);
   const [balancedProfiles, setBalancedProfiles] = useState('');
   const [locks, setLocks] = useState<MatchLock[]>([]);
@@ -599,6 +625,11 @@ function AdminMatchesPage() {
   const [createError, setCreateError] = useState('');
   const players: RatedPlayer[] = (playersQuery.data ?? []).filter(isRatedPlayer);
   const carried = reconcileSession(draft, playersQuery.data ?? []);
+  const savedPreferencesUnchanged = draft.sourcePlayers.every((previous) => {
+    const current = players.find((player) => player.id === previous.id);
+    return current?.preferencesConfirmed
+      && JSON.stringify(current.positions) === JSON.stringify(previous.positions);
+  });
   const visiblePlayers = visiblePool(players, poolSearch, poolPosition, poolSort);
   useEffect(() => {
     if (!playersQuery.isSuccess) return;
@@ -628,12 +659,33 @@ function AdminMatchesPage() {
       validateMatchLocks(selected, locks);
       if (locks.some((lock) => !(lock.team === 'A' ? teamA : teamB).includes(lock.playerId))) return null;
       if (balanceResult && balancedProfiles === profilesFingerprint && balanceResult.teamAIds.join(',') === teamA.join(',') && balanceResult.teamBIds.join(',') === teamB.join(',')) return balanceResult;
+      const saved = draft.savedRoster;
+      if (saved && saved.teamA.length && saved.teamB.length && !locks.length && savedPreferencesUnchanged
+        && saved.teamAIds.join(',') === teamA.join(',') && saved.teamBIds.join(',') === teamB.join(',')) {
+        const result = assignMatchRoles(selected, teamA, teamB);
+        const assignments = [...saved.teamA, ...saved.teamB];
+        const filled = assignments.filter((assignment) => assignment.assignmentStatus === 'filled');
+        const totalFor = (ids: number[]) => selected.filter((player) => ids.includes(player.id)).reduce((sum, player) => sum + player.elo, 0);
+        const seven = teamA.length === 7 ? teamA : teamB;
+        const six = teamA.length === 6 ? teamA : teamB;
+        const libero = assignments.find((assignment) => seven.includes(assignment.playerId) && assignment.assignedPosition === 'Libero');
+        return {
+          ...result, teamAAssignments: saved.teamA, teamBAssignments: saved.teamB,
+          preferredCount: assignments.length - filled.length,
+          positionShortages: positions.flatMap((position) => {
+            const filledCount = filled.filter((assignment) => assignment.assignedPosition === position).length;
+            return filledCount ? [{ position, filledCount }] : [];
+          }),
+          underdogCoreGetsLibero: selected.length === 13 && libero
+            ? totalFor(seven.filter((id) => id !== libero.playerId)) <= totalFor(six) : null,
+        };
+      }
       if (mode === 'manual') return null;
       return assignMatchRoles(selected, teamA, teamB);
     } catch {
       return null;
     }
-  }, [players, selectedPlayerIds, teamA, teamB, balanceResult, balancedProfiles, profilesFingerprint, mode, locks]);
+  }, [players, selectedPlayerIds, teamA, teamB, balanceResult, balancedProfiles, profilesFingerprint, mode, locks, draft.savedRoster, savedPreferencesUnchanged]);
   const roleAssignmentById = new Map(
     roleAssignments
       ? [...roleAssignments.teamAAssignments, ...roleAssignments.teamBAssignments]
@@ -836,26 +888,73 @@ function AdminMatchesPage() {
     } catch (error) { setCreateError(messageFor(error)); }
   }
 
+  const busy = createMatch.isPending || updateDraft.isPending || deleteDraft.isPending;
+  const upcomingRosters = (matchesQuery.data ?? []).filter((m) => m.status === 'upcoming').sort((x, y) => new Date(y.createdAt).getTime() - new Date(x.createdAt).getTime() || y.id - x.id);
+  const effectiveTargetId = upcomingRosters.length === 1 ? upcomingRosters[0].id : upcomingRosters.some((m) => m.id === targetId) ? targetId : null;
+  const targetMatch = upcomingRosters.find((m) => m.id === effectiveTargetId) ?? null;
+  const nextGame = matchesQuery.isSuccess && playersQuery.isSuccess ? nextGameSession(matchesQuery.data, playersQuery.data, 0) : null;
+  const hasDraftState = selectedPlayerIds.length > 0 || teamA.length > 0 || teamB.length > 0 || draft.editingMatchId !== null || draft.step !== 'date';
+
+  function requestStartOver() {
+    if (busy) return;
+    if (selectedPlayerIds.length > 0) setConfirmStartOver(true);
+    else startOver();
+  }
+  function startNextGame() {
+    if (busy || !playersQuery.isSuccess || !matchesQuery.isSuccess) return;
+    const fresh = nextGameSession(matchesQuery.data, playersQuery.data, 0);
+    if (!fresh) return;
+    replaceSession((generation) => ({ ...fresh, generation }));
+  }
+  function continueTarget() {
+    if (busy || !targetMatch || !draftEditable(targetMatch)) return;
+    setSummaryError('');
+    replaceSession((generation) => editSession(targetMatch, generation));
+  }
+  function confirmReset() {
+    if (!resetTarget || deleteDraft.isPending) return;
+    const id = resetTarget.id;
+    setResetError('');
+    deleteDraft.mutate({ matchId: id }, {
+      onSuccess: async () => {
+        queryClient.removeQueries({ queryKey: getGetMatchQueryKey(id) });
+        await queryClient.invalidateQueries({ queryKey: getListMatchesQueryKey() });
+        setResetTarget(null);
+        startOver();
+      },
+      onError: (error) => setResetError(messageFor(error)),
+    });
+  }
+
   function saveMatch() {
-    if (!isRosterValid || !roleAssignments || !canContinue || draft.step !== 'teams') return;
+    if (!isRosterValid || !roleAssignments || !canContinue || draft.step !== 'teams' || busy) return;
     setCreateError('');
-    createMatch.mutate({ data: {
+    const toApi = (list: typeof roleAssignments.teamAAssignments) => list.map((assignment) => ({
+      playerId: assignment.playerId,
+      assignedPosition: apiPositionByRole[assignment.assignedPosition],
+      assignmentStatus: assignment.assignmentStatus,
+      preferenceRank: assignment.preferenceRank,
+    }));
+    const data = {
       matchDate: draft.matchDate,
       teamAPlayerIds: teamA,
       teamBPlayerIds: teamB,
-      teamAAssignments: roleAssignments.teamAAssignments.map((assignment) => ({
-        playerId: assignment.playerId,
-        assignedPosition: apiPositionByRole[assignment.assignedPosition],
-        assignmentStatus: assignment.assignmentStatus,
-        preferenceRank: assignment.preferenceRank,
-      })),
-      teamBAssignments: roleAssignments.teamBAssignments.map((assignment) => ({
-        playerId: assignment.playerId,
-        assignedPosition: apiPositionByRole[assignment.assignedPosition],
-        assignmentStatus: assignment.assignmentStatus,
-        preferenceRank: assignment.preferenceRank,
-      })),
-    } }, {
+      teamAAssignments: toApi(roleAssignments.teamAAssignments),
+      teamBAssignments: toApi(roleAssignments.teamBAssignments),
+    };
+    const editingId = draft.editingMatchId;
+    if (editingId !== null) {
+      updateDraft.mutate({ matchId: editingId, data }, {
+        onSuccess: async (updated) => {
+          queryClient.setQueryData(getGetMatchQueryKey(editingId), updated);
+          await queryClient.invalidateQueries({ queryKey: getListMatchesQueryKey() });
+          startOver();
+        },
+        onError: (error) => setCreateError(messageFor(error)),
+      });
+      return;
+    }
+    createMatch.mutate({ data }, {
       onSuccess: async () => {
         await queryClient.invalidateQueries({ queryKey: getListMatchesQueryKey() });
         setSelectedPlayerIds([]);
@@ -882,9 +981,15 @@ function AdminMatchesPage() {
       {(['date', 'players', 'teams'] as const).map((step, index) => <li key={step} aria-current={draft.step === step ? 'step' : undefined}>{index + 1}. {step === 'date' ? 'Date' : step === 'players' ? 'Players' : 'Teams'}</li>)}
     </ol>
     <div className="summary-strip"><span className="summary-num" data-testid="text-selected-count">Selected: {poolCount} / 12–14</span></div>
+    {matchesQuery.isError && <div className="form-error" role="alert">Saved rosters could not be loaded. <button className="text-button" onClick={() => void matchesQuery.refetch()}>Try again</button></div>}
+    <SavedRosterSummary rosters={upcomingRosters} targetId={effectiveTargetId} busy={busy} onSelect={setTargetId} onContinue={continueTarget} onReset={() => { if (targetMatch && draftEditable(targetMatch)) { setResetError(''); setResetTarget(targetMatch); } }} />
+    {summaryError && <div className="form-error" role="alert">{summaryError}</div>}
+    {draft.editingMatchId !== null && <div className="position-warning" role="status" data-testid="status-editing-target"><strong>Editing saved {rosterLabel(upcomingRosters.find((m) => m.id === draft.editingMatchId) ?? { id: draft.editingMatchId, createdAt: '', teamA: [], teamB: [] })}</strong><span>Saving updates this roster instead of creating a new one.</span></div>}
+    {draft.step === 'date' && draft.editingMatchId === null && nextGame && <div className="pool-actions"><button className="button button-primary touch-44" disabled={busy} onClick={startNextGame} data-testid="button-next-game">Next Game</button></div>}
     <section className="panel session-date" aria-label="Match date">
       <div className="form-field"><label htmlFor="match-date">Match date {draft.step === 'date' ? '· Step 1' : ''}</label><input id="match-date" type="date" required value={draft.matchDate} onChange={(event) => setDraft((current) => ({ ...current, matchDate: event.target.value }))} data-testid="input-match-date" /></div>
       {draft.step === 'date' && <button className="button button-primary" disabled={!validMatchDate(draft.matchDate)} onClick={() => setDraft((current) => ({ ...current, step: 'players' }))} data-testid="button-date-continue">Continue to players</button>}
+      {hasDraftState && <button className="button button-secondary start-over-button" disabled={busy} onClick={requestStartOver} data-testid="button-start-over">Start Over</button>}
       {!validMatchDate(draft.matchDate) && <p className="form-error" role="alert">Choose a valid match date before continuing.</p>}
     </section>
     {playersQuery.isSuccess && carried.missing.length > 0 && <div className="position-warning" role="status" data-testid="warning-missing-players"><strong>Some previous players are no longer on the roster</strong><span>{carried.missing.map((player) => player.name).join(' · ')}</span><small>Select replacements to reach 12–14 players.</small></div>}
@@ -1024,12 +1129,14 @@ function AdminMatchesPage() {
               </div>)}
             </div>}
             {createError && <div className="form-error" style={{ margin: '0 18px 12px' }} role="alert">{createError}</div>}
-            <div className="builder-footer"><div className={`validation-note ${isRosterValid ? 'valid' : ''}`} role="status" data-testid="status-roster-validation">{isRosterValid && <Check size={12} style={{ verticalAlign: 'middle', marginRight: 5 }} />}{validation}</div><button className="button button-primary" onClick={saveMatch} disabled={!isRosterValid || !canContinue || createMatch.isPending} data-testid="button-create-match">{createMatch.isPending ? 'Saving roster…' : 'Save upcoming match'}</button></div>
+            <div className="builder-footer"><div className={`validation-note ${isRosterValid ? 'valid' : ''}`} role="status" data-testid="status-roster-validation">{isRosterValid && <Check size={12} style={{ verticalAlign: 'middle', marginRight: 5 }} />}{validation}</div><button className="button button-primary" onClick={saveMatch} disabled={!isRosterValid || !canContinue || busy} data-testid="button-create-match">{busy ? 'Saving roster…' : draft.editingMatchId !== null ? 'Save changes to roster' : 'Save upcoming match'}</button></div>
             </div>
           </>}
       </section>
     </div>
     <Notice text={notice} />
+    {confirmStartOver && <ConfirmDialog testId="dialog-start-over" title="Start over?" tone="warning" confirmLabel="Start Over" onCancel={() => setConfirmStartOver(false)} onConfirm={() => { setConfirmStartOver(false); startOver(); }}><p>This clears the {poolCount} selected {poolCount === 1 ? 'player' : 'players'}, assignments and locks. No saved match is deleted.</p></ConfirmDialog>}
+    {resetTarget && <ConfirmDialog testId="dialog-reset-match" title="Reset Current Match?" confirmLabel="Reset Current Match" pendingLabel="Resetting…" pending={deleteDraft.isPending} error={resetError} onCancel={() => setResetTarget(null)} onConfirm={confirmReset}><p><strong>{rosterLabel(resetTarget)}</strong> will be deleted. This cannot be undone.</p></ConfirmDialog>}
   </main></Shell>;
 }
 
@@ -1054,11 +1161,13 @@ function MatchCollectionPage({ type }: { type: 'current' | 'history' }) {
   const search = useSearch();
   const requestedMatchId = Number(new URLSearchParams(search).get('match'));
   const initialMatchId = Number.isInteger(requestedMatchId) && requestedMatchId > 0 ? requestedMatchId : null;
-  const [expandedMatch, setExpandedMatch] = useState<number | null>(initialMatchId);
-  useEffect(() => {
-    setExpandedMatch(initialMatchId);
-  }, [initialMatchId]);
   const isCurrent = type === 'current';
+  const [, navigate] = useLocation();
+  const [expandedMatch, setExpandedMatch] = useState<number | null>(isCurrent ? initialMatchId : null);
+  useEffect(() => {
+    setExpandedMatch(isCurrent ? initialMatchId : null);
+  }, [initialMatchId, isCurrent]);
+  const [dismissedResult, setDismissedResult] = useState<number | null>(null);
   const matches = (matchesQuery.data ?? [])
     .filter((match) => match.status === (isCurrent ? 'upcoming' : 'completed'))
     .sort((a, b) => {
@@ -1072,6 +1181,10 @@ function MatchCollectionPage({ type }: { type: 'current' | 'history' }) {
       title={isCurrent ? 'Current Match' : 'Match History'}
       description={isCurrent ? 'All saved upcoming match rosters, newest first.' : 'Completed club matches and their results.'}
     />
+    {!isCurrent && initialMatchId !== null && dismissedResult !== initialMatchId && (matchesQuery.data ?? []).some((m) => m.id === initialMatchId && m.status === 'completed') && <section className="panel post-save-result" aria-label="Saved match result" data-testid="panel-post-save-result">
+      <div className="post-save-head"><div><span className="eyebrow">Result saved</span><h2 className="panel-title">Match Result</h2></div><button className="button button-secondary touch-44" onClick={() => { setDismissedResult(initialMatchId); navigate('/match-history'); }} data-testid="button-dismiss-result"><X size={14} />Dismiss</button></div>
+      <MatchDetail matchId={initialMatchId} />
+    </section>}
     {matchesQuery.isLoading ? <LoadingState /> : matchesQuery.isError ? <ErrorState error={matchesQuery.error} retry={() => void matchesQuery.refetch()} /> :
       matches.length ? <div className="match-list">{matches.map((match) => <MatchCard key={match.id} match={match} expanded={expandedMatch === match.id} onToggle={() => setExpandedMatch(expandedMatch === match.id ? null : match.id)} />)}</div> :
         <section className="panel"><EmptyState

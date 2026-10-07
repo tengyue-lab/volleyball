@@ -9,6 +9,7 @@ const SessionContext = createContext<{
   setDraft: Dispatch<SetStateAction<MatchSession>>;
   startNext: (match: Match) => void;
   startOver: () => void;
+  replaceSession: (build: (generation: number) => MatchSession) => void;
 } | null>(null);
 
 // AuthBridge remounts its children on identity/access changes, clearing this
@@ -19,6 +20,7 @@ export function MatchSessionProvider({ children }: { children: ReactNode }) {
     draft, setDraft,
     startNext: (match) => setDraft((current) => nextSession(match, current.generation + 1)),
     startOver: () => setDraft((current) => freshSession(current.generation + 1)),
+    replaceSession: (build) => setDraft((current) => build(current.generation + 1)),
   }}>{children}</SessionContext.Provider>;
 }
 

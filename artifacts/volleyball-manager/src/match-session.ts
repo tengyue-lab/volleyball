@@ -1,10 +1,19 @@
 import type { Match, Player } from '@workspace/api-client-react';
+import type { MatchPositionAssignment } from './match-balancing';
 
 export type SessionStep = 'date' | 'players' | 'teams';
 export type CarriedPlayer = Pick<Player, 'id' | 'name' | 'positions'> & {
   preferencesConfirmed?: boolean;
 };
+export interface SavedRoster {
+  teamAIds: number[];
+  teamBIds: number[];
+  teamA: MatchPositionAssignment[];
+  teamB: MatchPositionAssignment[];
+}
 export interface MatchSession {
+  editingMatchId: number | null;
+  savedRoster: SavedRoster | null;
   generation: number;
   step: SessionStep;
   matchDate: string;
@@ -23,7 +32,7 @@ export function validMatchDate(value: string): boolean {
 }
 
 export function freshSession(generation = 0, now = new Date()): MatchSession {
-  return { generation, step: 'date', matchDate: localToday(now), selectedPlayerIds: [], sourcePlayers: [] };
+  return { editingMatchId: null, savedRoster: null, generation, step: 'date', matchDate: localToday(now), selectedPlayerIds: [], sourcePlayers: [] };
 }
 
 export function resultActionsReady(
@@ -77,4 +86,64 @@ export function visiblePool<T extends Player>(players: T[], search: string, posi
     if (sort === 'elo') return (b.elo ?? 0) - (a.elo ?? 0) || nameOrder;
     return sort === 'name-desc' ? -nameOrder : nameOrder;
   });
+}
+
+function completedOrder(a: Match, b: Match): number {
+  const at = new Date(a.completedAt ?? a.createdAt).getTime();
+  const bt = new Date(b.completedAt ?? b.createdAt).getTime();
+  if (at !== bt) return bt - at;
+  const ac = new Date(a.createdAt).getTime();
+  const bc = new Date(b.createdAt).getTime();
+  return bc - ac || b.id - a.id;
+}
+
+export function latestCompletedMatch(matches: Match[]): Match | null {
+  return matches.filter((match) => match.status === 'completed').sort(completedOrder)[0] ?? null;
+}
+
+/** Only the most recent completed match is considered; never falls back to an older one. */
+export function nextGameSession(matches: Match[], players: Player[], generation: number, now = new Date()): MatchSession | null {
+  const latest = latestCompletedMatch(matches);
+  if (!latest) return null;
+  const live = new Map(players.map((player) => [player.id, player]));
+  const supported = new Set(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']);
+  const ids = [...new Set([...latest.teamA, ...latest.teamB].map((player) => player.id))].filter((id) => {
+    const player = live.get(id);
+    return player && player.preferencesConfirmed && typeof player.elo === 'number'
+      && player.positions.length >= 1 && player.positions.length <= 5
+      && new Set(player.positions).size === player.positions.length
+      && player.positions.every((position) => supported.has(position));
+  });
+  const pool = ids.map((id) => live.get(id)!);
+  if (ids.length < 12 || ids.length > 14 || !selectionCanContinue(pool)) return null;
+  return {
+    ...freshSession(generation, now), step: 'players', selectedPlayerIds: ids,
+    sourcePlayers: pool.map((player) => ({ id: player.id, name: player.name, positions: [...player.positions], preferencesConfirmed: player.preferencesConfirmed })),
+  };
+}
+
+export function draftEditable(match: Pick<Match, 'status' | 'draftEditable'>): boolean {
+  return match.status === 'upcoming' && match.draftEditable === true;
+}
+
+export function editSession(match: Match, generation: number, now = new Date()): MatchSession {
+  if (!draftEditable(match)) throw new Error('This roster is protected and cannot be edited here.');
+  const all = [...match.teamA, ...match.teamB];
+  const sourcePlayers = all.map((player) => ({
+    id: player.id, name: player.name, positions: [...player.positions], preferencesConfirmed: player.preferencesConfirmed,
+  }));
+  const toAssignments = (team: Match['teamA']): MatchPositionAssignment[] => team.flatMap((player) => player.assignedPosition ? [{
+    playerId: player.id, assignedPosition: player.assignedPosition as MatchPositionAssignment['assignedPosition'],
+    assignmentStatus: player.assignmentStatus ?? (player.positions.includes(player.assignedPosition) ? 'preferred' : 'filled'),
+    preferenceRank: player.preferenceRank ?? null,
+  }] : []);
+  const teamA = toAssignments(match.teamA);
+  const teamB = toAssignments(match.teamB);
+  const complete = teamA.length === match.teamA.length && teamB.length === match.teamB.length;
+  const matchDate = match.matchDate && validMatchDate(match.matchDate) ? match.matchDate : localToday(now);
+  return {
+    ...freshSession(generation, now), step: 'teams', matchDate, editingMatchId: match.id, sourcePlayers,
+    selectedPlayerIds: [...new Set(all.map((player) => player.id))],
+    savedRoster: { teamAIds: match.teamA.map((p) => p.id), teamBIds: match.teamB.map((p) => p.id), teamA: complete ? teamA : [], teamB: complete ? teamB : [] },
+  };
 }

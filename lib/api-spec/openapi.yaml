@@ -290,6 +290,44 @@ paths:
                 $ref: "#/components/schemas/Match"
         "404":
           description: Match not found
+    patch:
+      operationId: updateMatchDraft
+      tags: [matches]
+      summary: Update an unplayed draft in place (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MatchInput"
+      responses:
+        "200":
+          description: Updated draft
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Match"
+        "400":
+          description: Invalid roster
+        "403":
+          description: Admin required
+        "404":
+          description: Match not found
+        "409":
+          description: Match already has result history
+    delete:
+      operationId: deleteMatchDraft
+      tags: [matches]
+      summary: Delete only an unplayed draft, retaining audit rows (admin only)
+      responses:
+        "204":
+          description: Draft deleted
+        "403":
+          description: Admin required
+        "404":
+          description: Match not found
+        "409":
+          description: Match already has result history
   /matches/{matchId}/result:
     parameters:
       - name: matchId
@@ -444,6 +482,9 @@ components:
       type: object
       required: [id, teamA, teamB, scoreA, scoreB, status, winner, completedAt, createdAt, eloChanges]
       properties:
+        draftEditable:
+          type: boolean
+          description: Upcoming roster has never had a result or completion event.
         matchDate:
           type: ["string", "null"]
           format: date

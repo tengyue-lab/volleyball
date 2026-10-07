@@ -20,3 +20,9 @@ When several saved upcoming rosters exist, the admin explicitly chooses which ro
 **Why:** The user selected explicit roster choice and in-place editing when asked to clarify the new Create Match actions.
 
 **How to apply:** Keep this distinct from Next Game, which starts a new match using the latest completed match's eligible pool. Reset targets only the selected saved draft; other upcoming rosters remain, so Current Match becomes empty only when no upcoming rosters remain.
+
+Draft reset must retain audit rows, even metadata for the deleted unplayed roster. Editing an unplayed draft may synchronize its role metadata, but completed or reopened-with-history rosters are protected.
+
+**Why:** The user explicitly requested that reset not touch audit rows or ELO history. A reopened completed result is not a fresh draft merely because its status is upcoming.
+
+**How to apply:** Check actual completion/history evidence before any draft mutation. Keep reset and edit semantics distinct; retain recorded teams and positions on Continue, using live ratings without reassigning roles just because names or ratings changed.

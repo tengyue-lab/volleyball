@@ -1388,6 +1388,169 @@ export function useGetMatch<TData = Awaited<ReturnType<typeof getMatch>>, TError
 
 
 
+export const getUpdateMatchDraftUrl = (matchId: number,) => {
+
+
+
+
+  return `/api/matches/${matchId}`
+}
+
+/**
+ * @summary Update an unplayed draft in place (admin only)
+ */
+export const updateMatchDraft = async (matchId: number,
+    matchInput: MatchInput, options?: Parameters<typeof customFetch>[1]): Promise<Match> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<Match>(getUpdateMatchDraftUrl(matchId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(matchInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateMatchDraftMutationKey = () => ['updateMatchDraft'] as const;
+
+export const getUpdateMatchDraftMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMatchDraft>>, TError,UpdateMatchDraftMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateMatchDraft>>, TError,UpdateMatchDraftMutationVariables, TContext> => {
+
+const mutationKey = getUpdateMatchDraftMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateMatchDraft>>, UpdateMatchDraftMutationVariables> = (props) => {
+          const {matchId,data} = props ?? {};
+
+          return  updateMatchDraft(matchId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateMatchDraftMutationResult = NonNullable<Awaited<ReturnType<typeof updateMatchDraft>>>
+    export type UpdateMatchDraftMutationBody = BodyType<MatchInput>
+    export type UpdateMatchDraftMutationError = ErrorType<void>
+    export type UpdateMatchDraftMutationVariables = {matchId: number;data: BodyType<MatchInput>}
+
+    /**
+ * @summary Update an unplayed draft in place (admin only)
+ */
+export const useUpdateMatchDraft = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMatchDraft>>, TError,UpdateMatchDraftMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateMatchDraft>>,
+        TError,
+        UpdateMatchDraftMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateMatchDraftMutationOptions(options));
+    }
+
+export const getDeleteMatchDraftUrl = (matchId: number,) => {
+
+
+
+
+  return `/api/matches/${matchId}`
+}
+
+/**
+ * @summary Delete only an unplayed draft, retaining audit rows (admin only)
+ */
+export const deleteMatchDraft = async (matchId: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteMatchDraftUrl(matchId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteMatchDraftMutationKey = () => ['deleteMatchDraft'] as const;
+
+export const getDeleteMatchDraftMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMatchDraft>>, TError,DeleteMatchDraftMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteMatchDraft>>, TError,DeleteMatchDraftMutationVariables, TContext> => {
+
+const mutationKey = getDeleteMatchDraftMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteMatchDraft>>, DeleteMatchDraftMutationVariables> = (props) => {
+          const {matchId} = props ?? {};
+
+          return  deleteMatchDraft(matchId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteMatchDraftMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMatchDraft>>>
+
+    export type DeleteMatchDraftMutationError = ErrorType<void>
+    export type DeleteMatchDraftMutationVariables = {matchId: number}
+
+    /**
+ * @summary Delete only an unplayed draft, retaining audit rows (admin only)
+ */
+export const useDeleteMatchDraft = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMatchDraft>>, TError,DeleteMatchDraftMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteMatchDraft>>,
+        TError,
+        DeleteMatchDraftMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteMatchDraftMutationOptions(options));
+    }
+
 export const getSubmitMatchResultUrl = (matchId: number,) => {
 
 

@@ -5,7 +5,7 @@ import { transformWithEsbuild } from 'vite';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
-  freshSession, localToday, nextSession, reconcileSession,
+  freshSession, localToday, nextSession, nextGameSession, editSession, latestCompletedMatch, reconcileSession,
   resultActionsReady, selectionCanContinue, validMatchDate, visiblePool,
 } from '../src/match-session.ts';
 
@@ -22,22 +22,134 @@ function completed(n = 14) {
     teamA: structuredClone(pool.slice(0, 7)), teamB: structuredClone(pool.slice(7, n)),
   };
 }
-const source = await readFile(new URL('../src/components/PostMatchActions.tsx', import.meta.url), 'utf8');
-const transformed = await transformWithEsbuild(source, 'PostMatchActions.tsx', { loader: 'tsx', jsx: 'automatic', format: 'esm' });
-const code = transformed.code.replaceAll('"react/jsx-runtime"', JSON.stringify(import.meta.resolve('react/jsx-runtime')));
-const { default: PostMatchActions } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+async function load(name) {
+  const source = await readFile(new URL(`../src/components/${name}.tsx`, import.meta.url), 'utf8');
+  const out = await transformWithEsbuild(source, `${name}.tsx`, { loader: 'tsx', jsx: 'automatic', format: 'esm' });
+  const code = out.code.replaceAll('"react/jsx-runtime"', JSON.stringify(import.meta.resolve('react/jsx-runtime')))
+    .replaceAll('from "react"', `from ${JSON.stringify(import.meta.resolve('react'))}`);
+  return import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+}
+const history = await load('MatchHistoryDetails');
+const MatchHistoryDetails = history.default;
+const { default: ConfirmDialog } = await load('ConfirmDialog');
+const { default: SavedRosterSummary } = await load('SavedRosterSummary');
 
-test('saved result shows both actions and pending or incomplete results disable them', () => {
-  const match = completed();
-  const ready = resultActionsReady(match);
-  const markup = renderToStaticMarkup(createElement(PostMatchActions, { ready, onNext() {}, onStartOver() {} }));
-  assert.ok(markup.includes('Next Match') && markup.includes('Start Over'));
-  assert.equal((markup.match(/disabled/g) ?? []).length, 0);
-  for (const args of [[match, true, false], [match, false, true],
-    [{ ...match, status: 'upcoming' }], [{ ...match, scoreA: null }], [{ ...match, winner: null }]]) {
-    const gated = renderToStaticMarkup(createElement(PostMatchActions, { ready: resultActionsReady(...args), onNext() {}, onStartOver() {} }));
-    assert.equal((gated.match(/disabled/g) ?? []).length, 2);
-  }
+const hm = {
+  id: 5,
+  teamA: [{ id: 1, name: 'Zed', assignedPosition: 'Setter' }, { id: 2, name: 'Amy', assignedPosition: 'Libero' }],
+  teamB: [{ id: 3, name: 'Bo', assignedPosition: null }, { id: 4, name: 'Cy', assignedPosition: 'Opposite' }, { id: 6, name: 'Di', assignedPosition: 'Opposite' }],
+  eloChanges: [
+    { id: 1, playerId: 1, changeAmount: 5, action: 'result' }, { id: 2, playerId: 2, changeAmount: -12, action: 'result' },
+    { id: 3, playerId: 3, changeAmount: null, action: 'result' }, { id: 4, playerId: 4, changeAmount: 0, action: 'result' },
+    { id: 5, playerId: 6, changeAmount: 12, action: 'result', eloBefore: 900 },
+  ],
+};
+
+test('history shows two collapsed disclosures and no forbidden actions', () => {
+  const markup = renderToStaticMarkup(createElement(MatchHistoryDetails, { match: hm }));
+  assert.equal((markup.match(/aria-expanded="false"/g) ?? []).length, 2);
+  assert.ok(markup.includes('Team Detail') && markup.includes('ELO Changes'));
+  assert.ok(!markup.includes('Zed') && !/Next|Start Over/.test(markup));
+});
+
+test('Team Detail lists names and played positions only, with honest unavailable label', () => {
+  const markup = renderToStaticMarkup(createElement(MatchHistoryDetails, { match: hm, initialOpen: { team: true } }));
+  assert.ok(markup.includes('Setter') && markup.includes('Position not recorded'));
+  assert.ok(!/ELO|Rank|rank|provisional/.test(markup.replace('ELO Changes', '')));
+  assert.equal((markup.match(/aria-expanded="true"/g) ?? []).length, 1);
+});
+
+test('ELO Changes sort descending, color by sign, private last, and show nothing else', () => {
+  assert.deepEqual(history.sortedEloChanges(hm).map((r) => r.id), [6, 1, 4, 2, 3]);
+  const markup = renderToStaticMarkup(createElement(MatchHistoryDetails, { match: hm, initialOpen: { elo: true } }));
+  assert.ok(markup.includes('+12') && markup.includes('-12') && markup.includes('Private'));
+  assert.ok(markup.includes('elo-change-positive') && markup.includes('elo-change-negative') && markup.includes('elo-change-zero') && markup.includes('elo-change-private'));
+  assert.ok(!/900|Rank|Bronze|provisional|Team A/.test(markup));
+});
+
+test('ELO disclosure shows loading and error states without list data', () => {
+  assert.ok(renderToStaticMarkup(createElement(MatchHistoryDetails, { match: hm, initialOpen: { elo: true }, eloState: 'loading' })).includes('Loading'));
+  assert.ok(renderToStaticMarkup(createElement(MatchHistoryDetails, { match: hm, initialOpen: { elo: true }, eloState: 'error' })).includes('Try again'));
+});
+
+test('saved roster summary requires explicit target and protects non-editable drafts', () => {
+  const rosters = [{ id: 7, createdAt: 'x', teamA: [1], teamB: [2], draftEditable: true }, { id: 8, createdAt: 'x', teamA: [1], teamB: [2], draftEditable: false }];
+  const none = renderToStaticMarkup(createElement(SavedRosterSummary, { rosters, targetId: null, busy: false, onSelect() {}, onContinue() {}, onReset() {} }));
+  assert.equal((none.match(/disabled/g) ?? []).length, 2);
+  const ok = renderToStaticMarkup(createElement(SavedRosterSummary, { rosters, targetId: 7, busy: false, onSelect() {}, onContinue() {}, onReset() {} }));
+  assert.ok(ok.includes('Reset Current Match') && ok.includes('Continue to Team Assignment') && !/disabled/.test(ok));
+  const prot = renderToStaticMarkup(createElement(SavedRosterSummary, { rosters, targetId: 8, busy: false, onSelect() {}, onContinue() {}, onReset() {} }));
+  assert.equal((prot.match(/disabled/g) ?? []).length, 2);
+  assert.equal(renderToStaticMarkup(createElement(SavedRosterSummary, { rosters: [], targetId: null, busy: false, onSelect() {}, onContinue() {}, onReset() {} })), '');
+});
+
+test('reset confirmation names the roster, warns, and locks while pending', () => {
+  const m = renderToStaticMarkup(createElement(ConfirmDialog, { testId: 'd', title: 'Reset', confirmLabel: 'Go', pending: true, error: 'boom', onConfirm() {}, onCancel() {} }, 'Roster / 007 cannot be undone'));
+  assert.ok(m.includes('Roster / 007') && m.includes('boom'));
+  assert.equal((m.match(/disabled/g) ?? []).length, 2);
+});
+
+function mk(id, completedAt, createdAt, teamIds) {
+  const half = Math.ceil(teamIds.length / 2);
+  const snap = (i) => ({ ...pool[i - 1] });
+  return { ...completed(), id, completedAt, createdAt, teamA: teamIds.slice(0, half).map(snap), teamB: teamIds.slice(half).map(snap) };
+}
+const range = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
+
+test('Next Game uses only the latest completed match, today, live data and no fallback', () => {
+  const live = structuredClone(pool);
+  const older = mk(1, '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z', range(1, 14));
+  const latest = mk(2, '2026-10-01T00:00:00Z', '2026-10-01T00:00:00Z', range(1, 12));
+  const s = nextGameSession([older, latest, { ...latest, id: 3, status: 'upcoming' }], live, 4, now);
+  assert.equal(s.step, 'players'); assert.equal(s.matchDate, '2026-10-07');
+  assert.deepEqual(s.selectedPlayerIds, range(1, 12)); assert.equal(s.editingMatchId, null); assert.equal(s.savedRoster, null);
+  assert.ok(s.sourcePlayers.every((p) => !('elo' in p)));
+  const tooFew = mk(5, '2026-10-02T00:00:00Z', '2026-10-02T00:00:00Z', range(1, 11));
+  assert.equal(nextGameSession([older, latest, tooFew], live, 1, now), null);
+  const unconfirmed = live.map((p) => p.id === 3 ? { ...p, preferencesConfirmed: false } : p);
+  assert.equal(nextGameSession([latest], unconfirmed, 1, now), null);
+  assert.equal(nextGameSession([latest], live.map((p) => ({ ...p, positions: ['Opposite'] })), 1, now), null);
+  assert.equal(nextGameSession([latest], live.filter((p) => p.id > 2), 1, now), null);
+  assert.equal(nextGameSession([latest], live.filter((p) => p.id !== 1), 1, now), null);
+});
+
+test('latest completed ties break by createdAt then id', () => {
+  const a = mk(1, '2026-10-01T00:00:00Z', '2026-09-01T00:00:00Z', range(1, 12));
+  const b = mk(2, '2026-10-01T00:00:00Z', '2026-09-02T00:00:00Z', range(1, 12));
+  const c = mk(3, '2026-10-01T00:00:00Z', '2026-09-02T00:00:00Z', range(1, 12));
+  assert.equal(latestCompletedMatch([a, b, c]).id, 3);
+});
+
+test('Next Game removes ineligible played players if 12–14 eligible players remain', () => {
+  const match = completed(14);
+  const unconfirmed = pool.map((player) => player.id === 14 ? { ...player, preferencesConfirmed: false } : player);
+  assert.equal(nextGameSession([match], unconfirmed, 1, now).selectedPlayerIds.length, 13);
+  const invalid = pool.map((player) => player.id === 14 ? { ...player, positions: ['Setter', 'Setter'] } : player);
+  assert.equal(nextGameSession([match], invalid, 1, now).selectedPlayerIds.length, 13);
+  const unrated = pool.map((player) => player.id === 14 ? { ...player, elo: null } : player);
+  assert.equal(nextGameSession([match], unrated, 1, now).selectedPlayerIds.length, 13);
+});
+
+test('Continue loads the saved roster for the same id with copied membership and no invented locks', () => {
+  const m = { ...mk(11, null, '2026-10-01T00:00:00Z', range(1, 12)), status: 'upcoming', draftEditable: true, matchDate: '2026-11-01', scoreA: null, scoreB: null, winner: null };
+  m.teamA.forEach((p) => { p.assignedPosition = 'Setter'; p.assignmentStatus = 'preferred'; });
+  m.teamB.forEach((p) => { p.assignedPosition = 'Libero'; });
+  const s = editSession(m, 2, now);
+  assert.equal(s.editingMatchId, 11); assert.equal(s.step, 'teams'); assert.equal(s.matchDate, '2026-11-01');
+  assert.deepEqual(s.savedRoster.teamAIds, m.teamA.map((p) => p.id));
+  assert.equal(s.savedRoster.teamA.length, 6); assert.ok(!('locks' in s));
+  m.teamA[0].name = 'Changed'; m.teamA.pop();
+  assert.notEqual(s.sourcePlayers[0].name, 'Changed'); assert.equal(s.savedRoster.teamAIds.length, 6);
+  assert.throws(() => editSession({ ...m, draftEditable: false }, 1), /protected/);
+  assert.throws(() => editSession({ ...m, status: 'completed' }, 1), /protected/);
+});
+
+test('Start Over and edit session never share state, and fresh sessions drop the target', () => {
+  const m = { ...mk(11, null, '2026-10-01T00:00:00Z', range(1, 12)), status: 'upcoming', draftEditable: true };
+  const edit = editSession(m, 1, now);
+  const reset = freshSession(edit.generation + 1, now);
+  assert.equal(reset.editingMatchId, null); assert.equal(reset.savedRoster, null);
+  assert.equal(reset.step, 'date'); assert.deepEqual(reset.selectedPlayerIds, []);
 });
 
 for (const count of [12, 13, 14]) {
