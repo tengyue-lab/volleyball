@@ -316,6 +316,7 @@ export function assignMatchRoles(
   players: readonly MatchBalancePlayer[],
   teamAIds: readonly number[],
   teamBIds: readonly number[],
+  locks: readonly MatchLock[] = [],
 ): MatchRoleAssignments {
   validateRankedPool(players);
   if (![12, 13, 14].includes(players.length)) {
@@ -338,14 +339,23 @@ export function assignMatchRoles(
   if (!expectedSizes.some(([a, b]) => teamAIds.length === a && teamBIds.length === b)) {
     throw new Error('The team sizes do not match the selected pool.');
   }
+  validateMatchLocks(players, locks);
+  for (const lock of locks) {
+    const teamIds = lock.team === 'A' ? teamAIds : teamBIds;
+    if (!teamIds.includes(lock.playerId)) {
+      throw new Error(`Locked player ${lock.playerId} must stay on Team ${lock.team}.`);
+    }
+  }
 
   const playerById = new Map(players.map((player) => [player.id, player]));
   const teamAPlayers = teamAIds.map((id) => playerById.get(id)!);
   const teamBPlayers = teamBIds.map((id) => playerById.get(id)!);
+  const lockedRoles = new Map(locks.map((lock) => [lock.playerId, lock.position]));
   const { filledPlayerElo: _filledPlayerElo, ...result } = makeRoleAssignments(
     teamAPlayers,
     teamBPlayers,
     players.length,
+    lockedRoles,
   );
   return result;
 }

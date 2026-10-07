@@ -102,6 +102,7 @@ test('manual Swap Player uses lock-valid opposite-team candidates and preserves 
   assert.match(swapHandler, /setLocks\(swapped\.locks\)/);
   assert.match(swapHandler, /setTeamA\(swapped\.teamA\)/);
   assert.match(swapHandler, /setTeamB\(swapped\.teamB\)/);
+  assert.match(swapHandler, /assignMatchRoles\(selectedPlayers, swapped\.teamA, swapped\.teamB, swapped\.locks\)/);
   assert.doesNotMatch(swapHandler, /setSelectedPlayerIds|setDraft|balanceMatchTeams|fillMatchTeams/);
   assert.match(createMatchSource, /No valid players available to swap with\./);
 });

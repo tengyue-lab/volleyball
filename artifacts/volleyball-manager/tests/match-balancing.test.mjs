@@ -65,6 +65,8 @@ test('manual swap candidates allow any unlocked opponent but honor locked roles 
     { playerId: 5, team: 'B', position: 'Middle Blocker' },
   ];
   assert.deepEqual(getManualSwapCandidates(1, [1, 2], [3, 4, 5], locks), [4]);
+  assert.deepEqual(getManualSwapCandidates(2, [1, 2], [3, 4, 5], locks), []);
+  assert.deepEqual(getManualSwapCandidates(2, [1, 2], [3, 4, 5, 6], locks), [6]);
   assert.deepEqual(getManualSwapCandidates(1, [1, 2], [3], locks.slice(0, 1)), []);
   assert.deepEqual(getManualSwapCandidates(1, [1, 2], [5], [locks[0], locks[3]]), []);
 });
@@ -94,6 +96,24 @@ test('manual swap exchanges only the two team memberships and carries locks with
   assert.deepEqual(pool, [1, 2, 3, 4, 5]);
   assert.equal(swapManualTeamMembers(1, 4, teamA, teamB, locks), null);
   assert.equal(swapManualTeamMembers(1, 2, teamA, teamB, locks), null);
+});
+
+test('role assignment after a locked swap keeps both players in their locked roles on the fixed teams', () => {
+  const teamA = [1, 3, 4, 7, 8, 11];
+  const teamB = [2, 5, 6, 9, 10, 12];
+  const confirmedPool = OLD_ROLE_POOL.map((player) => ({ ...player, preferencesConfirmed: true }));
+  const locks = [
+    { playerId: 1, team: 'A', position: 'Setter' },
+    { playerId: 2, team: 'B', position: 'Setter' },
+  ];
+  const swapped = swapManualTeamMembers(1, 2, teamA, teamB, locks);
+  assert.ok(swapped);
+
+  const plan = assignMatchRoles(confirmedPool, swapped.teamA, swapped.teamB, swapped.locks);
+  assert.equal(plan.teamAAssignments.find((assignment) => assignment.playerId === 2)?.assignedPosition, 'Setter');
+  assert.equal(plan.teamBAssignments.find((assignment) => assignment.playerId === 1)?.assignedPosition, 'Setter');
+  assert.deepEqual(swapped.teamA, [2, 3, 4, 7, 8, 11]);
+  assert.deepEqual(swapped.teamB, [1, 5, 6, 9, 10, 12]);
 });
 
 function assertFormation(assignments, playerCount) {

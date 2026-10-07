@@ -838,12 +838,20 @@ function AdminMatchesPage() {
         setSwapSelectionId(null);
         return;
       }
+      let assignmentError = '';
+      try {
+        const planned = assignMatchRoles(selectedPlayers, swapped.teamA, swapped.teamB, swapped.locks);
+        setBalanceResult({ ...planned, teamAIds: swapped.teamA, teamBIds: swapped.teamB });
+        setBalancedProfiles(profilesFingerprint);
+      } catch (error) {
+        setBalanceResult(null);
+        setBalancedProfiles('');
+        assignmentError = messageFor(error);
+      }
       setTeamA(swapped.teamA);
       setTeamB(swapped.teamB);
       setLocks(swapped.locks);
-      setBalanceResult(null);
-      setBalancedProfiles('');
-      setCreateError('');
+      setCreateError(assignmentError);
       setSwapSelectionId(null);
       return;
     }
