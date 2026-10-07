@@ -23,7 +23,7 @@ const clerkAppearance = {
   options: {
     logoPlacement: 'inside' as const,
     logoLinkUrl: basePath || '/',
-    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
+    logoImageUrl: `${window.location.origin}${basePath}/wyndham-wombats-vc.png`,
   },
   variables: {
     colorPrimary: '#245c4c',
@@ -74,8 +74,8 @@ export function ClerkShell({ children }: { children: ReactNode }) {
       signInUrl={`${basePath}/sign-in`}
       signUpUrl={`${basePath}/sign-up`}
       localization={{
-        signIn: { start: { title: 'Welcome back to SIDEOUT', subtitle: 'Sign in to see your rating and profile' } },
-        signUp: { start: { title: 'Join the club roster', subtitle: 'Create an account to manage your ELO visibility' } },
+        signIn: { start: { title: 'Welcome back to Wyndham Wombats VC', subtitle: 'Sign in to see your rating and profile' } },
+        signUp: { start: { title: 'Join Wyndham Wombats VC', subtitle: 'Create an account to manage your ELO visibility' } },
       }}
       routerPush={(to) => setLocation(stripBase(to))}
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}

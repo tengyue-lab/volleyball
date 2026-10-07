@@ -120,7 +120,7 @@ function Shell({ children }: { children: ReactNode }) {
     ...(access.isAdmin ? [{ href: '/admin', label: 'Admin', icon: <ShieldCheck size={17} strokeWidth={1.8} /> }] : []),
   ];
   const currentTab = navItems.find((item) => item.href === location);
-  const currentTabLabel = currentTab?.label ?? (location === '/' ? 'Loading' : 'SIDEOUT');
+  const currentTabLabel = currentTab?.label ?? (location === '/' ? 'Loading' : 'Wyndham Wombats VC');
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -175,9 +175,9 @@ function Shell({ children }: { children: ReactNode }) {
               </Link>)}
             </nav>}
           </div>
-          <Link href="/" className="brand topbar-brand" data-testid="link-brand" aria-label="SIDEOUT home">
-            <span className="brand-mark" aria-hidden="true" />
-            <span><span className="brand-name">SIDEOUT</span><span className="brand-sub">CLUB ROSTER</span></span>
+          <Link href="/" className="brand topbar-brand" data-testid="link-brand" aria-label="Wyndham Wombats VC home">
+            <img className="topbar-brand-logo" src={`${basePath}/wyndham-wombats-vc.png`} alt="" aria-hidden="true" />
+            <span className="brand-name">Wyndham Wombats VC</span>
           </Link>
         </header>
         {children}
@@ -1268,7 +1268,7 @@ function UserPortalPage() {
   const { notice, setNotice } = useNotice();
   const player = playerQuery.data;
   return <Shell><main className="content">
-    <PageHeader eyebrow="Account / my profile" title="My profile" description={access.email ? `Signed in as ${access.email}.` : 'Your SIDEOUT account.'}>
+    <PageHeader eyebrow="Account / my profile" title="My profile" description={access.email ? `Signed in as ${access.email}.` : 'Your Wyndham Wombats VC account.'}>
       <button type="button" className="button button-secondary" onClick={() => void signOut({ redirectUrl: basePath || '/' })} data-testid="button-sign-out"><LogOut size={15} /> Sign out</button>
     </PageHeader>
     {access.status === 'error' ? <section className="panel"><ErrorState error={new Error('We could not verify your account.')} retry={access.retry} /></section> :
