@@ -304,6 +304,99 @@ def active_match_elo_changes(
     return [serialize_elo_history_row(row) for row in rows]
 
 
+def reverse_match_result(
+    connection: sqlite3.Connection, match_id: int
+) -> tuple[sqlite3.Row | None, str | None, int]:
+    """Use the same exact reversal for Edit Result and transactional deletion."""
+    match = connection.execute(
+        "SELECT * FROM matches WHERE id = ?", (match_id,)
+    ).fetchone()
+    if match is None:
+        return None, "Match not found.", 404
+    if match["status"] != "completed":
+        return None, "Only a completed match can be reopened.", 409
+
+    elo_changes = active_match_elo_changes(connection, match_id)
+    if not elo_changes:
+        return None, "This completed match has no ELO history to reverse.", 409
+    player_ids = [change["playerId"] for change in elo_changes]
+    placeholders = ",".join("?" for _ in player_ids)
+    last_change_id = max(change["id"] for change in elo_changes)
+    later_change = connection.execute(
+        f"""
+        SELECT h.id FROM elo_history h JOIN matches m ON m.id = h.match_id
+        WHERE h.player_id IN ({placeholders})
+          AND h.id > ? AND h.match_id != ? AND h.action = 'result'
+          AND m.status = 'completed'
+          AND h.id > COALESCE((SELECT MAX(r.id) FROM elo_history r
+              WHERE r.match_id = h.match_id AND r.action = 'reversal'), 0)
+        LIMIT 1
+        """,
+        (*player_ids, last_change_id, match_id),
+    ).fetchone()
+    if later_change is not None:
+        return None, (
+            "A later match has changed one or more of these players' ELO. "
+            "Reopen later results first so the rating history stays correct."
+        ), 409
+
+    player_rows = connection.execute(
+        f"SELECT * FROM players WHERE id IN ({placeholders})", player_ids
+    ).fetchall()
+    players_by_id = {row["id"]: row for row in player_rows}
+    reversed_at = utc_now()
+    for change in elo_changes:
+        player_id = change["playerId"]
+        current_player = players_by_id.get(player_id)
+        before_reversal = (
+            current_player["elo"] if current_player is not None
+            else change["eloAfter"]
+        )
+        restored_elo = change["eloBefore"]
+        recorded_counter = change["matchesPlayedBefore"]
+        # Legacy results never incremented the progression counter.
+        before_counter = (
+            current_player["matches_played"] if current_player is not None
+            else change["matchesPlayedAfter"]
+        ) if recorded_counter is not None else None
+        if current_player is not None:
+            connection.execute(
+                "UPDATE players SET elo = ?, matches_played = ? WHERE id = ?",
+                (restored_elo, recorded_counter if recorded_counter is not None
+                 else current_player["matches_played"], player_id),
+            )
+        connection.execute(
+            """
+            INSERT INTO elo_history (
+                player_id, match_id, elo_before, elo_after,
+                change_amount, action, created_at,
+                k_used, rank_before, rank_after, matches_played_before, matches_played_after
+            ) VALUES (?, ?, ?, ?, ?, 'reversal', ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                player_id, match_id, before_reversal, restored_elo,
+                restored_elo - before_reversal, reversed_at, change["kUsed"],
+                rank_for_elo(before_reversal) if change["rankAfter"] is not None else None,
+                change["rankBefore"], before_counter, recorded_counter,
+            ),
+        )
+    connection.execute(
+        """
+        UPDATE matches
+        SET score_a = NULL, score_b = NULL, winner = NULL,
+            completed_at = NULL, status = 'upcoming'
+        WHERE id = ?
+        """,
+        (match_id,),
+    )
+    connection.execute("UPDATE priority_events SET active = 0 WHERE match_id = ?", (match_id,))
+    replay_priority(connection, player_ids)
+    reopened = connection.execute(
+        "SELECT * FROM matches WHERE id = ?", (match_id,)
+    ).fetchone()
+    return reopened, None, 200
+
+
 def calculate_elo_updates(
     team_a_players: list[dict[str, Any]],
     team_b_players: list[dict[str, Any]],
@@ -725,15 +818,38 @@ def create_app(database_path: str | Path | None = None) -> Flask:
         return jsonify(serialize_match(match_row, draft_editable=True)), 200 if request.method == "PATCH" else 201
 
     @app.delete("/api/matches/<int:match_id>")
-    def delete_match_draft(match_id: int):
+    def delete_match(match_id: int):
         with database() as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
             if row is None:
                 return jsonify({"error": "Match not found."}), 404
-            if not draft_can_edit(connection, row):
-                return jsonify({"error": "Only unplayed drafts can be deleted. This match has result history."}), 409
-            # Retain even this draft's audit metadata. No cascade or ELO changes.
+            expected_status = request.args.get("expectedStatus")
+            if expected_status not in (None, "upcoming", "completed"):
+                return jsonify({"error": "Invalid expected match status."}), 400
+            if expected_status is not None and row["status"] != expected_status:
+                return jsonify({"error": "The match status changed. Refresh and confirm deletion again."}), 409
+            if row["status"] == "completed":
+                _, error, status = reverse_match_result(connection, match_id)
+                if error:
+                    return jsonify({"error": error}), status
+            else:
+                # Reopened matches retain history, but their applied result is
+                # already reversed. Never apply it again or erase active ELO.
+                if active_match_elo_changes(connection, match_id):
+                    return jsonify({"error": "This upcoming match still has an active ELO result and cannot be deleted safely."}), 409
+                if any(row[field] is not None for field in ("score_a", "score_b", "winner", "completed_at")):
+                    return jsonify({"error": "This match has inconsistent result state and cannot be deleted safely."}), 409
+                if connection.execute(
+                    "SELECT 1 FROM priority_events WHERE match_id = ? AND active = 1 LIMIT 1", (match_id,)
+                ).fetchone():
+                    return jsonify({"error": "This upcoming match still has active priority effects and cannot be deleted safely."}), 409
+
+            # Reversal, dependent-record cleanup and deletion share this
+            # transaction: a failure rolls all player changes back as well.
+            connection.execute("DELETE FROM elo_history WHERE match_id = ?", (match_id,))
+            connection.execute("DELETE FROM priority_events WHERE match_id = ?", (match_id,))
+            connection.execute("DELETE FROM assignment_audit WHERE match_id = ?", (match_id,))
             connection.execute("DELETE FROM matches WHERE id = ?", (match_id,))
         return "", 204
 
@@ -850,106 +966,9 @@ def create_app(database_path: str | Path | None = None) -> Flask:
     def reopen_match_result(match_id: int):
         with database() as connection:
             connection.execute("BEGIN IMMEDIATE")
-            match = connection.execute(
-                "SELECT * FROM matches WHERE id = ?", (match_id,)
-            ).fetchone()
-            if match is None:
-                return jsonify({"error": "Match not found."}), 404
-            if match["status"] != "completed":
-                return jsonify({"error": "Only a completed match can be reopened."}), 409
-
-            elo_changes = active_match_elo_changes(connection, match_id)
-            if not elo_changes:
-                return jsonify(
-                    {"error": "This completed match has no ELO history to reverse."}
-                ), 409
-            player_ids = [change["playerId"] for change in elo_changes]
-            placeholders = ",".join("?" for _ in player_ids)
-            last_change_id = max(change["id"] for change in elo_changes)
-            later_change = connection.execute(
-                f"""
-                SELECT h.id FROM elo_history h JOIN matches m ON m.id = h.match_id
-                WHERE h.player_id IN ({placeholders})
-                  AND h.id > ? AND h.match_id != ? AND h.action = 'result'
-                  AND m.status = 'completed'
-                  AND h.id > COALESCE((SELECT MAX(r.id) FROM elo_history r
-                      WHERE r.match_id = h.match_id AND r.action = 'reversal'), 0)
-                LIMIT 1
-                """,
-                (*player_ids, last_change_id, match_id),
-            ).fetchone()
-            if later_change is not None:
-                return jsonify(
-                    {
-                        "error": (
-                            "A later match has changed one or more of these players' ELO. "
-                            "Reopen later results first so the rating history stays correct."
-                        )
-                    }
-                ), 409
-
-            player_rows = connection.execute(
-                f"SELECT * FROM players WHERE id IN ({placeholders})", player_ids
-            ).fetchall()
-            players_by_id = {row["id"]: row for row in player_rows}
-            reversed_at = utc_now()
-            for change in elo_changes:
-                player_id = change["playerId"]
-                current_player = players_by_id.get(player_id)
-                before_reversal = (
-                    current_player["elo"] if current_player is not None
-                    else change["eloAfter"]
-                )
-                restored_elo = change["eloBefore"]
-                recorded_counter = change["matchesPlayedBefore"]
-                # Legacy results predate the progression counter. They never
-                # incremented it, so their rating-only reversal leaves it alone.
-                before_counter = (
-                    current_player["matches_played"] if current_player is not None
-                    else change["matchesPlayedAfter"]
-                ) if recorded_counter is not None else None
-                if current_player is not None:
-                    connection.execute(
-                        "UPDATE players SET elo = ?, matches_played = ? WHERE id = ?",
-                        (restored_elo, recorded_counter if recorded_counter is not None
-                         else current_player["matches_played"], player_id),
-                    )
-                connection.execute(
-                    """
-                    INSERT INTO elo_history (
-                        player_id, match_id, elo_before, elo_after,
-                        change_amount, action, created_at,
-                        k_used, rank_before, rank_after, matches_played_before, matches_played_after
-                    ) VALUES (?, ?, ?, ?, ?, 'reversal', ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        player_id,
-                        match_id,
-                        before_reversal,
-                        restored_elo,
-                        restored_elo - before_reversal,
-                        reversed_at,
-                        change["kUsed"],
-                        rank_for_elo(before_reversal) if change["rankAfter"] is not None else None,
-                        change["rankBefore"],
-                        before_counter,
-                        recorded_counter,
-                    ),
-                )
-            connection.execute(
-                """
-                UPDATE matches
-                SET score_a = NULL, score_b = NULL, winner = NULL,
-                    completed_at = NULL, status = 'upcoming'
-                WHERE id = ?
-                """,
-                (match_id,),
-            )
-            reopened_match = connection.execute(
-                "SELECT * FROM matches WHERE id = ?", (match_id,)
-            ).fetchone()
-            connection.execute("UPDATE priority_events SET active = 0 WHERE match_id = ?", (match_id,))
-            replay_priority(connection, player_ids)
+            reopened_match, error, status = reverse_match_result(connection, match_id)
+            if error:
+                return jsonify({"error": error}), status
         return jsonify(serialize_match(reopened_match))
 
     @app.errorhandler(404)

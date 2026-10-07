@@ -35,6 +35,18 @@ export function freshSession(generation = 0, now = new Date()): MatchSession {
   return { editingMatchId: null, savedRoster: null, generation, step: 'date', matchDate: localToday(now), selectedPlayerIds: [], sourcePlayers: [] };
 }
 
+export function clearDeletedMatchSession(session: MatchSession, matchId: number): MatchSession {
+  return session.editingMatchId === matchId ? freshSession(session.generation + 1) : session;
+}
+
+export function restoreFailedDeletionSession(current: MatchSession, previous: MatchSession): MatchSession {
+  // Do not overwrite another roster started while the request was in flight.
+  return current.generation === previous.generation + 1
+    && current.editingMatchId === null && current.step === 'date'
+    && current.selectedPlayerIds.length === 0
+    ? { ...previous, generation: current.generation + 1 } : current;
+}
+
 export function resultActionsReady(
   match: Pick<Match, 'status' | 'scoreA' | 'scoreB' | 'winner'>,
   saving = false,

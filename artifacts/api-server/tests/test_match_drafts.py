@@ -36,14 +36,19 @@ class MatchDraftTests(unittest.TestCase):
                 for table in ("players", "elo_history", "priority_events", "assignment_audit")
             }
 
-    def test_reset_removes_only_target_and_retains_every_audit_and_rating(self):
+    def test_reset_removes_only_target_and_its_assignments_without_rating_changes(self):
         completed = self.complete(self.create_match())
         draft = self.create_match()
         other = self.create_match()
         before = self.snapshot()
         response = self.client.delete(f"/api/matches/{draft['id']}")
         self.assertEqual(response.status_code, 204)
-        self.assertEqual(self.snapshot(), before)
+        after = self.snapshot()
+        for table in ("players", "elo_history", "priority_events"):
+            self.assertEqual(after[table], before[table])
+        self.assertEqual(after["assignment_audit"], [
+            row for row in before["assignment_audit"] if row[0] != draft["id"]
+        ])
         self.assertEqual(self.client.get(f"/api/matches/{draft['id']}").status_code, 404)
         self.assertEqual(self.client.get(f"/api/matches/{completed['id']}").get_json(), completed)
         self.assertEqual(self.client.get(f"/api/matches/{other['id']}").get_json(), other)
@@ -90,14 +95,13 @@ class MatchDraftTests(unittest.TestCase):
                 (match["id"], self.player_ids[0]),
             ).fetchone()[0], "preferred")
 
-    def test_completed_and_reopened_history_reject_reset_and_edit(self):
+    def test_completed_and_reopened_history_still_reject_edit(self):
         match = self.create_match()
         completed = self.complete(match)
         self.assertFalse(completed["draftEditable"])
         for current in (completed, self.client.post(f"/api/matches/{match['id']}/reopen").get_json()):
             before = self.snapshot()
             self.assertFalse(current["draftEditable"])
-            self.assertEqual(self.client.delete(f"/api/matches/{match['id']}").status_code, 409)
             self.assertEqual(self.client.patch(f"/api/matches/{match['id']}", json=self.body(match)).status_code, 409)
             self.assertEqual(self.snapshot(), before)
 
@@ -109,8 +113,8 @@ class MatchDraftTests(unittest.TestCase):
                 (match["id"], self.player_ids[0], "filled"),
             )
         self.assertFalse(self.client.get(f"/api/matches/{match['id']}").get_json()["draftEditable"])
-        self.assertEqual(self.client.delete(f"/api/matches/{match['id']}").status_code, 409)
         self.assertEqual(self.client.patch(f"/api/matches/{match['id']}", json=self.body(match)).status_code, 409)
+        self.assertEqual(self.client.delete(f"/api/matches/{match['id']}").status_code, 204)
 
     def test_admin_gate_and_missing_ids(self):
         match = self.create_match()
@@ -144,7 +148,7 @@ class MatchDraftTests(unittest.TestCase):
                 f"/api/matches/{match['id']}/result", json={"scoreA": 3, "scoreB": 1}
             ).status_code
         def remove():
-            return SignedClient(self.app).delete(f"/api/matches/{match['id']}").status_code
+            return SignedClient(self.app).delete(f"/api/matches/{match['id']}?expectedStatus=upcoming").status_code
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             result = executor.submit(complete)
             deletion = executor.submit(remove)

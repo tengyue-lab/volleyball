@@ -5,7 +5,7 @@ import { transformWithEsbuild } from 'vite';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
-  freshSession, localToday, nextSession, nextGameSession, editSession, latestCompletedMatch, reconcileSession,
+  freshSession, clearDeletedMatchSession, restoreFailedDeletionSession, localToday, nextSession, nextGameSession, editSession, latestCompletedMatch, reconcileSession,
   resultActionsReady, selectionCanContinue, validMatchDate, visiblePool,
 } from '../src/match-session.ts';
 
@@ -25,14 +25,46 @@ function completed(n = 14) {
 async function load(name) {
   const source = await readFile(new URL(`../src/components/${name}.tsx`, import.meta.url), 'utf8');
   const out = await transformWithEsbuild(source, `${name}.tsx`, { loader: 'tsx', jsx: 'automatic', format: 'esm' });
-  const code = out.code.replaceAll('"react/jsx-runtime"', JSON.stringify(import.meta.resolve('react/jsx-runtime')))
+  let code = out.code.replaceAll('"react/jsx-runtime"', JSON.stringify(import.meta.resolve('react/jsx-runtime')))
     .replaceAll('from "react"', `from ${JSON.stringify(import.meta.resolve('react'))}`);
+  if (name === 'MatchDeleteConfirmation') {
+    const dependency = await transformWithEsbuild(await readFile(new URL('../src/components/ConfirmDialog.tsx', import.meta.url), 'utf8'), 'ConfirmDialog.tsx', { loader: 'tsx', jsx: 'automatic', format: 'esm' });
+    const dep = dependency.code.replaceAll('"react/jsx-runtime"', JSON.stringify(import.meta.resolve('react/jsx-runtime'))).replaceAll('from "react"', `from ${JSON.stringify(import.meta.resolve('react'))}`);
+    code = code.replace('"./ConfirmDialog"', JSON.stringify(`data:text/javascript;base64,${Buffer.from(dep).toString('base64')}`));
+  }
   return import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 }
 const history = await load('MatchHistoryDetails');
 const MatchHistoryDetails = history.default;
 const { default: ConfirmDialog } = await load('ConfirmDialog');
 const { default: SavedRosterSummary } = await load('SavedRosterSummary');
+const { default: MatchDeleteConfirmation } = await load('MatchDeleteConfirmation');
+
+test('deletion clears only the target saved edit, and restores failed requests without overwriting another roster', () => {
+  const previous = { ...freshSession(8), editingMatchId: 17, step: 'teams', selectedPlayerIds: [1, 2], savedRoster: { teamAIds: [1], teamBIds: [2] } };
+  assert.equal(clearDeletedMatchSession(previous, 18), previous);
+  const cleared = clearDeletedMatchSession(previous, 17);
+  assert.equal(cleared.step, 'date');
+  assert.deepEqual(cleared.selectedPlayerIds, []);
+  assert.equal(cleared.savedRoster, null);
+  assert.equal(cleared.editingMatchId, null);
+  const restored = restoreFailedDeletionSession(cleared, previous);
+  assert.equal(restored.editingMatchId, 17);
+  assert.deepEqual(restored.selectedPlayerIds, [1, 2]);
+  const unrelated = { ...cleared, step: 'players', selectedPlayerIds: [3] };
+  assert.equal(restoreFailedDeletionSession(unrelated, previous), unrelated);
+});
+
+test('draft and completed deletion confirmations have distinct warnings and lock during deletion', () => {
+  const props = { pending: false, error: '', onConfirm() {}, onCancel() {} };
+  const draft = renderToStaticMarkup(createElement(MatchDeleteConfirmation, { ...props, completed: false }));
+  assert.ok(draft.includes('Delete this draft match?') && !draft.includes('reverse all ELO'));
+  const completed = renderToStaticMarkup(createElement(MatchDeleteConfirmation, { ...props, completed: true }));
+  assert.ok(completed.includes('reverse all ELO, rank, matches played and priority') && completed.includes('cannot be undone'));
+  const pending = renderToStaticMarkup(createElement(MatchDeleteConfirmation, { ...props, completed: true, pending: true, error: 'Later result blocks deletion' }));
+  assert.equal((pending.match(/disabled/g) ?? []).length, 2);
+  assert.ok(pending.includes('Later result blocks deletion'));
+});
 
 const hm = {
   id: 5,
@@ -79,7 +111,7 @@ test('saved roster summary requires explicit target and protects non-editable dr
   const ok = renderToStaticMarkup(createElement(SavedRosterSummary, { rosters, targetId: 7, busy: false, onSelect() {}, onContinue() {}, onReset() {} }));
   assert.ok(ok.includes('Reset Current Match') && ok.includes('Continue to Team Assignment') && !/disabled/.test(ok));
   const prot = renderToStaticMarkup(createElement(SavedRosterSummary, { rosters, targetId: 8, busy: false, onSelect() {}, onContinue() {}, onReset() {} }));
-  assert.equal((prot.match(/disabled/g) ?? []).length, 2);
+  assert.equal((prot.match(/disabled/g) ?? []).length, 1);
   assert.equal(renderToStaticMarkup(createElement(SavedRosterSummary, { rosters: [], targetId: null, busy: false, onSelect() {}, onContinue() {}, onReset() {} })), '');
 });
 

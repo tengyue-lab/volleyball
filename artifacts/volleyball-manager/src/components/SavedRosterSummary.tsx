@@ -18,13 +18,13 @@ export default function SavedRosterSummary({ rosters, targetId, busy, onSelect, 
         {rosters.map((roster) => <li key={roster.id}>
           <label className={`saved-summary-row ${roster.id === targetId ? 'selected' : ''}`}>
             <input type="radio" name="saved-roster-target" checked={roster.id === targetId} disabled={busy} onChange={() => onSelect(roster.id)} data-testid={`radio-saved-roster-${roster.id}`} />
-            <span><strong>{rosterLabel(roster)}</strong><small>{roster.teamA.length} vs {roster.teamB.length} players{roster.draftEditable === true ? '' : ' · Protected, has result history'}</small></span>
+            <span><strong>{rosterLabel(roster)}</strong><small>{roster.teamA.length} vs {roster.teamB.length} players{roster.draftEditable === true ? '' : ' · Reopened result'}</small></span>
           </label>
         </li>)}
       </ul>
-      {protectedTarget && <p className="field-hint" role="status">This roster has result history and cannot be edited or reset here.</p>}
+      {protectedTarget && <p className="field-hint" role="status">This roster has result history and cannot be edited here. Reset is allowed if its result has already been reversed.</p>}
       <div className="saved-summary-actions">
-        <button type="button" className="button button-warn touch-44" disabled={!target || protectedTarget || busy} onClick={onReset} data-testid="button-reset-current-match">Reset Current Match</button>
+        <button type="button" className="button button-warn touch-44" disabled={!target || busy} onClick={onReset} data-testid="button-reset-current-match">Reset Current Match</button>
         <button type="button" className="button button-primary touch-44" disabled={!target || protectedTarget || busy} onClick={onContinue} data-testid="button-continue-team-assignment">Continue to Team Assignment</button>
       </div>
     </div>

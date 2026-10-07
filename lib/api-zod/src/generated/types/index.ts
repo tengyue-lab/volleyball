@@ -11,6 +11,8 @@ export * from './adminAccess';
 export * from './adminAccessInput';
 export * from './appAccount';
 export * from './authViewer';
+export * from './deleteMatchDraftExpectedStatus';
+export * from './deleteMatchDraftParams';
 export * from './eloHistoryEntry';
 export * from './eloHistoryEntryAction';
 export * from './eloHistoryEntryKUsed';

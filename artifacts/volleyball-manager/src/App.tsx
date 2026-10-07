@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import type { DragEvent as ReactDragEvent, FormEvent, ReactNode } from 'react';
 import { Redirect } from 'wouter';
 import { useClerk } from '@clerk/react';
@@ -38,6 +39,7 @@ import { ArrowLeftRight, LogIn, LogOut, ShieldCheck, UserRound, CalendarDays, Ch
 import { Link, Route, Switch, useLocation, useSearch, Router as WouterRouter } from 'wouter';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
+import { toast } from '@/hooks/use-toast';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import {
   assignMatchRoles,
@@ -56,10 +58,11 @@ import RankedPositionInput from '@/components/RankedPositionInput';
 import AssignedPlayer from '@/components/AssignedPlayer';
 import { RankBadge, RankTransition } from '@/components/RankBadge';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import MatchDeleteConfirmation from '@/components/MatchDeleteConfirmation';
 import MatchHistoryDetails from '@/components/MatchHistoryDetails';
 import SavedRosterSummary, { rosterLabel } from '@/components/SavedRosterSummary';
 import { MatchSessionProvider, useMatchSession } from '@/match-session-context';
-import { draftEditable, editSession, freshSession, nextGameSession, reconcileSession, selectionCanContinue, validMatchDate, visiblePool } from '@/match-session';
+import { clearDeletedMatchSession, restoreFailedDeletionSession, draftEditable, editSession, freshSession, nextGameSession, reconcileSession, selectionCanContinue, validMatchDate, visiblePool } from '@/match-session';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchInterval: 5000, staleTime: 0, refetchIntervalInBackground: false, retry: 1 } } });
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -580,7 +583,54 @@ function HistoryDetails({ match }: { match: Match }) {
   return <MatchHistoryDetails match={{ ...match, eloChanges: detail.data?.eloChanges ?? [] }} eloState={opened ? eloState : 'ready'} onEloOpen={() => setOpened(true)} onEloRetry={() => void detail.refetch()} />;
 }
 
-function MatchCard({ match, expanded, onToggle }: { match: Match; expanded: boolean; onToggle: () => void }) {
+function useMatchDeletion() {
+  const mutation = useDeleteMatchDraft();
+  const client = useQueryClient();
+  const { draft, setDraft } = useMatchSession();
+  async function remove(match: Match, callbacks: { beforeDelete?: () => void; onSuccess: () => void; onError: (error: unknown) => void }) {
+    const previous = draft.editingMatchId === match.id ? draft : null;
+    // Close live score entry and clear only this roster's local edit state
+    // before submitting. A cancelled confirmation never reaches this point.
+    flushSync(() => {
+      setDraft((current) => clearDeletedMatchSession(current, match.id));
+      callbacks.beforeDelete?.();
+    });
+    try {
+      // Await the request directly: clearing a saved edit remounts Create
+      // Match, so per-observer mutate callbacks would be lost on unmount.
+      await mutation.mutateAsync({ matchId: match.id, params: { expectedStatus: match.status } });
+      await client.cancelQueries();
+      client.removeQueries({ queryKey: getGetMatchQueryKey(match.id) });
+      client.setQueryData<Match[]>(getListMatchesQueryKey(), (current) => current?.filter((row) => row.id !== match.id));
+      // Reversal affects public rankings, private profiles, counters and
+      // priority as well as the match list and player ELO histories.
+      await refreshEverything(client);
+      callbacks.onSuccess();
+    } catch (error) {
+      if (previous) setDraft((current) => restoreFailedDeletionSession(current, previous));
+      toast({ title: 'Match was not deleted', description: messageFor(error), variant: 'destructive' });
+      callbacks.onError(error);
+    }
+  }
+  return { ...mutation, remove };
+}
+
+function DeleteMatchButton({ match, beforeDelete }: { match: Match; beforeDelete: () => void }) {
+  const { isAdmin } = useAccess();
+  const deletion = useMatchDeletion();
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState('');
+  if (!isAdmin) return null;
+  return <>
+    <button className="button button-warn touch-44" data-testid={`button-delete-match-${match.id}`} disabled={deletion.isPending} onClick={() => { setError(''); setConfirming(true); }}><Trash2 size={14} />Delete Match</button>
+    {confirming && <MatchDeleteConfirmation completed={match.status === 'completed'} pending={deletion.isPending} error={error}
+      onCancel={() => setConfirming(false)}
+      onConfirm={() => { if (!deletion.isPending) deletion.remove(match, { beforeDelete, onSuccess: () => setConfirming(false), onError: (failure) => setError(messageFor(failure)) }); }}
+    />}
+  </>;
+}
+
+function MatchCard({ match, expanded, onToggle, beforeDelete }: { match: Match; expanded: boolean; onToggle: () => void; beforeDelete: () => void }) {
   const { isAdmin } = useAccess();
   const completed = match.status === 'completed';
   return <article className="panel match-card" data-testid={`card-match-${match.id}`}>
@@ -588,7 +638,7 @@ function MatchCard({ match, expanded, onToggle }: { match: Match; expanded: bool
     <div className="versus-row"><div className="versus-team">Team A<span>{match.teamA.length} players</span>{completed && <strong>{match.scoreA}</strong>}</div><span className="versus-word">{completed ? '–' : 'VS'}</span><div className="versus-team">Team B<span>{match.teamB.length} players</span>{completed && <strong>{match.scoreB}</strong>}</div></div>
     <div className="match-card-foot"><span>{completed ? `${match.winner} won` : 'Match roster saved'}</span>{!completed && <button className="text-button" onClick={onToggle} aria-expanded={expanded} data-testid={`button-view-match-${match.id}`}>{expanded ? 'Hide details' : completed ? 'View results' : isAdmin ? 'Enter score' : 'View roster'} <ChevronDown size={12} style={{ verticalAlign: 'middle', transform: expanded ? 'rotate(180deg)' : undefined }} /></button>}</div>
     {completed && <HistoryDetails match={match} />}
-    {completed && isAdmin && <EditResultButton matchId={match.id} />}
+    {isAdmin && <div className="history-actions">{completed && <EditResultButton matchId={match.id} />}<DeleteMatchButton match={match} beforeDelete={beforeDelete} /></div>}
     {!completed && expanded && <MatchDetail matchId={match.id} />}
   </article>;
 }
@@ -600,8 +650,8 @@ function AdminMatchesPage() {
   const matchesQuery = useListMatches();
   const createMatch = useCreateMatch();
   const updateDraft = useUpdateMatchDraft();
-  const deleteDraft = useDeleteMatchDraft();
-  const [targetId, setTargetId] = useState<number | null>(null);
+  const deleteDraft = useMatchDeletion();
+  const [targetId, setTargetId] = useState<number | null>(draft.editingMatchId);
   const [resetTarget, setResetTarget] = useState<Match | null>(null);
   const [resetError, setResetError] = useState('');
   const [confirmStartOver, setConfirmStartOver] = useState(false);
@@ -913,14 +963,13 @@ function AdminMatchesPage() {
   }
   function confirmReset() {
     if (!resetTarget || deleteDraft.isPending) return;
-    const id = resetTarget.id;
     setResetError('');
-    deleteDraft.mutate({ matchId: id }, {
-      onSuccess: async () => {
-        queryClient.removeQueries({ queryKey: getGetMatchQueryKey(id) });
-        await queryClient.invalidateQueries({ queryKey: getListMatchesQueryKey() });
+    deleteDraft.remove(resetTarget, {
+      onSuccess: () => {
         setResetTarget(null);
-        startOver();
+        // A new, unsaved selection can be reset normally. Do not discard an
+        // unrelated saved roster being edited while another target is deleted.
+        if (draft.editingMatchId === null) startOver();
       },
       onError: (error) => setResetError(messageFor(error)),
     });
@@ -982,7 +1031,7 @@ function AdminMatchesPage() {
     </ol>
     <div className="summary-strip"><span className="summary-num" data-testid="text-selected-count">Selected: {poolCount} / 12–14</span></div>
     {matchesQuery.isError && <div className="form-error" role="alert">Saved rosters could not be loaded. <button className="text-button" onClick={() => void matchesQuery.refetch()}>Try again</button></div>}
-    <SavedRosterSummary rosters={upcomingRosters} targetId={effectiveTargetId} busy={busy} onSelect={setTargetId} onContinue={continueTarget} onReset={() => { if (targetMatch && draftEditable(targetMatch)) { setResetError(''); setResetTarget(targetMatch); } }} />
+    <SavedRosterSummary rosters={upcomingRosters} targetId={effectiveTargetId} busy={busy} onSelect={setTargetId} onContinue={continueTarget} onReset={() => { if (targetMatch) { setResetError(''); setResetTarget(targetMatch); } }} />
     {summaryError && <div className="form-error" role="alert">{summaryError}</div>}
     {draft.editingMatchId !== null && <div className="position-warning" role="status" data-testid="status-editing-target"><strong>Editing saved {rosterLabel(upcomingRosters.find((m) => m.id === draft.editingMatchId) ?? { id: draft.editingMatchId, createdAt: '', teamA: [], teamB: [] })}</strong><span>Saving updates this roster instead of creating a new one.</span></div>}
     {draft.step === 'date' && draft.editingMatchId === null && nextGame && <div className="pool-actions"><button className="button button-primary touch-44" disabled={busy} onClick={startNextGame} data-testid="button-next-game">Next Game</button></div>}
@@ -1186,7 +1235,13 @@ function MatchCollectionPage({ type }: { type: 'current' | 'history' }) {
       <MatchDetail matchId={initialMatchId} />
     </section>}
     {matchesQuery.isLoading ? <LoadingState /> : matchesQuery.isError ? <ErrorState error={matchesQuery.error} retry={() => void matchesQuery.refetch()} /> :
-      matches.length ? <div className="match-list">{matches.map((match) => <MatchCard key={match.id} match={match} expanded={expandedMatch === match.id} onToggle={() => setExpandedMatch(expandedMatch === match.id ? null : match.id)} />)}</div> :
+      matches.length ? <div className="match-list">{matches.map((match) => <MatchCard key={match.id} match={match} expanded={expandedMatch === match.id} onToggle={() => setExpandedMatch(expandedMatch === match.id ? null : match.id)} beforeDelete={() => {
+        if (expandedMatch === match.id) setExpandedMatch(null);
+        if (initialMatchId === match.id) {
+          setDismissedResult(match.id);
+          navigate(isCurrent ? '/current-match' : '/match-history');
+        }
+      }} />)}</div> :
         <section className="panel"><EmptyState
           title={isCurrent ? 'No upcoming matches yet' : 'No completed matches yet'}
           copy={isCurrent ? 'Saved match rosters will appear here. Start a roster for the next club match.' : 'Completed matches and results will appear here.'}

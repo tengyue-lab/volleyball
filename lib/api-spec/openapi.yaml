@@ -318,16 +318,25 @@ paths:
     delete:
       operationId: deleteMatchDraft
       tags: [matches]
-      summary: Delete only an unplayed draft, retaining audit rows (admin only)
+      summary: Delete a match, reversing its completed result first (admin only)
+      description: Atomically reverses completed ELO, counters and priority before removing the match and its associated audit rows. Already-reversed results are not reversed twice. Later dependent results must be reopened first.
+      parameters:
+        - name: expectedStatus
+          in: query
+          required: false
+          description: Reject deletion if the status changed after the user confirmed.
+          schema:
+            type: string
+            enum: [upcoming, completed]
       responses:
         "204":
-          description: Draft deleted
+          description: Match and associated rows deleted after any required reversal
         "403":
           description: Admin required
         "404":
           description: Match not found
         "409":
-          description: Match already has result history
+          description: A later result depends on this match, or its result history cannot be safely reversed
   /matches/{matchId}/result:
     parameters:
       - name: matchId

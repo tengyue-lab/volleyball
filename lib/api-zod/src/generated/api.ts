@@ -644,10 +644,15 @@ export const UpdateMatchDraftResponse = zod.object({
 
 
 /**
- * @summary Delete only an unplayed draft, retaining audit rows (admin only)
+ * Atomically reverses completed ELO, counters and priority before removing the match and its associated audit rows. Already-reversed results are not reversed twice. Later dependent results must be reopened first.
+ * @summary Delete a match, reversing its completed result first (admin only)
  */
 export const DeleteMatchDraftParams = zod.object({
   "matchId": zod.coerce.number().int()
+})
+
+export const DeleteMatchDraftQueryParams = zod.object({
+  "expectedStatus": zod.enum(['upcoming', 'completed']).optional().describe('Reject deletion if the status changed after the user confirmed.')
 })
 
 export const DeleteMatchDraftResponse = zod.void()

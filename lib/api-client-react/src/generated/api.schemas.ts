@@ -332,3 +332,18 @@ export interface AdminAccessInput {
   email: string;
 }
 
+export type DeleteMatchDraftParams = {
+/**
+ * Reject deletion if the status changed after the user confirmed.
+ */
+expectedStatus?: DeleteMatchDraftExpectedStatus;
+};
+
+export type DeleteMatchDraftExpectedStatus = typeof DeleteMatchDraftExpectedStatus[keyof typeof DeleteMatchDraftExpectedStatus];
+
+
+export const DeleteMatchDraftExpectedStatus = {
+  upcoming: 'upcoming',
+  completed: 'completed',
+} as const;
+

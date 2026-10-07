@@ -25,6 +25,7 @@ import type {
   AdminAccessInput,
   AppAccount,
   AuthViewer,
+  DeleteMatchDraftParams,
   EloHistoryEntry,
   HealthStatus,
   Match,
@@ -1477,20 +1478,30 @@ export const useUpdateMatchDraft = <TError = ErrorType<void>,
       return useMutation(getUpdateMatchDraftMutationOptions(options));
     }
 
-export const getDeleteMatchDraftUrl = (matchId: number,) => {
+export const getDeleteMatchDraftUrl = (matchId: number,
+    params?: DeleteMatchDraftParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/matches/${matchId}`
+  return stringifiedParams.length > 0 ? `/api/matches/${matchId}?${stringifiedParams}` : `/api/matches/${matchId}`
 }
 
 /**
- * @summary Delete only an unplayed draft, retaining audit rows (admin only)
+ * Atomically reverses completed ELO, counters and priority before removing the match and its associated audit rows. Already-reversed results are not reversed twice. Later dependent results must be reopened first.
+ * @summary Delete a match, reversing its completed result first (admin only)
  */
-export const deleteMatchDraft = async (matchId: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+export const deleteMatchDraft = async (matchId: number,
+    params?: DeleteMatchDraftParams, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
 
-  return customFetch<void>(getDeleteMatchDraftUrl(matchId),
+  return customFetch<void>(getDeleteMatchDraftUrl(matchId,params),
   {
     ...options,
     method: 'DELETE'
@@ -1520,9 +1531,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteMatchDraft>>, DeleteMatchDraftMutationVariables> = (props) => {
-          const {matchId} = props ?? {};
+          const {matchId,params} = props ?? {};
 
-          return  deleteMatchDraft(matchId,requestOptions)
+          return  deleteMatchDraft(matchId,params,requestOptions)
         }
 
 
@@ -1535,10 +1546,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type DeleteMatchDraftMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMatchDraft>>>
 
     export type DeleteMatchDraftMutationError = ErrorType<void>
-    export type DeleteMatchDraftMutationVariables = {matchId: number}
+    export type DeleteMatchDraftMutationVariables = {matchId: number;params?: DeleteMatchDraftParams}
 
     /**
- * @summary Delete only an unplayed draft, retaining audit rows (admin only)
+ * @summary Delete a match, reversing its completed result first (admin only)
  */
 export const useDeleteMatchDraft = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMatchDraft>>, TError,DeleteMatchDraftMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
