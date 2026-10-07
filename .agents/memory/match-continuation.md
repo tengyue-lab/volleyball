@@ -21,8 +21,8 @@ When several saved upcoming rosters exist, the admin explicitly chooses which ro
 
 **How to apply:** Keep this distinct from Next Game, which starts a new match using the latest completed match's eligible pool. Reset targets only the selected saved draft; other upcoming rosters remain, so Current Match becomes empty only when no upcoming rosters remain.
 
-Draft reset must retain audit rows, even metadata for the deleted unplayed roster. Editing an unplayed draft may synchronize its role metadata, but completed or reopened-with-history rosters are protected.
+Admins must be able to delete unplayed drafts and completed matches. Completed deletion must first use the existing exact result reversal, restoring ELO, rank, matches played and priority. Remove the deleted match's associated audit rows only after that reversal, leaving no orphan records.
 
-**Why:** The user explicitly requested that reset not touch audit rows or ELO history. A reopened completed result is not a fresh draft merely because its status is upcoming.
+**Why:** The user explicitly requested safe completed-match deletion and no orphan audit rows. This supersedes the earlier rule that draft reset retained assignment metadata after deleting its match.
 
-**How to apply:** Check actual completion/history evidence before any draft mutation. Keep reset and edit semantics distinct; retain recorded teams and positions on Continue, using live ratings without reassigning roles just because names or ratings changed.
+**How to apply:** Keep reversal and deletion atomic, preserve unrelated match audits, and retain existing later-result dependency safeguards. Do not confuse deletion eligibility with draft-edit eligibility or reverse an already-reversed result twice. Continue still retains recorded teams and positions, using live ratings without reassigning roles merely because names or ratings changed.
