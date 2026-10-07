@@ -91,6 +91,21 @@ test('Lock Position menu renders each player’s saved preferences through the o
   assert.doesNotMatch(assignedPlayerSource, /MATCH_POSITIONS\.map/);
 });
 
+test('manual Swap Player uses lock-valid opposite-team candidates and preserves the selected pool', () => {
+  const start = createMatchSource.indexOf('function swapPlayers(');
+  const end = createMatchSource.indexOf('\n  function selectPlayerForSwap', start);
+  const swapHandler = createMatchSource.slice(start, end);
+
+  assert.match(createMatchSource, /getManualSwapCandidates\(swapSelectionId, teamA, teamB, locks\)/);
+  assert.match(createMatchSource, /swapCandidate=\{swapSelectionId === null \|\| swapSelectionId === player\.id \|\| swapCandidates\.includes\(player\.id\)\}/);
+  assert.match(swapHandler, /swapManualTeamMembers\(firstId, secondId, teamA, teamB, locks\)/);
+  assert.match(swapHandler, /setLocks\(swapped\.locks\)/);
+  assert.match(swapHandler, /setTeamA\(swapped\.teamA\)/);
+  assert.match(swapHandler, /setTeamB\(swapped\.teamB\)/);
+  assert.doesNotMatch(swapHandler, /setSelectedPlayerIds|setDraft|balanceMatchTeams|fillMatchTeams/);
+  assert.match(createMatchSource, /No valid players available to swap with\./);
+});
+
 test('moving between Create Match stages preserves the selected roster and date', () => {
   const initial = {
     ...freshSession(4, now),

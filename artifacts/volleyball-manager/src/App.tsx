@@ -51,6 +51,7 @@ import {
   type MatchPosition,
   type MatchPositionAssignment,
 } from '@/match-balancing';
+import { getManualSwapCandidates, swapManualTeamMembers } from '@/match-swap';
 import { ClerkShell } from '@/clerk-shell';
 import NotFound from '@/pages/not-found';
 import RankedPositionInput from '@/components/RankedPositionInput';
@@ -729,6 +730,19 @@ function AdminMatchesPage() {
         .map((assignment) => [assignment.playerId, assignment])
       : [],
   );
+  const selectedSwapRole = swapSelectionId === null
+    ? null
+    : roleAssignmentById.get(swapSelectionId)?.assignedPosition ?? null;
+  const oppositeSwapTeam = swapSelectionId === null
+    ? []
+    : teamA.includes(swapSelectionId) ? teamB : teamA;
+  const swapCandidates = swapSelectionId === null
+    ? []
+    : mode === 'manual'
+      ? getManualSwapCandidates(swapSelectionId, teamA, teamB, locks)
+      : selectedSwapRole
+        ? oppositeSwapTeam.filter((id) => roleAssignmentById.get(id)?.assignedPosition === selectedSwapRole)
+        : [];
   const total = teamA.length + teamB.length;
   const poolCount = selectedPlayers.length;
   const canContinue = selectionCanContinue(selectedPlayers) && validMatchDate(draft.matchDate);
@@ -805,12 +819,35 @@ function AdminMatchesPage() {
 
   function swapPlayers(firstId: number, secondId: number) {
     if (firstId === secondId) return;
-    if (lockedIds.has(firstId) || lockedIds.has(secondId)) { setCreateError('Locked players cannot be swapped. Unlock them first.'); setSwapSelectionId(null); return; }
     const firstIsA = teamA.includes(firstId);
     const secondIsA = teamA.includes(secondId);
     const firstIsB = teamB.includes(firstId);
     const secondIsB = teamB.includes(secondId);
     if (!(firstIsA && secondIsB) && !(firstIsB && secondIsA)) return;
+    if (mode === 'manual') {
+      const swapped = swapManualTeamMembers(firstId, secondId, teamA, teamB, locks);
+      if (!swapped) {
+        setCreateError('This swap would violate a locked position. Choose an eligible player on the opposite team.');
+        setSwapSelectionId(null);
+        return;
+      }
+      try {
+        validateMatchLocks(selectedPlayers, swapped.locks);
+      } catch (error) {
+        setCreateError(messageFor(error));
+        setSwapSelectionId(null);
+        return;
+      }
+      setTeamA(swapped.teamA);
+      setTeamB(swapped.teamB);
+      setLocks(swapped.locks);
+      setBalanceResult(null);
+      setBalancedProfiles('');
+      setCreateError('');
+      setSwapSelectionId(null);
+      return;
+    }
+    if (lockedIds.has(firstId) || lockedIds.has(secondId)) { setCreateError('Locked players cannot be swapped. Unlock them first.'); setSwapSelectionId(null); return; }
     if (!roleAssignments || roleAssignmentById.get(firstId)?.assignedPosition !== roleAssignmentById.get(secondId)?.assignedPosition) {
       setCreateError('Only players assigned the same position can swap. This keeps ranks and exact formations unchanged.');
       setSwapSelectionId(null);
@@ -842,17 +879,17 @@ function AdminMatchesPage() {
   }
 
   function selectPlayerForSwap(playerId: number) {
-    if (lockedIds.has(playerId) || !roleAssignments) return;
+    if (mode === 'auto' && (lockedIds.has(playerId) || !roleAssignments)) return;
     if (swapSelectionId === null || swapSelectionId === playerId) {
+      setCreateError('');
       setSwapSelectionId(swapSelectionId === playerId ? null : playerId);
       return;
     }
     const firstSide = teamA.includes(swapSelectionId) ? 'A' : 'B';
     const secondSide = teamA.includes(playerId) ? 'A' : 'B';
     if (firstSide !== secondSide) {
+      if (!swapCandidates.includes(playerId)) return;
       swapPlayers(swapSelectionId, playerId);
-    } else {
-      setSwapSelectionId(playerId);
     }
   }
 
@@ -1128,12 +1165,13 @@ function AdminMatchesPage() {
                   roleAssignment={roleAssignmentById.get(player.id)}
                   manual={mode === 'manual'}
                   lockedPosition={locks.find((lock) => lock.playerId === player.id)?.position}
-                  canSwap={mode === 'auto' || !!roleAssignments}
+                  canSwap={mode === 'auto' ? !!roleAssignments : teamA.length > 0 && teamB.length > 0}
                   onLock={(position) => lockPlayer(player.id, position)}
                   onUnlock={() => unlockPlayer(player.id)}
                   team="A"
                   swapSelectionId={swapSelectionId}
                   swapSelectionTeam={swapSelectionId === null ? null : teamA.includes(swapSelectionId) ? 'A' : 'B'}
+                  swapCandidate={swapSelectionId === null || swapSelectionId === player.id || swapCandidates.includes(player.id)}
                   onSelectSwap={selectPlayerForSwap}
                   onRemove={unassign}
                   onDragStart={handleDragStart}
@@ -1149,12 +1187,13 @@ function AdminMatchesPage() {
                   roleAssignment={roleAssignmentById.get(player.id)}
                   manual={mode === 'manual'}
                   lockedPosition={locks.find((lock) => lock.playerId === player.id)?.position}
-                  canSwap={mode === 'auto' || !!roleAssignments}
+                  canSwap={mode === 'auto' ? !!roleAssignments : teamA.length > 0 && teamB.length > 0}
                   onLock={(position) => lockPlayer(player.id, position)}
                   onUnlock={() => unlockPlayer(player.id)}
                   team="B"
                   swapSelectionId={swapSelectionId}
                   swapSelectionTeam={swapSelectionId === null ? null : teamA.includes(swapSelectionId) ? 'A' : 'B'}
+                  swapCandidate={swapSelectionId === null || swapSelectionId === player.id || swapCandidates.includes(player.id)}
                   onSelectSwap={selectPlayerForSwap}
                   onRemove={unassign}
                   onDragStart={handleDragStart}
@@ -1162,6 +1201,7 @@ function AdminMatchesPage() {
                 />) : <div className="field-hint">{mode === 'manual' ? 'Assign selected players here' : 'Run Auto-Balance Teams to build this side'}</div>}</div>
               </section>
             </div>
+            {swapSelectionId !== null && swapCandidates.length === 0 && <div className="field-hint" role="status" data-testid="status-no-swap-candidates">No valid players available to swap with.</div>}
             <div className="balance-summary" data-testid="summary-elo-gap">
               <span>Team ELO difference</span><strong>{eloGap.toLocaleString()}</strong>
               <small>Team A total {teamAElo.toLocaleString()} · Team B total {teamBElo.toLocaleString()}</small>

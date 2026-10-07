@@ -27,6 +27,7 @@ interface Props {
   team: 'A' | 'B';
   swapSelectionId: number | null;
   swapSelectionTeam: 'A' | 'B' | null;
+  swapCandidate: boolean;
   onSelectSwap: (id: number) => void;
   onRemove: (id: number) => void;
   onDragStart: (event: ReactDragEvent<HTMLDivElement>, id: number) => void;
@@ -40,7 +41,7 @@ interface Props {
 
 export default function AssignedPlayer({
   player, roleAssignment, team, swapSelectionId, swapSelectionTeam,
-  onSelectSwap, onRemove, onDragStart, onDrop,
+  swapCandidate, onSelectSwap, onRemove, onDragStart, onDrop,
   manual = false, lockedPosition, canSwap = true, onLock, onUnlock,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -49,6 +50,7 @@ export default function AssignedPlayer({
   const frozen = locked || !canSwap;
   const isSelectedForSwap = swapSelectionId === player.id;
   const isSwapTarget = swapSelectionId !== null && swapSelectionTeam !== team;
+  const showSwapButton = swapSelectionId === null || isSelectedForSwap || (isSwapTarget && swapCandidate);
   const swapLabel = isSelectedForSwap ? 'Cancel' : isSwapTarget ? 'Swap' : 'Choose';
   const lockOptions = preferredLockPositions(player.positions);
 
@@ -84,14 +86,14 @@ export default function AssignedPlayer({
       {manual && (locked
         ? <button type="button" className="ap-btn" onClick={() => { setOpen(false); onUnlock?.(); }} aria-label={`Unlock ${player.name}`} data-testid={`button-unlock-${player.id}`}><LockOpen size={12} />Unlock</button>
         : <button type="button" className="ap-btn" aria-expanded={open} aria-controls={`lock-selector-${player.id}`} aria-label={`Lock role for ${player.name}`} onClick={() => { setOpen((v) => !v); setRejected(null); }} data-testid={`button-lock-${player.id}`}><Lock size={12} />Lock</button>)}
-      <button
+      {showSwapButton && <button
         className={`swap-player ${isSelectedForSwap ? 'selected' : ''}`}
-        disabled={frozen}
+        disabled={!canSwap}
         aria-label={isSelectedForSwap ? `Cancel swap for ${player.name}` : isSwapTarget ? `Swap ${player.name} with selected player` : `Choose ${player.name} for swap`}
         aria-pressed={isSelectedForSwap}
         onClick={() => onSelectSwap(player.id)}
         data-testid={`button-swap-player-${player.id}`}
-      ><ArrowLeftRight size={12} />{swapLabel}</button>
+      ><ArrowLeftRight size={12} />{swapLabel}</button>}
       <button className="remove-player" disabled={locked} aria-label={`Remove ${player.name} from Team ${team}`} onClick={() => onRemove(player.id)} data-testid={`button-unassign-${player.id}`}><X size={14} /></button>
     </div>
     {manual && open && !locked && <fieldset className="ap-selector-wrap" id={`lock-selector-${player.id}`}>

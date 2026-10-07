@@ -1,0 +1,185 @@
+Please fix the existing **Swap Player** functionality in:
+
+**Create Match → Teams → Manual Team Selection**
+
+The Swap Player UI already exists, but the function is currently not working correctly.
+
+Do not redesign the team-selection interface and do not change the matchmaking or ELO algorithms. Fix the existing swap functionality with the rules below.
+
+## 1. Swapping when positions are NOT locked
+
+If the player being swapped does **not** have a locked position/role yet, they should be able to swap with **ANY player on the opposite team**.
+
+Example:
+
+Team A:
+- John — position not locked
+
+Team B:
+- Alex
+- Ben
+- Chris
+- David
+- etc.
+
+If I click Swap on John, all players on Team B should be valid swap options.
+
+Selecting Alex should result in:
+
+- John moves to Team B.
+- Alex moves to Team A.
+- All other players remain unchanged.
+
+The selected match roster/player pool must remain unchanged.
+
+## 2. Swapping when a position IS locked
+
+If the player being swapped has a **locked position**, they should only be allowed to swap with a player on the opposite team who has the **same locked position**.
+
+Example:
+
+John on Team A is locked as:
+
+**Setter**
+
+When I click Swap on John, only a player on Team B who is also locked as:
+
+**Setter**
+
+should be available as a swap option.
+
+Players locked as Outside, Middle, Opposite, Libero, etc. should not be valid swap options.
+
+## 3. Locked vs unlocked players
+
+Use this rule:
+
+**Player being swapped is unlocked**
+→ Can swap with ANY player on the opposite team.
+
+**Player being swapped is locked**
+→ Can only swap with an opposite-team player who is locked to the SAME role.
+
+Additionally, the swap must not invalidate an existing locked role.
+
+Therefore, if one player is locked and the other player is unlocked, do not allow that swap simply because the second player could theoretically play that position.
+
+A locked Setter should swap with another **locked Setter**, not merely an unlocked player who has Setter in their preferences.
+
+Locked roles should be treated as fixed constraints.
+
+## 4. Swap must preserve state correctly
+
+When a swap occurs:
+
+- Swap only the two selected players between Team A and Team B.
+- Do not clear the selected player pool.
+- Do not regenerate the teams.
+- Do not run Auto Balance / Generate Balanced Teams.
+- Do not change either player's saved position preferences.
+- Do not remove existing role locks.
+- Do not reset other manually assigned players.
+- Keep the user on the Teams step.
+
+This should be a direct manual swap.
+
+## 5. Swap UI
+
+When the user clicks Swap on a player, only show/select players from the **opposite team** who are valid swap candidates according to the rules above.
+
+For an unlocked player:
+→ Show all opposite-team players who can be swapped without violating an existing lock.
+
+For a locked player:
+→ Show only opposite-team players with the exact same locked role.
+
+If there are no valid swap candidates, clearly indicate that there are no valid players available to swap with rather than silently failing.
+
+## Examples
+
+### Example A — Neither player has locked roles
+
+Team A:
+John — unlocked
+
+Team B:
+Alex — unlocked
+
+John ↔ Alex
+
+**Allowed**
+
+---
+
+### Example B — Same locked role
+
+Team A:
+John — Setter 🔒
+
+Team B:
+Alex — Setter 🔒
+
+John ↔ Alex
+
+**Allowed**
+
+---
+
+### Example C — Different locked roles
+
+Team A:
+John — Setter 🔒
+
+Team B:
+Alex — Outside 🔒
+
+John ↔ Alex
+
+**Not allowed**
+
+---
+
+### Example D — Locked vs unlocked
+
+Team A:
+John — Setter 🔒
+
+Team B:
+Alex — unlocked
+
+Even if Setter is one of Alex's preferences:
+
+John ↔ Alex
+
+**Not allowed**
+
+The lock represents a fixed role assignment and should be preserved.
+
+## Important
+
+Please inspect the existing Swap Player implementation first and fix/reuse it rather than creating a second separate swapping system.
+
+Make the smallest targeted change necessary.
+
+Do NOT change:
+- Matchmaking algorithm
+- Generate Balanced Teams algorithm
+- ELO calculations
+- Position preference data
+- Player selection
+- Match saving
+- Unrelated UI
+
+After implementing, test:
+
+1. Unlocked player ↔ unlocked opposite-team player.
+2. Locked Setter ↔ locked Setter.
+3. Locked Setter cannot swap with locked Outside.
+4. Locked player cannot swap with an unlocked player.
+5. Swap correctly moves both players between teams.
+6. Existing role locks remain intact after swapping.
+7. Selected player pool remains intact.
+8. Generate Balanced Teams continues to work.
+9. Frontend builds successfully.
+
+Do not deploy.

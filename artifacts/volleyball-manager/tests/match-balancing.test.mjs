@@ -9,6 +9,7 @@ import {
   validateMatchLocks,
 } from '../src/match-balancing.ts';
 import { preferredLockPositions } from '../src/match-lock-options.ts';
+import { getManualSwapCandidates, swapManualTeamMembers } from '../src/match-swap.ts';
 
 const OLD_ROLE_POOL = [
   { id: 1, positions: ['Setter'], elo: 500 },
@@ -52,6 +53,47 @@ test('Lock Position choices follow each player’s own saved preference order wi
   assert.notDeepEqual(preferredLockPositions(setterPreferences), preferredLockPositions(middlePreferences));
   assert.deepEqual(preferredLockPositions(['Setter', 'not-a-role', 'Libero']), ['Setter', 'Libero']);
   assert.deepEqual(MATCH_POSITIONS.filter((position) => !setterPreferences.includes(position)), ['Middle Blocker', 'Libero']);
+});
+
+test('manual swap candidates allow any unlocked opponent but honor locked roles exactly', () => {
+  assert.deepEqual(getManualSwapCandidates(1, [1, 2], [3, 4, 5], []), [3, 4, 5]);
+
+  const locks = [
+    { playerId: 1, team: 'A', position: 'Setter' },
+    { playerId: 3, team: 'B', position: 'Outside Hitter' },
+    { playerId: 4, team: 'B', position: 'Setter' },
+    { playerId: 5, team: 'B', position: 'Middle Blocker' },
+  ];
+  assert.deepEqual(getManualSwapCandidates(1, [1, 2], [3, 4, 5], locks), [4]);
+  assert.deepEqual(getManualSwapCandidates(1, [1, 2], [3], locks.slice(0, 1)), []);
+  assert.deepEqual(getManualSwapCandidates(1, [1, 2], [5], [locks[0], locks[3]]), []);
+});
+
+test('manual swap exchanges only the two team memberships and carries locks with their players', () => {
+  const teamA = [1, 2];
+  const teamB = [3, 4];
+  const pool = [1, 2, 3, 4, 5];
+  const locks = [
+    { playerId: 1, team: 'A', position: 'Setter' },
+    { playerId: 3, team: 'B', position: 'Setter' },
+    { playerId: 4, team: 'B', position: 'Outside Hitter' },
+  ];
+  const swapped = swapManualTeamMembers(1, 3, teamA, teamB, locks);
+
+  assert.deepEqual(swapped, {
+    teamA: [3, 2],
+    teamB: [1, 4],
+    locks: [
+      { playerId: 1, team: 'B', position: 'Setter' },
+      { playerId: 3, team: 'A', position: 'Setter' },
+      { playerId: 4, team: 'B', position: 'Outside Hitter' },
+    ],
+  });
+  assert.deepEqual(teamA, [1, 2]);
+  assert.deepEqual(teamB, [3, 4]);
+  assert.deepEqual(pool, [1, 2, 3, 4, 5]);
+  assert.equal(swapManualTeamMembers(1, 4, teamA, teamB, locks), null);
+  assert.equal(swapManualTeamMembers(1, 2, teamA, teamB, locks), null);
 });
 
 function assertFormation(assignments, playerCount) {
