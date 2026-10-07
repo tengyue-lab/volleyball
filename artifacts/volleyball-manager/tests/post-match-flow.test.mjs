@@ -4,6 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { transformWithEsbuild } from 'vite';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { swapManualTeamMembers } from '../src/match-swap.ts';
+import { validateMatchLocks } from '../src/match-balancing.ts';
 import {
   freshSession, clearDeletedMatchSession, restoreFailedDeletionSession, localToday, nextSession, nextGameSession, editSession, latestCompletedMatch, reconcileSession,
   resultActionsReady, selectionCanContinue, updateMatchSessionStep, validMatchDate, visiblePool,
@@ -102,9 +104,98 @@ test('manual Swap Player uses lock-valid opposite-team candidates and preserves 
   assert.match(swapHandler, /setLocks\(swapped\.locks\)/);
   assert.match(swapHandler, /setTeamA\(swapped\.teamA\)/);
   assert.match(swapHandler, /setTeamB\(swapped\.teamB\)/);
-  assert.match(swapHandler, /assignMatchRoles\(selectedPlayers, swapped\.teamA, swapped\.teamB, swapped\.locks\)/);
   assert.doesNotMatch(swapHandler, /setSelectedPlayerIds|setDraft|balanceMatchTeams|fillMatchTeams/);
+  const manualHandler = swapHandler.slice(0, swapHandler.indexOf('    if (lockedIds.has(firstId)'));
+  assert.doesNotMatch(manualHandler, /assignMatchRoles|allSelectedAssigned|isRosterValid|selectionCanContinue/);
+  assert.match(manualHandler, /setBalanceResult\(null\)/);
+  assert.match(manualHandler, /setSavedRolesInvalidated\(true\)/);
+  assert.match(createMatchSource, /if \(saved && !savedRolesInvalidated/);
+  assert.match(createMatchSource, /canSwap=\{mode === 'auto' \? !!roleAssignments : teamA\.length > 0 && teamB\.length > 0\}/);
   assert.match(createMatchSource, /No valid players available to swap with\./);
+});
+
+// Execute the actual manual handler so these regressions cover its state updates,
+// rather than only the membership helper.
+const swapStart = createMatchSource.indexOf('function swapPlayers(');
+const autoSwapStart = createMatchSource.indexOf('    if (lockedIds.has(firstId)', swapStart);
+const manualSwapSource = createMatchSource.slice(swapStart, autoSwapStart) + '\n}';
+const manualSwapModule = await transformWithEsbuild(`
+  export function makeHandler(env) {
+    const { mode, teamA, teamB, locks, selectedPlayers, swapManualTeamMembers,
+      validateMatchLocks, messageFor, setTeamA, setTeamB, setLocks,
+      setBalanceResult, setBalancedProfiles, setSavedRolesInvalidated, setCreateError, setSwapSelectionId } = env;
+    ${manualSwapSource}
+    return swapPlayers;
+  }`, 'manual-swap.ts', { loader: 'ts', format: 'esm' });
+const { makeHandler } = await import(`data:text/javascript;base64,${Buffer.from(manualSwapModule.code).toString('base64')}`);
+
+function manualSwapFixture(locks = []) {
+  const state = {
+    teamA: [1, 3], teamB: [2, 4, 5], locks: structuredClone(locks),
+    selectedPlayers: structuredClone(pool.slice(0, 12)),
+    balanceResult: null, balancedProfiles: '', savedRolesInvalidated: false, createError: '', swapSelectionId: 1,
+    step: 'teams',
+  };
+  const before = structuredClone(state);
+  const setters = Object.fromEntries(
+    ['teamA', 'teamB', 'locks', 'balanceResult', 'balancedProfiles', 'savedRolesInvalidated', 'createError', 'swapSelectionId']
+      .map((key) => [`set${key[0].toUpperCase()}${key.slice(1)}`, (value) => { state[key] = value; }]),
+  );
+  const handler = makeHandler({
+    ...state, ...setters, mode: 'manual', swapManualTeamMembers,
+    validateMatchLocks, messageFor: (error) => error.message,
+  });
+  return { state, before, handler };
+}
+
+test('manual handler swaps partial teams without assigning pending roles or changing the pool/step', () => {
+  const { state, before, handler } = manualSwapFixture();
+  handler(1, 2);
+  assert.deepEqual(state.teamA, [2, 3]);
+  assert.deepEqual(state.teamB, [1, 4, 5]);
+  assert.deepEqual(state.selectedPlayers, before.selectedPlayers);
+  const unassigned = (s) => s.selectedPlayers.filter((p) => ![...s.teamA, ...s.teamB].includes(p.id));
+  assert.deepEqual(unassigned(state), unassigned(before));
+  assert.equal(unassigned(state).length, 7);
+  assert.equal(state.balanceResult, null);
+  assert.equal(state.savedRolesInvalidated, true);
+  assert.deepEqual(state.locks, []);
+  assert.equal(state.createError, '');
+  assert.equal(state.step, 'teams');
+  assert.equal(state.swapSelectionId, null);
+});
+
+test('manual handler carries same-role locks without generating roles for other players', () => {
+  const locks = [
+    { playerId: 1, team: 'A', position: 'Setter' },
+    { playerId: 2, team: 'B', position: 'Setter' },
+    { playerId: 4, team: 'B', position: 'Outside Hitter' },
+  ];
+  const { state, before, handler } = manualSwapFixture(locks);
+  handler(1, 2);
+  assert.deepEqual(state.teamA, [2, 3]);
+  assert.deepEqual(state.teamB, [1, 4, 5]);
+  assert.deepEqual(state.locks, [
+    { ...locks[0], team: 'B' }, { ...locks[1], team: 'A' }, locks[2],
+  ]);
+  assert.equal(state.balanceResult, null);
+  assert.deepEqual(state.selectedPlayers, before.selectedPlayers);
+  assert.equal(state.createError, '');
+  assert.equal(state.step, 'teams');
+});
+
+test('manual handler blocks different locked roles without changing team state', () => {
+  const { state, before, handler } = manualSwapFixture([
+    { playerId: 1, team: 'A', position: 'Setter' },
+    { playerId: 4, team: 'B', position: 'Outside Hitter' },
+  ]);
+  handler(1, 4);
+  assert.deepEqual(state.teamA, before.teamA);
+  assert.deepEqual(state.teamB, before.teamB);
+  assert.deepEqual(state.locks, before.locks);
+  assert.deepEqual(state.selectedPlayers, before.selectedPlayers);
+  assert.equal(state.balanceResult, null);
+  assert.match(state.createError, /violate a locked position/);
 });
 
 test('moving between Create Match stages preserves the selected roster and date', () => {

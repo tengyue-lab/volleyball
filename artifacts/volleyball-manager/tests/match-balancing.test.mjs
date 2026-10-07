@@ -98,22 +98,19 @@ test('manual swap exchanges only the two team memberships and carries locks with
   assert.equal(swapManualTeamMembers(1, 2, teamA, teamB, locks), null);
 });
 
-test('role assignment after a locked swap keeps both players in their locked roles on the fixed teams', () => {
-  const teamA = [1, 3, 4, 7, 8, 11];
-  const teamB = [2, 5, 6, 9, 10, 12];
-  const confirmedPool = OLD_ROLE_POOL.map((player) => ({ ...player, preferencesConfirmed: true }));
-  const locks = [
-    { playerId: 1, team: 'A', position: 'Setter' },
-    { playerId: 2, team: 'B', position: 'Setter' },
-  ];
-  const swapped = swapManualTeamMembers(1, 2, teamA, teamB, locks);
+test('partial manual teams swap while seven of twelve selected players remain unassigned', () => {
+  const selected = Array.from({ length: 12 }, (_, i) => i + 1);
+  const teamA = [1, 2];
+  const teamB = [3, 4, 5];
+  const unassigned = selected.filter((id) => ![...teamA, ...teamB].includes(id));
+  const swapped = swapManualTeamMembers(1, 3, teamA, teamB, []);
   assert.ok(swapped);
-
-  const plan = assignMatchRoles(confirmedPool, swapped.teamA, swapped.teamB, swapped.locks);
-  assert.equal(plan.teamAAssignments.find((assignment) => assignment.playerId === 2)?.assignedPosition, 'Setter');
-  assert.equal(plan.teamBAssignments.find((assignment) => assignment.playerId === 1)?.assignedPosition, 'Setter');
-  assert.deepEqual(swapped.teamA, [2, 3, 4, 7, 8, 11]);
-  assert.deepEqual(swapped.teamB, [1, 5, 6, 9, 10, 12]);
+  assert.deepEqual(swapped.teamA, [3, 2]);
+  assert.deepEqual(swapped.teamB, [1, 4, 5]);
+  assert.deepEqual(selected.filter((id) => ![...swapped.teamA, ...swapped.teamB].includes(id)), unassigned);
+  assert.equal(unassigned.length, 7);
+  assert.deepEqual(swapped.locks, []);
+  assert.deepEqual(Object.keys(swapped).sort(), ['locks', 'teamA', 'teamB']);
 });
 
 function assertFormation(assignments, playerCount) {

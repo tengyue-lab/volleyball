@@ -14,3 +14,9 @@ Fill may move manually placed unlocked players between teams. Only locked player
 **Why:** The user explicitly chose “Allow Fill to move unlocked players.”
 
 **How to apply:** Treat unlocked manual placement as provisional, not a hard team constraint. Fill and later ELO balancing must never move or reassign locked players.
+
+Manual Swap changes only team membership. Pending roles must remain pending; explicit locked positions travel with their players. Swaps must work with partial teams and an unassigned selected-player pool.
+
+**Why:** The user corrected automatic role assignment during manual swaps and explicitly prohibited assignment, Fill, balancing, and full-roster requirements in this action.
+
+**How to apply:** Keep manual swaps separate from generated role plans. Use opposite-team membership and lock compatibility, not roster completeness, to determine candidates. Do not revive generated roles from saved rosters after a swap.

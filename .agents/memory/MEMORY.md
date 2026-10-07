@@ -1,5 +1,5 @@
 - [Filled-role priority](filled-role-priority.md) — keep shortage fallback; preferred-role priority changes on match completion, not roster save.
-- [Manual Lock and Fill](manual-lock-fill.md) — locks follow formation capacity; Fill may move unlocked players, including those manually placed on a team.
+- [Manual team rules](manual-lock-fill.md) — locks follow formation capacity; Fill may move unlocked players; manual Swap changes membership only, even with partial teams.
 - [ELO privacy scope](elo-privacy-scope.md) — user approved sign-in, player ownership and admin access to enforce private ratings.
 - [Vite runtime dependencies](vite-runtime-dependencies.md) — matching installed React versions do not guarantee matching prebundled browser runtimes.
 - [Volleyball product context](volleyball-product-context.md) — 3–4 matches weekly, phone-first use, and all upcoming rosters count as Current Match.

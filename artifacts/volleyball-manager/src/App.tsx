@@ -658,6 +658,7 @@ function AdminMatchesPage() {
   const [teamB, setTeamB] = useState<number[]>(() => [...(draft.savedRoster?.teamBIds ?? [])]);
   const [balanceResult, setBalanceResult] = useState<MatchBalanceResult | null>(null);
   const [balancedProfiles, setBalancedProfiles] = useState('');
+  const [savedRolesInvalidated, setSavedRolesInvalidated] = useState(false);
   const [locks, setLocks] = useState<MatchLock[]>([]);
   const [swapSelectionId, setSwapSelectionId] = useState<number | null>(null);
   const [createError, setCreateError] = useState('');
@@ -698,7 +699,7 @@ function AdminMatchesPage() {
       if (locks.some((lock) => !(lock.team === 'A' ? teamA : teamB).includes(lock.playerId))) return null;
       if (balanceResult && balancedProfiles === profilesFingerprint && balanceResult.teamAIds.join(',') === teamA.join(',') && balanceResult.teamBIds.join(',') === teamB.join(',')) return balanceResult;
       const saved = draft.savedRoster;
-      if (saved && saved.teamA.length && saved.teamB.length && !locks.length && savedPreferencesUnchanged
+      if (saved && !savedRolesInvalidated && saved.teamA.length && saved.teamB.length && !locks.length && savedPreferencesUnchanged
         && saved.teamAIds.join(',') === teamA.join(',') && saved.teamBIds.join(',') === teamB.join(',')) {
         const result = assignMatchRoles(selected, teamA, teamB);
         const assignments = [...saved.teamA, ...saved.teamB];
@@ -723,7 +724,7 @@ function AdminMatchesPage() {
     } catch {
       return null;
     }
-  }, [players, selectedPlayerIds, teamA, teamB, balanceResult, balancedProfiles, profilesFingerprint, mode, locks, draft.savedRoster, savedPreferencesUnchanged]);
+  }, [players, selectedPlayerIds, teamA, teamB, balanceResult, balancedProfiles, profilesFingerprint, mode, locks, draft.savedRoster, savedPreferencesUnchanged, savedRolesInvalidated]);
   const roleAssignmentById = new Map(
     roleAssignments
       ? [...roleAssignments.teamAAssignments, ...roleAssignments.teamBAssignments]
@@ -838,20 +839,14 @@ function AdminMatchesPage() {
         setSwapSelectionId(null);
         return;
       }
-      let assignmentError = '';
-      try {
-        const planned = assignMatchRoles(selectedPlayers, swapped.teamA, swapped.teamB, swapped.locks);
-        setBalanceResult({ ...planned, teamAIds: swapped.teamA, teamBIds: swapped.teamB });
-        setBalancedProfiles(profilesFingerprint);
-      } catch (error) {
-        setBalanceResult(null);
-        setBalancedProfiles('');
-        assignmentError = messageFor(error);
-      }
       setTeamA(swapped.teamA);
       setTeamB(swapped.teamB);
       setLocks(swapped.locks);
-      setCreateError(assignmentError);
+      setBalanceResult(null);
+      setBalancedProfiles('');
+      // Swapping back to saved team membership must not revive generated roles.
+      setSavedRolesInvalidated(true);
+      setCreateError('');
       setSwapSelectionId(null);
       return;
     }
