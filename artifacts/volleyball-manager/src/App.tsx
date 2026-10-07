@@ -35,7 +35,7 @@ import {
   getListPlayersQueryKey,
 } from '@workspace/api-client-react';
 import type { Match, Player, PlayerInput, PlayerUpdate, Position as PositionType } from '@workspace/api-client-react';
-import { ArrowLeftRight, LogIn, LogOut, ShieldCheck, UserRound, CalendarDays, Check, ChevronDown, ClipboardList, Menu, Pencil, Plus, Search, Trophy, Trash2, Users, WandSparkles, X } from 'lucide-react';
+import { LogIn, LogOut, ShieldCheck, UserRound, CalendarDays, Check, ChevronDown, ClipboardList, Menu, Pencil, Plus, Search, Trophy, Trash2, Users, WandSparkles, X } from 'lucide-react';
 import { Link, Route, Switch, useLocation, useSearch, Router as WouterRouter } from 'wouter';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -44,7 +44,6 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import {
   assignMatchRoles,
   balanceMatchTeams,
-  balanceAssignedTeams,
   fillMatchTeams,
   validateMatchLocks,
   type MatchLock,
@@ -63,7 +62,7 @@ import MatchHistoryDetails from '@/components/MatchHistoryDetails';
 import LeaderboardTable from '@/components/LeaderboardTable';
 import SavedRosterSummary, { rosterLabel } from '@/components/SavedRosterSummary';
 import { MatchSessionProvider, useMatchSession } from '@/match-session-context';
-import { clearDeletedMatchSession, restoreFailedDeletionSession, draftEditable, editSession, freshSession, nextGameSession, reconcileSession, selectionCanContinue, validMatchDate, visiblePool } from '@/match-session';
+import { clearDeletedMatchSession, restoreFailedDeletionSession, draftEditable, editSession, freshSession, nextGameSession, reconcileSession, selectionCanContinue, updateMatchSessionStep, validMatchDate, visiblePool } from '@/match-session';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchInterval: 5000, staleTime: 0, refetchIntervalInBackground: false, retry: 1 } } });
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -882,16 +881,6 @@ function AdminMatchesPage() {
     } catch (error) { setCreateError(messageFor(error)); }
   }
 
-  function eloBalance() {
-    if (!roleAssignments) return;
-    try {
-      const result = balanceAssignedTeams(selectedPlayers, {...roleAssignments, teamAIds: teamA, teamBIds: teamB}, locks);
-      setTeamA(result.teamAIds); setTeamB(result.teamBIds); setBalanceResult(result);
-      setBalancedProfiles(profilesFingerprint);
-      setSwapSelectionId(null); setCreateError('');
-    } catch (error) { setCreateError(messageFor(error)); }
-  }
-
   function lockPlayer(playerId: number, position: MatchPosition): boolean {
     const team = teamA.includes(playerId) ? 'A' : teamB.includes(playerId) ? 'B' : null;
     if (!team) { setCreateError('Place this player on a team before locking a position.'); return false; }
@@ -932,6 +921,11 @@ function AdminMatchesPage() {
   const targetMatch = upcomingRosters.find((m) => m.id === effectiveTargetId) ?? null;
   const nextGame = matchesQuery.isSuccess && playersQuery.isSuccess ? nextGameSession(matchesQuery.data, playersQuery.data, 0) : null;
   const hasDraftState = selectedPlayerIds.length > 0 || teamA.length > 0 || teamB.length > 0 || draft.editingMatchId !== null || draft.step !== 'date';
+  const stepVisibility = {
+    date: draft.step === 'date',
+    players: draft.step === 'players',
+    teams: draft.step === 'teams',
+  };
 
   function requestStartOver() {
     if (busy) return;
@@ -1017,43 +1011,37 @@ function AdminMatchesPage() {
     <ol className="session-steps" aria-label="Match creation steps">
       {(['date', 'players', 'teams'] as const).map((step, index) => <li key={step} aria-current={draft.step === step ? 'step' : undefined}>{index + 1}. {step === 'date' ? 'Date' : step === 'players' ? 'Players' : 'Teams'}</li>)}
     </ol>
-    <div className="summary-strip"><span className="summary-num" data-testid="text-selected-count">Selected: {poolCount} / 12–14</span></div>
+    <div className="summary-strip match-session-summary">
+      <span className="summary-num" data-testid="text-selected-count">Selected: {poolCount} / 12–14</span>
+      {hasDraftState && <button className="button button-secondary touch-44 start-over-button" disabled={busy} onClick={requestStartOver} data-testid="button-start-over">Start Over</button>}
+    </div>
     {matchesQuery.isError && <div className="form-error" role="alert">Saved rosters could not be loaded. <button className="text-button" onClick={() => void matchesQuery.refetch()}>Try again</button></div>}
     <SavedRosterSummary rosters={upcomingRosters} targetId={effectiveTargetId} busy={busy} onSelect={setTargetId} onContinue={continueTarget} onReset={() => { if (targetMatch) { setResetError(''); setResetTarget(targetMatch); } }} />
     {summaryError && <div className="form-error" role="alert">{summaryError}</div>}
     {draft.editingMatchId !== null && <div className="position-warning" role="status" data-testid="status-editing-target"><strong>Editing saved {rosterLabel(upcomingRosters.find((m) => m.id === draft.editingMatchId) ?? { id: draft.editingMatchId, createdAt: '', teamA: [], teamB: [] })}</strong><span>Saving updates this roster instead of creating a new one.</span></div>}
-    {draft.step === 'date' && draft.editingMatchId === null && nextGame && <div className="pool-actions"><button className="button button-primary touch-44" disabled={busy} onClick={startNextGame} data-testid="button-next-game">Next Game</button></div>}
-    <section className="panel session-date" aria-label="Match date">
+    {stepVisibility.date && draft.editingMatchId === null && nextGame && <aside className="panel next-game-shortcut" aria-label="Reuse the previous match roster" data-testid="card-next-game">
+      <div><strong>Start with the last roster</strong><p>{nextGame.selectedPlayerIds.length} eligible players from the most recent completed match will be pre-selected.</p></div>
+      <button className="button button-secondary touch-44" disabled={busy} onClick={startNextGame} data-testid="button-next-game">Next Game</button>
+    </aside>}
+    <section className="panel session-date" aria-label="Match date" hidden={!stepVisibility.date} data-testid="step-match-date">
       <div className="form-field"><label htmlFor="match-date">Match date {draft.step === 'date' ? '· Step 1' : ''}</label><input id="match-date" type="date" required value={draft.matchDate} onChange={(event) => setDraft((current) => ({ ...current, matchDate: event.target.value }))} data-testid="input-match-date" /></div>
-      {draft.step === 'date' && <button className="button button-primary" disabled={!validMatchDate(draft.matchDate)} onClick={() => setDraft((current) => ({ ...current, step: 'players' }))} data-testid="button-date-continue">Continue to players</button>}
-      {hasDraftState && <button className="button button-secondary start-over-button" disabled={busy} onClick={requestStartOver} data-testid="button-start-over">Start Over</button>}
+      <button className="button button-primary touch-44" disabled={!validMatchDate(draft.matchDate)} onClick={() => setDraft((current) => updateMatchSessionStep(current, 'players'))} data-testid="button-date-continue">Continue to players</button>
       {!validMatchDate(draft.matchDate) && <p className="form-error" role="alert">Choose a valid match date before continuing.</p>}
     </section>
-    {playersQuery.isSuccess && carried.missing.length > 0 && <div className="position-warning" role="status" data-testid="warning-missing-players"><strong>Some previous players are no longer on the roster</strong><span>{carried.missing.map((player) => player.name).join(' · ')}</span><small>Select replacements to reach 12–14 players.</small></div>}
-    {roleAssignments?.positionShortages.length ? <div className="position-warning" role="alert" data-testid="warning-position-shortage">
+    {stepVisibility.players && playersQuery.isSuccess && carried.missing.length > 0 && <div className="position-warning" role="status" data-testid="warning-missing-players"><strong>Some previous players are no longer on the roster</strong><span>{carried.missing.map((player) => player.name).join(' · ')}</span><small>Select replacements to reach 12–14 players.</small></div>}
+    {stepVisibility.teams && roleAssignments?.positionShortages.length ? <div className="position-warning" role="alert" data-testid="warning-position-shortage">
       <strong>Some positions were short in this pool</strong>
       <span>{roleAssignments.positionShortages.map((shortage) =>
         `${shortage.position}: ${shortage.filledCount} Filled player${shortage.filledCount === 1 ? '' : 's'}`,
       ).join(' · ')}</span>
       <small>Those slots are still assigned to the highest-ELO available players.</small>
     </div> : null}
-    <div className="match-builder-layout" hidden={draft.step === 'date'}>
+    <div className="match-builder-layout" hidden={stepVisibility.date}>
       <section className="panel builder-panel" aria-label="Build a match roster">
-        <div className="panel-head"><div><h2 className="panel-title">Build a match</h2><div className="panel-note">Select a pool first; team assignments can be automatic or manual</div></div><span className="count-chip">{poolCount} / 14 selected</span></div>
-        <div className="builder-intro"><strong>Exact role formation</strong><p>Every side gets 1 Setter, 2 Outside Hitters, 2 Middle Blockers, and 1 Opposite. Seven-player sides add 1 Libero. Auto-Balance preserves these roles while reducing the team ELO gap.</p></div>
-        <div className="role-legend" aria-label="Role assignment legend">
-          <strong>Role badges</strong>
-          <RoleBadge assignedPosition="Setter" status="preferred" />
-          <RoleBadge assignedPosition="Middle Blocker" status="filled" />
-          <span>Preferred means the role is on the player profile; Filled means they covered a role no preferred player could fill.</span>
-        </div>
+        <div className="panel-head"><div><h2 className="panel-title">Build a match</h2><div className="panel-note">Select players in Step 2, then assign and balance teams in Step 3.</div></div><span className="count-chip">{poolCount} / 14 selected</span></div>
         {playersQuery.isLoading ? <LoadingState lines={3} /> : playersQuery.isError ? <ErrorState error={playersQuery.error} retry={() => void playersQuery.refetch()} /> :
           <>
-            <div className="match-mode-switch" role="group" aria-label="Choose match assignment mode">
-              <button className={`mode-button ${mode === 'auto' ? 'active' : ''}`} aria-pressed={mode === 'auto'} onClick={() => changeMode('auto')} data-testid="button-mode-auto"><WandSparkles size={14} />Auto-Balance</button>
-              <button className={`mode-button ${mode === 'manual' ? 'active' : ''}`} aria-pressed={mode === 'manual'} onClick={() => changeMode('manual')} data-testid="button-mode-manual"><Users size={14} />Manual Assign</button>
-            </div>
-            <div className="pool-selection">
+            <div className="pool-selection" hidden={!stepVisibility.players} data-testid="step-player-selection">
               <div className="pool-selection-head">
                 <div><h3>Select the player pool · Step 2</h3><p>Choose 12 to 14 players. You can select no more than 14.</p></div>
                 <span className="count-chip">{poolCount} selected</span>
@@ -1082,19 +1070,29 @@ function AdminMatchesPage() {
                     </label>;
                   })}
                 </div>}
-              {draft.step === 'teams' && mode === 'auto' && <div className="pool-actions">
-                <button className="button button-primary" onClick={autoBalance} disabled={poolCount < 12 || poolCount > 14} data-testid="button-auto-balance"><WandSparkles size={14} />Auto-Balance Teams</button>
-                <button className="button button-quiet" onClick={() => { setSelectedPlayerIds([]); setTeamA([]); setTeamB([]); setBalanceResult(null); setSwapSelectionId(null); }} disabled={poolCount === 0} data-testid="button-clear-pool">Clear selection</button>
-              </div>}
               {draft.step === 'players' && <div className="pool-actions">
-                <button className="button button-primary" disabled={!canContinue} onClick={() => setDraft((current) => ({ ...current, step: 'teams' }))} data-testid="button-players-continue">Continue to teams</button>
+                <button className="button button-primary touch-44" disabled={!canContinue} onClick={() => setDraft((current) => updateMatchSessionStep(current, 'teams'))} data-testid="button-players-continue">Continue to teams</button>
                 <button className="button button-quiet" disabled={poolCount === 0 || locks.length > 0} onClick={() => { setSelectedPlayerIds([]); setTeamA([]); setTeamB([]); setBalanceResult(null); setSwapSelectionId(null); }} data-testid="button-clear-pool">Clear selection</button>
                 {!canContinue && <small>Select 12–14 players with confirmed preferences, including at least one Setter, and a valid date.</small>}
               </div>}
             </div>
-            <div hidden={draft.step !== 'teams'}>
-            <div className="pool-actions"><button className="button button-secondary" onClick={() => setDraft((current) => ({ ...current, step: 'players' }))} data-testid="button-back-players">Back to players</button></div>
-            <div className="pool-actions"><button className="button button-secondary" disabled={!isRosterValid} onClick={eloBalance} data-testid="button-elo-balance"><ArrowLeftRight size={14} />ELO Balancer</button><small>Same-position swaps only; assigned ranks stay fixed.</small></div>
+            <div className="team-step" hidden={!stepVisibility.teams} data-testid="step-team-assignment">
+            <div className="pool-actions"><button className="button button-secondary touch-44" onClick={() => setDraft((current) => updateMatchSessionStep(current, 'players'))} data-testid="button-back-players">Back to players</button></div>
+            <div className="builder-intro"><strong>Exact role formation</strong><p>Every side gets 1 Setter, 2 Outside Hitters, 2 Middle Blockers, and 1 Opposite. Seven-player sides add 1 Libero. Auto-Balance preserves these roles while reducing the team ELO gap.</p></div>
+            <div className="role-legend" aria-label="Role assignment legend">
+              <strong>Role badges</strong>
+              <RoleBadge assignedPosition="Setter" status="preferred" />
+              <RoleBadge assignedPosition="Middle Blocker" status="filled" />
+              <span>Preferred means the role is on the player profile; Filled means they covered a role no preferred player could fill.</span>
+            </div>
+            <div className="match-mode-switch" role="group" aria-label="Choose match assignment mode">
+              <button className={`mode-button ${mode === 'auto' ? 'active' : ''}`} aria-pressed={mode === 'auto'} onClick={() => changeMode('auto')} data-testid="button-mode-auto"><WandSparkles size={14} />Auto-Balance</button>
+              <button className={`mode-button ${mode === 'manual' ? 'active' : ''}`} aria-pressed={mode === 'manual'} onClick={() => changeMode('manual')} data-testid="button-mode-manual"><Users size={14} />Manual Assign</button>
+            </div>
+            {mode === 'auto' && <div className="pool-actions">
+              <button className="button button-primary touch-44" onClick={autoBalance} disabled={poolCount < 12 || poolCount > 14} data-testid="button-auto-balance"><WandSparkles size={14} />Auto-Balance Teams</button>
+              <button className="button button-quiet touch-44" onClick={() => { setSelectedPlayerIds([]); setTeamA([]); setTeamB([]); setBalanceResult(null); setSwapSelectionId(null); }} disabled={poolCount === 0} data-testid="button-clear-pool">Clear selection</button>
+            </div>}
             {mode === 'manual' && <>
               <div className="manual-assign-head"><strong>Manual assignment</strong><span>Place players with + A / + B and lock preferred roles. Fill may move any unlocked player.</span></div>
               <div className="pool-actions">

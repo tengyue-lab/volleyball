@@ -6,10 +6,11 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   freshSession, clearDeletedMatchSession, restoreFailedDeletionSession, localToday, nextSession, nextGameSession, editSession, latestCompletedMatch, reconcileSession,
-  resultActionsReady, selectionCanContinue, validMatchDate, visiblePool,
+  resultActionsReady, selectionCanContinue, updateMatchSessionStep, validMatchDate, visiblePool,
 } from '../src/match-session.ts';
 
 const now = new Date(2026, 9, 7, 0, 15);
+const createMatchSource = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
 const pool = Array.from({ length: 14 }, (_, i) => ({
   id: i + 1, name: `Player ${String(i + 1).padStart(2, '0')}`,
   positions: i < 2 ? ['Setter', 'Opposite'] : ['Outside Hitter'],
@@ -39,6 +40,47 @@ const MatchHistoryDetails = history.default;
 const { default: ConfirmDialog } = await load('ConfirmDialog');
 const { default: SavedRosterSummary } = await load('SavedRosterSummary');
 const { default: MatchDeleteConfirmation } = await load('MatchDeleteConfirmation');
+
+test('Create Match keeps Date, Players and Teams as distinct stages', () => {
+  const shortcutStart = createMatchSource.indexOf('<aside className="panel next-game-shortcut"');
+  const shortcutEnd = createMatchSource.indexOf('</aside>', shortcutStart);
+  const dateStart = createMatchSource.indexOf('<section className="panel session-date"');
+  const dateEnd = createMatchSource.indexOf('</section>', dateStart);
+  const dateMarkup = createMatchSource.slice(dateStart, dateEnd);
+
+  assert.ok(shortcutStart >= 0 && shortcutEnd > shortcutStart && shortcutStart < dateStart);
+  assert.match(createMatchSource.slice(shortcutStart, shortcutEnd), /data-testid="button-next-game"/);
+  assert.equal((dateMarkup.match(/data-testid="button-date-continue"/g) ?? []).length, 1);
+  assert.ok(!dateMarkup.includes('Next Game'));
+  assert.match(createMatchSource, /className="pool-selection" hidden=\{!stepVisibility\.players\} data-testid="step-player-selection"/);
+  assert.match(createMatchSource, /className="team-step" hidden=\{!stepVisibility\.teams\} data-testid="step-team-assignment"/);
+  assert.match(createMatchSource, /className="match-builder-layout" hidden=\{stepVisibility\.date\}/);
+  assert.match(createMatchSource, /data-testid="button-auto-balance"/);
+  assert.match(createMatchSource, /data-testid="button-fill"/);
+  assert.match(createMatchSource, /balanceMatchTeams\(selectedPlayers\)/);
+  assert.doesNotMatch(createMatchSource, /button-elo-balance|function eloBalance/);
+});
+
+test('moving between Create Match stages preserves the selected roster and date', () => {
+  const initial = {
+    ...freshSession(4, now),
+    matchDate: '2026-11-14',
+    selectedPlayerIds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    sourcePlayers: [{ id: 1, name: 'Player 01', positions: ['Setter'] }],
+  };
+  const players = updateMatchSessionStep(initial, 'players');
+  const teams = updateMatchSessionStep(players, 'teams');
+  const backToPlayers = updateMatchSessionStep(teams, 'players');
+
+  for (const session of [players, teams, backToPlayers]) {
+    assert.deepEqual(session.selectedPlayerIds, initial.selectedPlayerIds);
+    assert.equal(session.matchDate, initial.matchDate);
+    assert.deepEqual(session.sourcePlayers, initial.sourcePlayers);
+  }
+  assert.equal(players.step, 'players');
+  assert.equal(teams.step, 'teams');
+  assert.equal(backToPlayers.step, 'players');
+});
 
 test('deletion clears only the target saved edit, and restores failed requests without overwriting another roster', () => {
   const previous = { ...freshSession(8), editingMatchId: 17, step: 'teams', selectedPlayerIds: [1, 2], savedRoster: { teamAIds: [1], teamBIds: [2] } };

@@ -442,6 +442,11 @@
 .session-date{padding:20px;margin-bottom:18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
 .session-date .form-field{margin:0;flex:1;min-width:0;max-width:300px}
 .session-date input{min-height:44px;min-width:0}
+.match-session-summary{justify-content:space-between;flex-wrap:wrap}
+.match-session-summary .start-over-button{margin-left:auto}
+.next-game-shortcut{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;margin:0 0 16px;background:#f2f6f0;border-color:#c9d8cd}
+.next-game-shortcut strong{font-size:13px;color:hsl(var(--foreground))}
+.next-game-shortcut p{margin:4px 0 0;color:hsl(var(--muted-foreground));font-size:11px;line-height:1.5}
 .pool-toolbar{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
 .pool-toolbar .search,.pool-toolbar select{flex:1;min-width:150px}
 .pool-toolbar .search input{width:100%}
@@ -451,6 +456,7 @@
 .post-match-actions p{font-size:12px;color:hsl(var(--muted-foreground))}
 .post-match-actions>div{display:flex;flex-wrap:wrap;gap:10px}
 .post-match-actions .button{min-height:44px}
+@media(max-width:680px){.next-game-shortcut{align-items:stretch;flex-direction:column}.next-game-shortcut>.button{width:100%}}
 @media(max-width:680px){.pool-toolbar>*{width:100%;min-width:0!important;flex-basis:100%!important}.post-match-actions .button{flex:1}.session-date .form-field{max-width:none}.content .pool-actions .button{min-height:44px}}
 .priority-indicator{color:#245c4c;font-size:10px;font-weight:700;margin-top:6px}
 .legacy-indicator{color:#8d491c;font-size:10px;margin-bottom:6px}
