@@ -1,0 +1,220 @@
+Please fix two bugs in the existing **Create Match → Teams → Manual Selection → Swap Player** functionality.
+
+Do NOT redesign or rewrite the swap system. Inspect the implementation you just added and make the smallest targeted fix.
+
+Do NOT change the matchmaking algorithm, Generate Balanced Teams behavior, ELO calculations, or unrelated UI.
+
+## BUG 1 — Swapping incorrectly assigns roles to everyone
+
+Current behavior:
+
+When I manually swap two players between Team A and Team B, players who previously showed:
+
+**Pending Role**
+
+suddenly get assigned positions/roles.
+
+This should NOT happen.
+
+A manual player swap must NOT trigger automatic role assignment, position filling, matchmaking, or team balancing.
+
+### Correct behavior
+
+If a player is:
+
+**Pending Role**
+
+before the swap, they should remain:
+
+**Pending Role**
+
+after the swap.
+
+Only players whose roles were explicitly locked by the user should retain a role.
+
+Example before swap:
+
+Team A:
+- John — Pending Role
+- Alex — Setter 🔒
+- Ben — Pending Role
+
+Team B:
+- Chris — Pending Role
+- David — Setter 🔒
+- Sam — Pending Role
+
+If John and Chris are swapped:
+
+Team A:
+- Chris — Pending Role
+- Alex — Setter 🔒
+- Ben — Pending Role
+
+Team B:
+- John — Pending Role
+- David — Setter 🔒
+- Sam — Pending Role
+
+Do NOT automatically assign positions to John, Chris, Ben, or Sam.
+
+A manual swap should ONLY exchange the two players' team membership.
+
+Existing explicit role locks must remain unchanged.
+
+---
+
+## BUG 2 — Swapping should work before all selected players are assigned to teams
+
+Current behavior:
+
+Swap Player does not work until every selected player has been moved from the available/selected player list into Team A or Team B.
+
+For example:
+
+Selected player pool contains multiple players.
+
+Currently assigned:
+
+Team A:
+- 2 players
+
+Team B:
+- 3 players
+
+Other selected players are still waiting to be manually assigned.
+
+At this point I should STILL be able to swap one of the 2 Team A players with one of the 3 Team B players.
+
+The existence of unassigned players should NOT disable Swap Player.
+
+### Correct behavior
+
+Swap availability should depend only on:
+
+1. The player being swapped.
+2. Players currently assigned to the opposite team.
+3. The existing locked-role compatibility rules.
+
+It should NOT depend on whether all selected players have already been assigned to Team A or Team B.
+
+If Team A has at least one player and Team B has at least one valid swap candidate, swapping should work.
+
+Players still sitting in the available/unassigned player pool should simply remain there and should not affect the swap.
+
+---
+
+## Preserve the existing swap rules
+
+Keep the rules implemented previously:
+
+### Unlocked / Pending Role player
+
+A player without a locked role can swap with valid players on the opposite team according to the existing swap rules.
+
+### Locked player
+
+A player with a locked role can only swap with an opposite-team player with the SAME locked role.
+
+Example:
+
+Setter 🔒 ↔ Setter 🔒
+= allowed
+
+Setter 🔒 ↔ Outside 🔒
+= not allowed
+
+Setter 🔒 ↔ Pending Role
+= not allowed
+
+Do not change these rules as part of this bug fix.
+
+---
+
+## Important state rule
+
+Please inspect the swap handler carefully.
+
+A manual swap should essentially change:
+
+**Player A: Team A → Team B**
+
+and
+
+**Player B: Team B → Team A**
+
+while preserving the rest of their existing manual-selection state.
+
+It should NOT call or reuse a function that:
+
+- automatically assigns roles
+- fills positions
+- balances teams
+- regenerates teams
+- resets manual team state
+- clears the selected player pool
+- requires the unassigned-player pool to be empty
+
+If the current swap handler is reusing one of those functions, separate the swap operation from that automatic logic.
+
+---
+
+## Test these exact scenarios
+
+### Test 1 — Partial teams
+
+Selected players: 12
+
+Currently:
+- Team A = 2 players
+- Team B = 3 players
+- Unassigned = 7 players
+
+Swap an eligible Team A player with an eligible Team B player.
+
+Expected:
+- Swap works.
+- Team A still has 2.
+- Team B still has 3.
+- 7 players remain unassigned.
+
+### Test 2 — Pending roles
+
+Swap two Pending Role players.
+
+Expected:
+- They change teams.
+- Both remain Pending Role.
+- Other Pending Role players remain Pending Role.
+
+### Test 3 — Existing locks
+
+Swap two players with the same locked role.
+
+Expected:
+- Swap works.
+- Their locked roles remain unchanged.
+- No other players receive roles.
+
+### Test 4 — Invalid locked swap
+
+Attempt:
+
+Setter 🔒 ↔ Outside 🔒
+
+Expected:
+- Swap is unavailable/blocked.
+
+### Test 5 — No side effects
+
+After a manual swap:
+- selected player pool remains unchanged
+- unassigned players remain unchanged
+- no automatic role assignment occurs
+- no team balancing occurs
+- no ELO balancing occurs
+- user remains on the Teams step
+
+Please run the relevant tests/build after fixing this.
+
+Do not deploy.
