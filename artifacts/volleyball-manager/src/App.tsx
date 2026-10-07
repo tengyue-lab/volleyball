@@ -51,7 +51,7 @@ import {
   type MatchPosition,
   type MatchPositionAssignment,
 } from '@/match-balancing';
-import { getManualSwapCandidates, swapManualTeamMembers } from '@/match-swap';
+import { getManualSwapCandidates, getSameRoleSwapCandidates, preserveSwappedRoles, swapManualTeamMembers } from '@/match-swap';
 import { ClerkShell } from '@/clerk-shell';
 import NotFound from '@/pages/not-found';
 import RankedPositionInput from '@/components/RankedPositionInput';
@@ -731,19 +731,18 @@ function AdminMatchesPage() {
         .map((assignment) => [assignment.playerId, assignment])
       : [],
   );
-  const selectedSwapRole = swapSelectionId === null
-    ? null
-    : roleAssignmentById.get(swapSelectionId)?.assignedPosition ?? null;
+  const assignedRoleById = new Map(
+    [...roleAssignmentById].map(([playerId, assignment]) => [playerId, assignment.assignedPosition]),
+  );
+  const hasAssignedRoles = locks.length > 0 || assignedRoleById.size > 0;
   const oppositeSwapTeam = swapSelectionId === null
     ? []
     : teamA.includes(swapSelectionId) ? teamB : teamA;
   const swapCandidates = swapSelectionId === null
     ? []
     : mode === 'manual'
-      ? getManualSwapCandidates(swapSelectionId, teamA, teamB, locks)
-      : selectedSwapRole
-        ? oppositeSwapTeam.filter((id) => roleAssignmentById.get(id)?.assignedPosition === selectedSwapRole)
-        : [];
+      ? getManualSwapCandidates(swapSelectionId, teamA, teamB, locks, assignedRoleById)
+      : getSameRoleSwapCandidates(swapSelectionId, oppositeSwapTeam, assignedRoleById);
   const total = teamA.length + teamB.length;
   const poolCount = selectedPlayers.length;
   const canContinue = selectionCanContinue(selectedPlayers) && validMatchDate(draft.matchDate);
@@ -826,9 +825,9 @@ function AdminMatchesPage() {
     const secondIsB = teamB.includes(secondId);
     if (!(firstIsA && secondIsB) && !(firstIsB && secondIsA)) return;
     if (mode === 'manual') {
-      const swapped = swapManualTeamMembers(firstId, secondId, teamA, teamB, locks);
+      const swapped = swapManualTeamMembers(firstId, secondId, teamA, teamB, locks, assignedRoleById);
       if (!swapped) {
-        setCreateError('This swap would violate a locked position. Choose an eligible player on the opposite team.');
+        setCreateError('This swap is not allowed. Choose an eligible player with the same role or compatible lock.');
         setSwapSelectionId(null);
         return;
       }
@@ -842,8 +841,13 @@ function AdminMatchesPage() {
       setTeamA(swapped.teamA);
       setTeamB(swapped.teamB);
       setLocks(swapped.locks);
-      setBalanceResult(null);
-      setBalancedProfiles('');
+      if (roleAssignments) {
+        setBalanceResult(preserveSwappedRoles(roleAssignments, swapped.teamA, swapped.teamB, selectedPlayers));
+        setBalancedProfiles(profilesFingerprint);
+      } else {
+        setBalanceResult(null);
+        setBalancedProfiles('');
+      }
       // Swapping back to saved team membership must not revive generated roles.
       setSavedRolesInvalidated(true);
       setCreateError('');
@@ -909,7 +913,7 @@ function AdminMatchesPage() {
 
   function autoBalance() {
     if (poolCount < 12 || poolCount > 14) return;
-    if (locks.length) { setCreateError('Clear Locks before switching to automatic balancing.'); return; }
+    if (locks.length) { setCreateError('Clear Roles before switching to automatic balancing.'); return; }
     try {
     const result = balanceMatchTeams(selectedPlayers);
     setTeamA(result.teamAIds);
@@ -937,8 +941,13 @@ function AdminMatchesPage() {
     setBalanceResult(null); setSwapSelectionId(null); setCreateError('');
   }
 
-  function clearLocks() {
-    setLocks([]); setBalanceResult(null); setSwapSelectionId(null); setCreateError('');
+  function clearRoles() {
+    setLocks([]);
+    setBalanceResult(null);
+    setBalancedProfiles('');
+    setSavedRolesInvalidated(true);
+    setSwapSelectionId(null);
+    setCreateError('');
   }
 
   function clearTeamAssignments() {
@@ -958,7 +967,7 @@ function AdminMatchesPage() {
 
   function changeMode(next: 'auto' | 'manual') {
     if (next === mode) return;
-    if (locks.length) { setCreateError('Clear Locks or unlock every player before switching modes.'); return; }
+    if (locks.length) { setCreateError('Clear Roles or unlock every player before switching modes.'); return; }
     setMode(next); setBalanceResult(null); setSwapSelectionId(null); setCreateError('');
   }
 
@@ -1152,7 +1161,7 @@ function AdminMatchesPage() {
               <div className="manual-assign-head"><strong>Manual assignment</strong><span>Place players with + A / + B and lock preferred roles. Fill may move any unlocked player.</span></div>
               <div className="pool-actions">
                 <button className="button button-primary touch-44" onClick={fillManualTeams} data-testid="button-fill"><WandSparkles size={14} />Fill</button>
-                <button className="button button-secondary touch-44" onClick={clearLocks} disabled={!locks.length} data-testid="button-clear-locks">Clear Locks</button>
+                <button className="button button-secondary touch-44" onClick={clearRoles} disabled={!hasAssignedRoles} data-testid="button-clear-roles">Clear Roles</button>
                 <button className="button button-quiet touch-44" onClick={clearTeamAssignments} disabled={teamA.length === 0 && teamB.length === 0 && locks.length === 0} data-testid="button-clear-teams">Clear Selection</button>
                 <small>{locks.length} locked · locked teams and positions stay fixed</small>
               </div>

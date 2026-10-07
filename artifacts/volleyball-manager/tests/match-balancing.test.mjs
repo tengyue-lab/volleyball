@@ -9,7 +9,7 @@ import {
   validateMatchLocks,
 } from '../src/match-balancing.ts';
 import { preferredLockPositions } from '../src/match-lock-options.ts';
-import { getManualSwapCandidates, swapManualTeamMembers } from '../src/match-swap.ts';
+import { getManualSwapCandidates, getSameRoleSwapCandidates, preserveSwappedRoles, swapManualTeamMembers } from '../src/match-swap.ts';
 
 const OLD_ROLE_POOL = [
   { id: 1, positions: ['Setter'], elo: 500 },
@@ -96,6 +96,35 @@ test('manual swap exchanges only the two team memberships and carries locks with
   assert.deepEqual(pool, [1, 2, 3, 4, 5]);
   assert.equal(swapManualTeamMembers(1, 4, teamA, teamB, locks), null);
   assert.equal(swapManualTeamMembers(1, 2, teamA, teamB, locks), null);
+});
+
+test('assigned roles share the same opposite-team compatibility rule for manual and auto swaps', () => {
+  for (const role of MATCH_POSITIONS) {
+    const otherRole = MATCH_POSITIONS.find((position) => position !== role);
+    const roles = new Map([[1, role], [2, otherRole], [3, role], [4, otherRole]]);
+    assert.deepEqual(getSameRoleSwapCandidates(1, [3, 4], roles), [3]);
+    assert.deepEqual(getManualSwapCandidates(1, [1, 2], [3, 4], [], roles), [3]);
+    assert.ok(swapManualTeamMembers(1, 3, [1, 2], [3, 4], [], roles));
+    assert.equal(swapManualTeamMembers(1, 4, [1, 2], [3, 4], [], roles), null);
+  }
+});
+
+test('post-Fill swap preserves every role record and moves existing locks with same-role players', () => {
+  const filled = fillMatchTeams(ROLE_POOL, []);
+  const setterA = filled.teamAAssignments.find((a) => a.assignedPosition === 'Setter').playerId;
+  const setterB = filled.teamBAssignments.find((a) => a.assignedPosition === 'Setter').playerId;
+  const roleMap = new Map([...assignmentsById(filled)].map(([id, a]) => [id, a.assignedPosition]));
+  const locks = [{ playerId: setterA, team: 'A', position: 'Setter' }];
+  const swapped = swapManualTeamMembers(setterA, setterB, filled.teamAIds, filled.teamBIds, locks, roleMap);
+  assert.ok(swapped);
+  assert.deepEqual(swapped.locks, [{ ...locks[0], team: 'B' }]);
+  const preserved = preserveSwappedRoles(filled, swapped.teamA, swapped.teamB, ROLE_POOL);
+  assert.deepEqual(assignmentsById(preserved), assignmentsById(filled));
+  for (const [id, assignment] of assignmentsById(filled)) {
+    assert.equal(assignmentsById(preserved).get(id), assignment);
+  }
+  assertFormation(preserved.teamAAssignments, 6);
+  assertFormation(preserved.teamBAssignments, 6);
 });
 
 test('partial manual teams swap while seven of twelve selected players remain unassigned', () => {
