@@ -10,13 +10,16 @@ import type { Position } from './position';
 import type { RankLabel } from './rankLabel';
 
 /**
- * Immutable played roster. New ranking and priority fields are optional because older snapshots are never rewritten.
+ * Immutable played roster. Non-admin responses redact elo and rank and omit rating progression metadata. Stored snapshots are never rewritten.
  */
 export interface MatchPlayerSnapshot {
   id: number;
   name: string;
   positions: Position[];
-  /** @nullable */
+  /**
+     * Only administrators receive snapshot ratings.
+     * @nullable
+     */
   elo: number | null;
   rank?: RankLabel | null;
   /** @minimum 0 */

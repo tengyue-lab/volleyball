@@ -60,6 +60,7 @@ import { RankBadge, RankTransition } from '@/components/RankBadge';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import MatchDeleteConfirmation from '@/components/MatchDeleteConfirmation';
 import MatchHistoryDetails from '@/components/MatchHistoryDetails';
+import LeaderboardTable from '@/components/LeaderboardTable';
 import SavedRosterSummary, { rosterLabel } from '@/components/SavedRosterSummary';
 import { MatchSessionProvider, useMatchSession } from '@/match-session-context';
 import { clearDeletedMatchSession, restoreFailedDeletionSession, draftEditable, editSession, freshSession, nextGameSession, reconcileSession, selectionCanContinue, validMatchDate, visiblePool } from '@/match-session';
@@ -110,7 +111,7 @@ function Shell({ children }: { children: ReactNode }) {
   const navItems = [
     { href: '/current-match', label: 'Current Match', icon: <CalendarDays size={17} strokeWidth={1.8} /> },
     { href: '/create-match', label: 'Create Match', icon: <Plus size={17} strokeWidth={1.8} /> },
-    { href: '/players', label: 'Players', icon: <Users size={17} strokeWidth={1.8} /> },
+    ...(access.status === 'ready' && access.isAdmin ? [{ href: '/players', label: 'Players', icon: <Users size={17} strokeWidth={1.8} /> }] : []),
     { href: '/leaderboard', label: 'Leaderboard', icon: <Trophy size={17} strokeWidth={1.8} /> },
     { href: '/match-history', label: 'Match History', icon: <ClipboardList size={17} strokeWidth={1.8} /> },
     ...(access.signedIn
@@ -273,13 +274,13 @@ function PlayerEditor({ playerId, onClose, notify }: { playerId: number | null; 
     }
   }
 
-  const visibility = <div className="form-field visibility-field"><label className="check-row" htmlFor="player-elo-public"><input id="player-elo-public" type="checkbox" checked={eloPublic} onChange={(event) => setEloPublic(event.target.checked)} data-testid="checkbox-elo-public" /><span>Show my ELO on the public leaderboard.</span></label><div className="field-hint">Only the top ten public ratings are listed. You always see your own rating.</div></div>;
+  const visibility = <div className="form-field visibility-field"><label className="check-row" htmlFor="player-elo-public"><input id="player-elo-public" type="checkbox" checked={eloPublic} onChange={(event) => setEloPublic(event.target.checked)} data-testid="checkbox-elo-public" /><span>Show me on the public leaderboard.</span></label><div className="field-hint">Only the top ten public players are listed, with rank tiers rather than numeric ELO. You always see your own rating.</div></div>;
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="modal" role="dialog" aria-modal="true" aria-labelledby="player-dialog-title">
         <div className="modal-head">
-          <div><h2 id="player-dialog-title">{playerId === null ? 'Add a player' : ownerOnly ? 'ELO visibility' : 'Edit player'}</h2><p>{playerId === null ? 'Add someone to the club roster.' : ownerOnly ? 'Choose whether your rating appears publicly.' : 'Update this player’s roster details.'}</p></div>
+          <div><h2 id="player-dialog-title">{playerId === null ? 'Add a player' : ownerOnly ? 'ELO visibility' : 'Edit player'}</h2><p>{playerId === null ? 'Add someone to the club roster.' : ownerOnly ? 'Choose whether you appear on the public leaderboard.' : 'Update this player’s roster details.'}</p></div>
           <button className="button button-quiet" onClick={onClose} aria-label="Close dialog" data-testid="button-close-player"><X size={17} /></button>
         </div>
         {playerId !== null && playerQuery.isLoading ? <div className="modal-body"><LoadingState lines={2} /></div> :
@@ -363,28 +364,14 @@ function PlayersPage() {
 
 function LeaderboardPage() {
   const query = useGetLeaderboard();
-  const ranked = (query.data ?? []).filter(isRatedPlayer);
-  const topRating = ranked[0]?.elo ?? 0;
-  const average = ranked.length ? Math.round(ranked.reduce((sum, player) => sum + player.elo, 0) / ranked.length) : 0;
+  const ranked = query.data ?? [];
   return <Shell><main className="content">
-    <PageHeader eyebrow="Ratings / public top ten" title="ELO leaderboard" description="Players who chose to share their rating, highest first." />
-    <div className="leader-head">
-      <div className="leader-feature"><div className="eyebrow">Club standings</div><h2>Every point has a player behind it.</h2><p>Players control whether their rating is public. Only the public top ten is listed.</p></div>
-      <div className="leader-stat"><span>Highest rating</span><strong data-testid="text-highest-elo">{query.isLoading || !ranked.length ? '—' : topRating.toLocaleString()}</strong><span>Public average <b>{query.isLoading || !ranked.length ? '—' : average.toLocaleString()}</b></span></div>
-    </div>
-    <section className="panel" aria-label="ELO player rankings">
-      <div className="panel-head"><div><h2 className="panel-title">Player rankings</h2><div className="panel-note">Public ratings, highest first</div></div><span className="panel-note">{ranked.length} {ranked.length === 1 ? 'player' : 'players'}</span></div>
+    <PageHeader eyebrow="Standings / public top ten" title="Leaderboard" description="Saturday social leaderboard" />
+    <section className="panel" aria-label="Player rankings">
+      <div className="panel-head"><div><h2 className="panel-title">Player rankings</h2><div className="panel-note">Public top ten</div></div><span className="panel-note">{ranked.length} {ranked.length === 1 ? 'player' : 'players'}</span></div>
       {query.isLoading ? <LoadingState /> : query.isError ? <ErrorState error={query.error} retry={() => void query.refetch()} /> : ranked.length === 0 ?
-        <EmptyState title="No public players yet." copy="Players can choose to show their ELO from their profile." /> :
-          <div className="table-wrap"><table className="data-table leaderboard-table" role="table" aria-label="Public player rankings">
-            <thead role="rowgroup"><tr role="row"><th role="columnheader" scope="col">Rank</th><th role="columnheader" scope="col">Player</th><th role="columnheader" scope="col">Top preference</th><th role="columnheader" scope="col">ELO rating</th></tr></thead>
-            <tbody role="rowgroup">{ranked.map((player, index) => <tr role="row" key={player.id} data-testid={`row-ranking-${player.id}`}>
-              <td role="cell" data-label="Rank" className="rank-cell"><span className={index < 3 ? 'rank-top' : ''}>{index + 1}</span></td>
-              <td role="cell" data-label="Player"><div className="player-name">{player.name}</div></td>
-              <td role="cell" data-label="Top preference"><div className="tag-list">{player.positions[0] && <span className="tag">{player.positions[0]}</span>}</div></td>
-              <td role="cell" data-label="ELO rating" className="elo-cell"><div className="leader-rank-text"><RankBadge rank={player.rank} rating={player.elo} provisional={player.provisional} testId={`badge-rank-${player.id}`} /></div><div className="elo-meter"><span style={{ width: `${topRating > 0 ? Math.max(5, (player.elo / topRating) * 100) : 0}%` }} /></div></td>
-            </tr>)}</tbody>
-          </table></div>}
+        <EmptyState title="No public players yet." copy="Players can choose to appear here from their profile." /> :
+          <LeaderboardTable players={ranked} />}
     </section>
   </main></Shell>;
 }
@@ -548,7 +535,7 @@ function MatchDetail({ matchId }: { matchId: number }) {
       </div>
       <div className="final-score"><span>Team A</span><strong>{match.scoreA}</strong><span className="score-divider">–</span><strong>{match.scoreB}</strong><span>Team B</span></div>
       {resultError && <div className="form-error result-error" role="alert">{resultError}</div>}
-      {match.eloChanges.length ? <div className="table-wrap result-table-wrap">
+      {isAdmin && (match.eloChanges.length ? <div className="table-wrap result-table-wrap">
         <table className="data-table result-table" role="table" aria-label="Player results and ELO changes">
           <thead role="rowgroup"><tr role="row"><th role="columnheader">Player</th><th role="columnheader">Position played</th><th role="columnheader">Rank</th><th role="columnheader">ELO before</th><th role="columnheader">ELO after</th><th role="columnheader">Change</th></tr></thead>
           <tbody role="rowgroup">{[
@@ -568,7 +555,7 @@ function MatchDetail({ matchId }: { matchId: number }) {
             </tr>;
           })}</tbody>
         </table>
-      </div> : <p className="field-hint">ELO change history is unavailable for this match.</p>}
+      </div> : <p className="field-hint">ELO change history is unavailable for this match.</p>)}
       <Link href="/leaderboard" className="button button-secondary result-leaderboard"><Trophy size={14} />View leaderboard</Link>
     </section>}
     <section><h4>Team A · {match.teamA.length} players</h4>{match.teamA.map(renderPlayer)}</section>
@@ -577,10 +564,11 @@ function MatchDetail({ matchId }: { matchId: number }) {
 }
 
 function HistoryDetails({ match }: { match: Match }) {
+  const { isAdmin } = useAccess();
   const [opened, setOpened] = useState(false);
-  const detail = useGetMatch(match.id, { query: { queryKey: getGetMatchQueryKey(match.id), enabled: opened } });
+  const detail = useGetMatch(match.id, { query: { queryKey: getGetMatchQueryKey(match.id), enabled: isAdmin && opened } });
   const eloState = detail.isError ? 'error' : detail.data ? 'ready' : 'loading';
-  return <MatchHistoryDetails match={{ ...match, eloChanges: detail.data?.eloChanges ?? [] }} eloState={opened ? eloState : 'ready'} onEloOpen={() => setOpened(true)} onEloRetry={() => void detail.refetch()} />;
+  return <MatchHistoryDetails showElo={isAdmin} match={{ ...match, eloChanges: detail.data?.eloChanges ?? [] }} eloState={opened ? eloState : 'ready'} onEloOpen={() => setOpened(true)} onEloRetry={() => void detail.refetch()} />;
 }
 
 function useMatchDeletion() {
@@ -1360,6 +1348,11 @@ function SignedInOnly({ children }: { children: ReactNode }) {
   return access.signedIn ? <>{children}</> : <Redirect to="/" />;
 }
 
+function AdminPlayersRoute() {
+  const access = useAccess();
+  return access.status === 'ready' && access.isAdmin ? <PlayersPage /> : <Redirect to="/current-match" />;
+}
+
 function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
@@ -1370,7 +1363,7 @@ function Router() {
     <Route path="/" component={HomeRoute} />
     <Route path="/current-match" component={CurrentMatchPage} />
     <Route path="/create-match" component={CreateMatchPage} />
-    <Route path="/players" component={PlayersPage} />
+    <Route path="/players" component={AdminPlayersRoute} />
     <Route path="/leaderboard" component={LeaderboardPage} />
     <Route path="/match-history" component={MatchHistoryPage} />
     <Route path="/matches" component={LegacyMatchesRedirect} />

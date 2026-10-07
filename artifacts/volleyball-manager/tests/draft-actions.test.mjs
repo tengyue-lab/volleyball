@@ -25,3 +25,24 @@ test('draft actions use the guarded hooks and clean caches on reset success only
 test('continuing a saved edit retains its explicit reset target across the session remount', () => {
   assert.ok(app.includes('const [targetId, setTargetId] = useState<number | null>(draft.editingMatchId)'));
 });
+
+test('Players navigation and route are admin guarded without guarding the normal Profile', () => {
+  assert.ok(app.includes("access.status === 'ready' && access.isAdmin ? [{ href: '/players'"));
+  assert.ok(app.includes('<Route path="/players" component={AdminPlayersRoute} />'));
+  assert.ok(app.includes("access.status === 'ready' && access.isAdmin ? <PlayersPage /> : <Redirect to=\"/current-match\" />"));
+  assert.ok(app.includes('<SignedInOnly><UserPortalPage /></SignedInOnly>'));
+});
+
+test('public leaderboard uses exact text and the minimal DTO without numeric-rating filtering', () => {
+  const page = app.slice(app.indexOf('function LeaderboardPage'), app.indexOf('function RoleBadge'));
+  assert.ok(page.includes('title="Leaderboard" description="Saturday social leaderboard"'));
+  assert.ok(page.includes('<LeaderboardTable players={ranked} />'));
+  assert.ok(!/\\.elo|positions|isRatedPlayer|Highest rating|Public average|ELO leaderboard/.test(page));
+});
+
+test('history lazy audit fetch and direct result ELO display are admin-only', () => {
+  const history = app.slice(app.indexOf('function HistoryDetails'), app.indexOf('function useMatchDeletion'));
+  assert.ok(history.includes('enabled: isAdmin && opened'));
+  assert.ok(history.includes('showElo={isAdmin}'));
+  assert.ok(app.includes('{isAdmin && (match.eloChanges.length ?'));
+});

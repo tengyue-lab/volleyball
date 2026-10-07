@@ -28,6 +28,7 @@ import type {
   DeleteMatchDraftParams,
   EloHistoryEntry,
   HealthStatus,
+  LeaderboardEntry,
   Match,
   MatchInput,
   MatchResultInput,
@@ -1001,7 +1002,7 @@ export const getGetPlayerEloHistoryUrl = (playerId: number,) => {
 }
 
 /**
- * @summary Get a player's ELO audit history
+ * @summary Get a player's ELO audit history (admin only)
  */
 export const getPlayerEloHistory = async (playerId: number, options?: Parameters<typeof customFetch>[1]): Promise<EloHistoryEntry[]> => {
 
@@ -1048,7 +1049,7 @@ export type GetPlayerEloHistoryQueryError = ErrorType<void>
 
 
 /**
- * @summary Get a player's ELO audit history
+ * @summary Get a player's ELO audit history (admin only)
  */
 
 export function useGetPlayerEloHistory<TData = Awaited<ReturnType<typeof getPlayerEloHistory>>, TError = ErrorType<void>>(
@@ -1078,11 +1079,11 @@ export const getGetLeaderboardUrl = () => {
 }
 
 /**
- * @summary List players ranked by ELO
+ * @summary List public leaderboard tiers in rating order
  */
-export const getLeaderboard = async ( options?: Parameters<typeof customFetch>[1]): Promise<Player[]> => {
+export const getLeaderboard = async ( options?: Parameters<typeof customFetch>[1]): Promise<LeaderboardEntry[]> => {
 
-  return customFetch<Player[]>(getGetLeaderboardUrl(),
+  return customFetch<LeaderboardEntry[]>(getGetLeaderboardUrl(),
   {
     ...options,
     method: 'GET'
@@ -1125,7 +1126,7 @@ export type GetLeaderboardQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List players ranked by ELO
+ * @summary List public leaderboard tiers in rating order
  */
 
 export function useGetLeaderboard<TData = Awaited<ReturnType<typeof getLeaderboard>>, TError = ErrorType<unknown>>(

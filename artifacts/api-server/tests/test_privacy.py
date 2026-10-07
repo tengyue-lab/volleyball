@@ -107,14 +107,13 @@ class PrivacyTests(unittest.TestCase):
         anon = self.anonymous()
         for response in (anon.get(f"/api/matches/{match['id']}").get_json(), anon.get("/api/matches").get_json()[0]):
             self.assertIsNone(response["teamA"][0]["elo"])
-        history = anon.get(f"/api/players/{target}/elo-history").get_json()[0]
-        self.assertTrue(all(history[k] is None for k in ("eloBefore", "eloAfter", "changeAmount")))
+        self.assertEqual(anon.get(f"/api/players/{target}/elo-history").status_code, 401)
         changes = anon.get(f"/api/matches/{match['id']}").get_json()["eloChanges"]
-        self.assertIsNone(next(c for c in changes if c["playerId"] == target)["changeAmount"])
-        self.assertEqual(owner.get(f"/api/matches/{match['id']}").get_json()["teamA"][0]["elo"], 1050)
+        self.assertEqual(changes, [])
+        self.assertIsNone(owner.get(f"/api/matches/{match['id']}").get_json()["teamA"][0]["elo"])
         self.assertEqual(self.client.delete(f"/api/players/{target}").status_code, 204)
         self.assertIsNone(anon.get(f"/api/matches/{match['id']}").get_json()["teamA"][0]["elo"])
-        self.assertEqual(owner.get(f"/api/matches/{match['id']}").get_json()["teamA"][0]["elo"], 1050)
+        self.assertIsNone(owner.get(f"/api/matches/{match['id']}").get_json()["teamA"][0]["elo"])
         self.assertEqual(self.client.get(f"/api/matches/{match['id']}").get_json()["teamA"][0]["elo"], 1050)
         with sqlite3.connect(self.app.config["DATABASE_PATH"]) as conn:
             self.assertEqual(conn.execute("SELECT team_a_json FROM matches WHERE id=?", (match["id"],)).fetchone()[0], stored_before)
@@ -132,6 +131,59 @@ class PrivacyTests(unittest.TestCase):
         self.assertEqual(self.profile(target)["elo"], 1050)
         self.assertFalse(self.profile(target)["preferredRolePriority"])
         self.assertFalse(self.profile(target)["eloPublic"])
+
+    def test_leaderboard_minimal_contract_for_anonymous_owner_other_and_admin(self):
+        owner = self.owner(self.player_ids[0])
+        other = SignedClient(self.app, "user_test_social", "social@example.test")
+        for viewer in (self.anonymous(), owner, other, self.client):
+            response = viewer.get("/api/leaderboard")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(len(response.get_json()), 10)
+            for row in response.get_json():
+                self.assertEqual(set(row), {"id", "name", "rank", "provisional"})
+                self.assertTrue(row["rank"])
+                self.assertTrue(row["provisional"])
+
+    def test_match_rating_information_admin_only_even_for_public_players_and_owner(self):
+        target = self.player_ids[0]
+        owner = self.owner(target)
+        other = SignedClient(self.app, "user_test_history", "history@example.test")
+        match = self.create_match()
+        self.complete(match)
+        admin = self.client.get(f"/api/matches/{match['id']}").get_json()
+        self.assertTrue(admin["eloChanges"])
+        self.assertIsInstance(admin["teamA"][0]["elo"], int)
+        admin_history = self.client.get(f"/api/players/{target}/elo-history")
+        self.assertEqual(admin_history.status_code, 200)
+        self.assertIsInstance(admin_history.get_json()[0]["eloBefore"], int)
+        # Cover GET and HEAD, list/detail, query strings and both visibility states.
+        for public in (True, False):
+            self.client.patch(f"/api/players/{target}", json={"eloPublic": public})
+            for viewer in (self.anonymous(), owner, other):
+                for path in ("/api/matches", f"/api/matches/{match['id']}?details=1"):
+                    response = viewer.get(path)
+                    self.assertEqual(response.status_code, 200)
+                    data = response.get_json()
+                    data = data[0] if isinstance(data, list) else data
+                    self.assertEqual(data["eloChanges"], [])
+                    for field in ("scoreA", "scoreB", "winner", "status", "matchDate", "completedAt", "createdAt"):
+                        self.assertEqual(data[field], admin[field])
+                    for team in ("teamA", "teamB"):
+                        for player, full in zip(data[team], admin[team]):
+                            self.assertIsNone(player["elo"])
+                            self.assertIsNone(player["rank"])
+                            for field in ("id", "name", "positions", "assignedPosition", "assignmentStatus", "preferenceRank"):
+                                self.assertEqual(player.get(field), full.get(field))
+                            for field in ("matchesPlayed", "provisional", "eloPublic", "eloBefore", "eloAfter", "changeAmount", "kUsed"):
+                                self.assertNotIn(field, player)
+                expected = 401 if viewer.identity["userId"] is None else 403
+                audit_path = f"/api/players/{target}/elo-history"
+                self.assertEqual(viewer.get(audit_path).status_code, expected)
+                self.assertEqual(viewer.open(audit_path, method="HEAD").status_code, expected)
+            profile = owner.get(f"/api/players/{target}").get_json()
+            self.assertEqual(profile["elo"], self.profile(target)["elo"])
+            self.assertEqual(profile["rank"], self.profile(target)["rank"])
+            self.assertEqual(profile["eloPublic"], public)
 
     def test_unidentifiable_legacy_snapshot_ratings_fail_closed(self):
         match = self.create_match()

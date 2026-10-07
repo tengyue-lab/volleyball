@@ -228,23 +228,26 @@ class ProgressionIntegrationTests(unittest.TestCase):
             self.assertIsNone(viewer.get(f"/api/players/{target}").get_json()["rank"])
             response = viewer.get(f"/api/matches/{match['id']}").get_json()
             self.assertIsNone(response["teamA"][0]["rank"])
-            audit = next(c for c in response["eloChanges"] if c["playerId"] == target)
-            for field in ["eloBefore", "eloAfter", "changeAmount", "rankBefore", "rankAfter", "rankMovement"]:
-                self.assertIsNone(audit[field])
+            self.assertEqual(response["eloChanges"], [])
         for viewer in [owner, self.client]:
             profile = viewer.get(f"/api/players/{target}").get_json()
             self.assertEqual(profile["rank"], "Bronze 1")
             self.assertEqual(profile["matchesPlayed"], 1)
             self.assertTrue(profile["provisional"])
-            self.assertEqual(viewer.get(f"/api/matches/{match['id']}").get_json()["eloChanges"][0]["rankAfter"], "Bronze 1")
+        self.assertEqual(owner.get(f"/api/matches/{match['id']}").get_json()["eloChanges"], [])
+        self.assertEqual(self.client.get(f"/api/matches/{match['id']}").get_json()["eloChanges"][0]["rankAfter"], "Bronze 1")
         self.client.delete(f"/api/players/{target}")
-        for viewer, visible in [(owner, True), (self.client, True), (self.anonymous(), False)]:
+        for viewer, visible in [(owner, False), (self.client, True), (self.anonymous(), False)]:
             # The existing dedicated history route returns 404 for deleted
             # players; historical match audits remain available and protected.
             response = viewer.get(f"/api/matches/{match['id']}").get_json()
-            audit = next(c for c in response["eloChanges"] if c["playerId"] == target)
-            self.assertEqual(audit["rankAfter"], "Bronze 1" if visible else None)
-            self.assertEqual(viewer.get(f"/api/players/{target}/elo-history").status_code, 404)
+            if visible:
+                audit = next(c for c in response["eloChanges"] if c["playerId"] == target)
+                self.assertEqual(audit["rankAfter"], "Bronze 1")
+            else:
+                self.assertEqual(response["eloChanges"], [])
+            expected = 404 if visible else 401 if viewer is not owner else 403
+            self.assertEqual(viewer.get(f"/api/players/{target}/elo-history").status_code, expected)
         self.assertEqual(self.client.post(f"/api/matches/{match['id']}/reopen").status_code, 200)
         with sqlite3.connect(self.app.config["DATABASE_PATH"]) as connection:
             counter = connection.execute(

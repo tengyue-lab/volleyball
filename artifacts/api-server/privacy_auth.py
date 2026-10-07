@@ -108,7 +108,10 @@ def install_privacy(app, database):
                 "signedIn": True, "isAdmin": account["isAdmin"],
                 "userId": user_id, "email": email, "playerId": account["playerId"],
             }
-        if request.path.startswith("/api/admin/") and not g.viewer["isAdmin"]:
+        if (
+            request.path.startswith("/api/admin/")
+            or request.endpoint == "get_player_elo_history"
+        ) and not g.viewer["isAdmin"]:
             return jsonify({"error": "Administrator access required."}), 403 if user_id else 401
         if request.method not in ("GET", "HEAD", "OPTIONS"):
             if g.viewer["isAdmin"]:
@@ -135,6 +138,31 @@ def install_privacy(app, database):
             return response
         viewer = getattr(g, "viewer", {})
         if viewer.get("isAdmin"):
+            return response
+        if request.path == "/api/matches" or request.path.startswith("/api/matches/"):
+            # Match privacy is independent of public rating flags and ownership.
+            # Keep played roles/non-rating metadata; never modify stored snapshots.
+            snapshot_fields = {
+                "id", "name", "positions", "createdAt", "preferencesConfirmed",
+                "preferredRolePriority", "prioritySince", "assignedPosition",
+                "assignmentStatus", "preferenceRank",
+            }
+
+            def public_match(match):
+                result = dict(match)
+                for team in ("teamA", "teamB"):
+                    result[team] = [
+                        {**{key: value for key, value in player.items()
+                            if key in snapshot_fields}, "elo": None, "rank": None}
+                        for player in match.get(team, [])
+                    ]
+                result["eloChanges"] = []
+                return result
+
+            payload = response.get_json()
+            payload = ([public_match(match) for match in payload]
+                       if isinstance(payload, list) else public_match(payload))
+            response.set_data(app.json.dumps(payload))
             return response
         with database() as connection:
             public_ids = {row[0] for row in connection.execute("SELECT id FROM players WHERE elo_public=1")}

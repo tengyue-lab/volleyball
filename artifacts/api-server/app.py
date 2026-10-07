@@ -650,7 +650,12 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             rows = connection.execute(
                 "SELECT * FROM players WHERE elo_public=1 ORDER BY elo DESC, name COLLATE NOCASE, id LIMIT 10"
             ).fetchall()
-        return jsonify([serialize_player(row) for row in rows])
+        return jsonify([
+            {"id": row["id"], "name": row["name"],
+             "rank": rank_for_elo(row["elo"]),
+             "provisional": is_provisional(row["matches_played"])}
+            for row in rows
+        ])
 
     @app.get("/api/players/<int:player_id>/elo-history")
     def get_player_elo_history(player_id: int):

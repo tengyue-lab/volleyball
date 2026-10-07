@@ -31,8 +31,9 @@ function Disclosure({ id, matchId, label, open, onToggle, children }: { id: stri
   </div>;
 }
 
-export default function MatchHistoryDetails({ match, initialOpen, eloState = 'ready', onEloOpen, onEloRetry }: {
+export default function MatchHistoryDetails({ match, showElo = false, initialOpen, eloState = 'ready', onEloOpen, onEloRetry }: {
   match: HistoryMatch; initialOpen?: { team?: boolean; elo?: boolean };
+  showElo?: boolean;
   eloState?: 'ready' | 'loading' | 'error'; onEloOpen?: () => void; onEloRetry?: () => void;
 }) {
   const [teamOpen, setTeamOpen] = useState(initialOpen?.team ?? false);
@@ -45,11 +46,11 @@ export default function MatchHistoryDetails({ match, initialOpen, eloState = 're
     <Disclosure id="team-detail" matchId={match.id} label="Team Detail" open={teamOpen} onToggle={() => setTeamOpen((v) => !v)}>
       <div className="history-teams">{roster('Team A', match.teamA)}{roster('Team B', match.teamB)}</div>
     </Disclosure>
-    <Disclosure id="elo-changes" matchId={match.id} label="ELO Changes" open={eloOpen} onToggle={() => { if (!eloOpen) onEloOpen?.(); setEloOpen((v) => !v); }}>
+    {showElo && <Disclosure id="elo-changes" matchId={match.id} label="ELO Changes" open={eloOpen} onToggle={() => { if (!eloOpen) onEloOpen?.(); setEloOpen((v) => !v); }}>
       {eloState === 'loading' ? <p className="field-hint" role="status">Loading ELO changes…</p> : eloState === 'error' ? <div className="form-error" role="alert">ELO changes could not be loaded. <button type="button" className="text-button" onClick={onEloRetry}>Try again</button></div> : <ul className="history-elo-list">{sortedEloChanges(match).map((row) => <li key={row.id}>
         <span>{row.name}</span>
         <strong className={row.amount === null ? 'elo-change-private' : row.amount > 0 ? 'elo-change-positive' : row.amount < 0 ? 'elo-change-negative' : 'elo-change-zero'} data-testid={`text-elo-change-${match.id}-${row.id}`}>{formatChange(row.amount)}</strong>
       </li>)}</ul>}
-    </Disclosure>
+    </Disclosure>}
   </div>;
 }

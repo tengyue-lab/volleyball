@@ -78,7 +78,7 @@ const hm = {
 };
 
 test('history shows two collapsed disclosures and no forbidden actions', () => {
-  const markup = renderToStaticMarkup(createElement(MatchHistoryDetails, { match: hm }));
+  const markup = renderToStaticMarkup(createElement(MatchHistoryDetails, { match: hm, showElo: true }));
   assert.equal((markup.match(/aria-expanded="false"/g) ?? []).length, 2);
   assert.ok(markup.includes('Team Detail') && markup.includes('ELO Changes'));
   assert.ok(!markup.includes('Zed') && !/Next|Start Over/.test(markup));
@@ -93,15 +93,22 @@ test('Team Detail lists names and played positions only, with honest unavailable
 
 test('ELO Changes sort descending, color by sign, private last, and show nothing else', () => {
   assert.deepEqual(history.sortedEloChanges(hm).map((r) => r.id), [6, 1, 4, 2, 3]);
-  const markup = renderToStaticMarkup(createElement(MatchHistoryDetails, { match: hm, initialOpen: { elo: true } }));
+  const markup = renderToStaticMarkup(createElement(MatchHistoryDetails, { match: hm, showElo: true, initialOpen: { elo: true } }));
   assert.ok(markup.includes('+12') && markup.includes('-12') && markup.includes('Private'));
   assert.ok(markup.includes('elo-change-positive') && markup.includes('elo-change-negative') && markup.includes('elo-change-zero') && markup.includes('elo-change-private'));
   assert.ok(!/900|Rank|Bronze|provisional|Team A/.test(markup));
 });
 
 test('ELO disclosure shows loading and error states without list data', () => {
-  assert.ok(renderToStaticMarkup(createElement(MatchHistoryDetails, { match: hm, initialOpen: { elo: true }, eloState: 'loading' })).includes('Loading'));
-  assert.ok(renderToStaticMarkup(createElement(MatchHistoryDetails, { match: hm, initialOpen: { elo: true }, eloState: 'error' })).includes('Try again'));
+  assert.ok(renderToStaticMarkup(createElement(MatchHistoryDetails, { match: hm, showElo: true, initialOpen: { elo: true }, eloState: 'loading' })).includes('Loading'));
+  assert.ok(renderToStaticMarkup(createElement(MatchHistoryDetails, { match: hm, showElo: true, initialOpen: { elo: true }, eloState: 'error' })).includes('Try again'));
+});
+
+test('public history never renders ELO even with audit data and an initially open disclosure', () => {
+  const markup = renderToStaticMarkup(createElement(MatchHistoryDetails, { match: hm, initialOpen: { team: true, elo: true } }));
+  assert.ok(markup.includes('Team Detail') && markup.includes('Zed') && markup.includes('Setter'));
+  assert.ok(!/ELO|elo-changes|text-elo-change|\\+12|-12|900|Rank|Bronze|Provisional/.test(markup));
+  assert.equal((markup.match(/aria-expanded=/g) ?? []).length, 1);
 });
 
 test('saved roster summary requires explicit target and protects non-editable drafts', () => {

@@ -32,13 +32,31 @@ test('all tier badges use readable rank labels; Masters has no division', () => 
   assert.ok(!masters.includes('Masters 1'));
 });
 
-test('leaderboard keeps the rating next to its rank, without duplicate labels', () => {
+test('admin/profile badge retains optional numeric rating without duplicate labels', () => {
   const markup = render(RankBadge, { rank: 'Gold 1', rating: 1620, provisional: true });
   assert.equal((markup.match(/Gold 1/g) ?? []).length, 1);
   assert.ok(markup.includes('rank-label-and-rating'));
   assert.ok(markup.includes('1,620'));
   assert.ok(markup.includes('Provisional'));
   assert.ok(!render(RankBadge, { rank: null, rating: 1620 }).includes('1,620'));
+});
+
+test('public leaderboard renders only tiers, names and provisional status in server order', async () => {
+  const tableSource = await readFile(new URL('../src/components/LeaderboardTable.tsx', import.meta.url), 'utf8');
+  const transformedTable = await transformWithEsbuild(tableSource, 'LeaderboardTable.tsx', { loader: 'tsx', jsx: 'automatic', format: 'esm' });
+  const tableCode = transformedTable.code
+    .replaceAll('"react/jsx-runtime"', JSON.stringify(import.meta.resolve('react/jsx-runtime')))
+    .replace('"./RankBadge"', JSON.stringify(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`));
+  const { default: Table } = await import(`data:text/javascript;base64,${Buffer.from(tableCode).toString('base64')}`);
+  const markup = render(Table, { players: [
+    { id: 2, name: 'Zed', rank: 'Masters', provisional: false },
+    { id: 1, name: 'Amy', rank: 'Bronze 3', provisional: true },
+  ] });
+  assert.ok(markup.includes('Masters') && markup.includes('Bronze 3'));
+  assert.equal((markup.match(/>Provisional</g) ?? []).length, 1);
+  assert.ok(markup.indexOf('Zed') < markup.indexOf('Amy'));
+  assert.equal((markup.match(/role="columnheader"/g) ?? []).length, 3);
+  assert.ok(!/ELO|rating|elo-meter|Top preference|rank-top|>1<|>2</.test(markup.replaceAll('rank-label-and-rating', '')));
 });
 
 test('result promotions and demotions expose transition text and distinct styling', () => {

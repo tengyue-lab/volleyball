@@ -18,6 +18,7 @@ export * from './eloHistoryEntryAction';
 export * from './eloHistoryEntryKUsed';
 export * from './eloHistoryEntryRankMovement';
 export * from './healthStatus';
+export * from './leaderboardEntry';
 export * from './match';
 export * from './matchInput';
 export * from './matchPlayerAssignment';

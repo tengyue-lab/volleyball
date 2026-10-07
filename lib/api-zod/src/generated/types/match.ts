@@ -31,5 +31,6 @@ export interface Match {
   /** @nullable */
   completedAt: Date | null;
   createdAt: Date;
+  /** Admin-only result audit detail; always empty for non-admin viewers. */
   eloChanges: EloHistoryEntry[];
 }

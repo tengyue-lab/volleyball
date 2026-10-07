@@ -210,7 +210,7 @@ paths:
     get:
       operationId: getPlayerEloHistory
       tags: [players]
-      summary: Get a player's ELO audit history
+      summary: Get a player's ELO audit history (admin only)
       responses:
         "200":
           description: ELO changes ordered from oldest to newest
@@ -222,20 +222,24 @@ paths:
                   $ref: "#/components/schemas/EloHistoryEntry"
         "404":
           description: Player not found
+        "401":
+          description: Sign in as an administrator to access ELO audit history
+        "403":
+          description: Administrator access required
   /leaderboard:
     get:
       operationId: getLeaderboard
       tags: [players]
-      summary: List players ranked by ELO
+      summary: List public leaderboard tiers in rating order
       responses:
         "200":
-          description: Players ordered from highest ELO to lowest
+          description: Public top ten in existing rating order, without numeric ratings or preferences
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Player"
+                  $ref: "#/components/schemas/LeaderboardEntry"
   /matches:
     get:
       operationId: listMatches
@@ -391,6 +395,19 @@ paths:
           description: Result cannot be reversed because a later match depends on it
 components:
   schemas:
+    LeaderboardEntry:
+      type: object
+      additionalProperties: false
+      required: [id, name, rank, provisional]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        rank:
+          $ref: "#/components/schemas/RankLabel"
+        provisional:
+          type: boolean
     HealthStatus:
       type: object
       properties:
@@ -525,11 +542,12 @@ components:
           format: date-time
         eloChanges:
           type: array
+          description: Admin-only result audit detail; always empty for non-admin viewers.
           items:
             $ref: "#/components/schemas/EloHistoryEntry"
     MatchPlayerSnapshot:
       type: object
-      description: Immutable played roster. New ranking and priority fields are optional because older snapshots are never rewritten.
+      description: Immutable played roster. Non-admin responses redact elo and rank and omit rating progression metadata. Stored snapshots are never rewritten.
       required: [id, name, positions, elo]
       properties:
         id:
@@ -542,6 +560,7 @@ components:
             $ref: "#/components/schemas/Position"
         elo:
           type: ["integer", "null"]
+          description: Only administrators receive snapshot ratings.
         rank:
           $ref: "#/components/schemas/RankLabel"
         matchesPlayed:

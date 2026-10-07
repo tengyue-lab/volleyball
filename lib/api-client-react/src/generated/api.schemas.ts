@@ -5,21 +5,6 @@
  * Volleyball player and match management API
  * OpenAPI spec version: 0.1.0
  */
-export interface HealthStatus {
-  status: string;
-}
-
-export type Position = typeof Position[keyof typeof Position];
-
-
-export const Position = {
-  Setter: 'Setter',
-  Outside_Hitter: 'Outside Hitter',
-  Middle_Blocker: 'Middle Blocker',
-  Opposite: 'Opposite',
-  Libero: 'Libero',
-} as const;
-
 /**
  * Derived from ELO, null when hidden or not recorded in legacy history.
  * @nullable
@@ -47,6 +32,28 @@ export const RankLabel = {
   Diamond_2: 'Diamond 2',
   Diamond_1: 'Diamond 1',
   Masters: 'Masters',
+} as const;
+
+export interface LeaderboardEntry {
+  id: number;
+  name: string;
+  rank: RankLabel | null;
+  provisional: boolean;
+}
+
+export interface HealthStatus {
+  status: string;
+}
+
+export type Position = typeof Position[keyof typeof Position];
+
+
+export const Position = {
+  Setter: 'Setter',
+  Outside_Hitter: 'Outside Hitter',
+  Middle_Blocker: 'Middle Blocker',
+  Opposite: 'Opposite',
+  Libero: 'Libero',
 } as const;
 
 export interface Player {
@@ -131,13 +138,16 @@ export const MatchPlayerSnapshotAssignmentStatus = {
 } as const;
 
 /**
- * Immutable played roster. New ranking and priority fields are optional because older snapshots are never rewritten.
+ * Immutable played roster. Non-admin responses redact elo and rank and omit rating progression metadata. Stored snapshots are never rewritten.
  */
 export interface MatchPlayerSnapshot {
   id: number;
   name: string;
   positions: Position[];
-  /** @nullable */
+  /**
+     * Only administrators receive snapshot ratings.
+     * @nullable
+     */
   elo: number | null;
   rank?: RankLabel | null;
   /** @minimum 0 */
@@ -247,6 +257,7 @@ export interface Match {
   /** @nullable */
   completedAt: string | null;
   createdAt: string;
+  /** Admin-only result audit detail; always empty for non-admin viewers. */
   eloChanges: EloHistoryEntry[];
 }
 
