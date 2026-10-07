@@ -1,0 +1,239 @@
+Please update the match-completion UX in:
+
+**Current Match**
+
+The existing score entry, match result, ELO calculation, match history, and match completion logic should remain intact.
+
+This task is specifically about what happens AFTER an admin successfully completes a match.
+
+IMPORTANT:
+- Do NOT change the ELO calculation algorithm.
+- Do NOT change matchmaking/team balancing.
+- Do NOT change player position preferences.
+- Do NOT change Create Match.
+- Do NOT change how match results are stored.
+- Do NOT change Match History data.
+- Do NOT change authentication or permissions.
+- Do NOT redesign Current Match.
+- Do NOT deploy.
+
+# Current problem
+
+Currently, after the admin enters the final score and completes/submits a match, the app automatically navigates to:
+
+**Match History**
+
+I do not want this automatic navigation.
+
+When running volleyball socials, I want to complete a match and remain on the **Current Match** page.
+
+# Desired behavior
+
+When the admin enters the final score and successfully completes/submits the match:
+
+1. Save the result using the existing backend/API logic.
+2. Run the existing ELO update logic exactly as it currently works.
+3. Update Match History normally.
+4. Mark the match as completed using the existing logic.
+5. Show a success popup/modal.
+6. Keep the admin on **Current Match**.
+
+Do NOT automatically navigate to Match History.
+
+# Success popup
+
+After the backend confirms the match has been completed successfully, show a simple confirmation popup/modal:
+
+**Match Complete**
+
+Message:
+
+**The match result has been saved successfully.**
+
+Button:
+
+**OK**
+
+The exact styling should follow the app's existing popup/modal design.
+
+Do not redesign the UI just for this popup.
+
+# After clicking OK
+
+When the admin closes the Match Complete popup:
+
+Remain on:
+
+**Current Match**
+
+Do NOT automatically navigate to:
+- Match History
+- Create Match
+- Leaderboard
+- Any other page
+
+# Current Match should refresh correctly
+
+After the completed match is saved, refresh/update Current Match using the existing application state/API.
+
+If there is another active/current match waiting to be played, Current Match should display the appropriate next active match according to the app's existing current-match logic.
+
+If there are no remaining active/current matches, show the existing appropriate empty state.
+
+Do not invent a new match queue system if one does not already exist.
+
+The important behavior is:
+
+**Complete Match → confirmation → remain on Current Match → show the correct current state**
+
+rather than:
+
+**Complete Match → automatically navigate to Match History**
+
+# Do not change the completion logic
+
+The existing result-processing logic should remain the source of truth.
+
+Completing a match should still correctly:
+
+- Store the final score.
+- Determine the winner.
+- Mark the match as completed.
+- Apply the existing ELO changes.
+- Store/update ELO history as currently implemented.
+- Make the completed match available in Match History.
+- Update any existing leaderboard/player data that normally changes after match completion.
+
+This task should NOT alter those calculations.
+
+It is primarily a navigation/state-refresh UX change.
+
+# Failure behavior
+
+Only show **Match Complete** after the backend confirms that the match result was successfully saved.
+
+If completion fails:
+
+- Do NOT show the success popup.
+- Do NOT navigate away.
+- Do NOT incorrectly mark the UI as completed.
+- Keep the entered score where practical so the admin can retry.
+- Use the existing error handling/message.
+
+Most importantly, do not run the completion operation twice.
+
+# Prevent duplicate submission
+
+Please make sure the completion action cannot accidentally be submitted multiple times while the first request is processing.
+
+If the existing button already has loading/disabled behavior, preserve it.
+
+Otherwise, disable the completion/save-result action while the request is in progress.
+
+This is important because completing the same match twice must not apply ELO changes twice.
+
+Do not redesign the button; just preserve/add appropriate submission protection if necessary.
+
+# Expected workflow
+
+Example:
+
+Current Match displays:
+
+**Team A vs Team B**
+
+The admin enters the final score.
+
+For example:
+
+Team A: 25  
+Team B: 21
+
+Admin submits/completes the match.
+
+↓
+
+Backend successfully saves the result.
+
+↓
+
+Existing ELO logic runs once.
+
+↓
+
+Match is marked completed.
+
+↓
+
+Match appears in Match History.
+
+↓
+
+Popup appears:
+
+**Match Complete**
+
+**The match result has been saved successfully.**
+
+[OK]
+
+↓
+
+Admin clicks OK.
+
+↓
+
+Admin remains on:
+
+**Current Match**
+
+If another active match exists, show that match according to the existing app logic.
+
+If no active match exists, show the existing empty/no-current-match state.
+
+The admin should NOT be automatically taken to Match History.
+
+# Preserve Match History
+
+Do not remove or change Match History functionality.
+
+The completed match should still appear there normally.
+
+The admin can manually open Match History whenever they want.
+
+We are only removing the automatic navigation to it after completing a match.
+
+# Test these scenarios
+
+Please test:
+
+1. Create/have an active match.
+2. Open Current Match.
+3. Enter a valid final score.
+4. Complete the match.
+5. Verify the backend saves the result successfully.
+6. Verify the match is marked completed.
+7. Verify ELO updates exactly once.
+8. Verify the completed match appears correctly in Match History.
+9. Verify the **Match Complete** popup appears.
+10. Verify the app does NOT automatically navigate to Match History.
+11. Click OK.
+12. Verify the admin remains on Current Match.
+13. If another active match exists, verify Current Match displays the correct next match using the existing logic.
+14. If no active match exists, verify the existing empty state is shown correctly.
+15. Verify a failed submission does not show the success popup.
+16. Verify rapidly clicking the completion button cannot process the same match twice.
+17. Verify existing player/admin permissions remain unchanged.
+18. Run the existing automated tests.
+19. Verify the frontend builds successfully.
+
+Make the smallest targeted changes necessary.
+
+When finished, tell me:
+- Which files were changed.
+- What changed in each file.
+- Whether all tests passed.
+- Whether the frontend build passed.
+- Any assumptions you made.
+
+Do not deploy.

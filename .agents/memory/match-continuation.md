@@ -33,6 +33,12 @@ Successful Create Match saves retain the date, selected player pool and Teams st
 
 **How to apply:** Distinguish successful roster creation/saving from score entry or match completion. An explicitly continued saved roster is still edited in place, but after its successful save the subsequent setup must no longer target that saved roster for editing.
 
+After a score is successfully saved, admins stay on Current Match and receive a “Match Complete” acknowledgement. Refresh the existing upcoming/completed collections and let Current Match show remaining upcoming matches or its existing empty state; Match History remains a manual destination.
+
+**Why:** The user wants to complete multiple social matches from Current Match without repeated navigation to Match History.
+
+**How to apply:** Keep the existing result endpoint, ELO processing and refresh as the source of truth. Guard duplicate client submits while pending; do not introduce a new queue or change result calculations.
+
 Admins must be able to delete unplayed drafts and completed matches. Completed deletion must first use the existing exact result reversal, restoring ELO, rank, matches played and priority. Remove the deleted match's associated audit rows only after that reversal, leaving no orphan records.
 
 **Why:** The user explicitly requested safe completed-match deletion and no orphan audit rows. This supersedes the earlier rule that draft reset retained assignment metadata after deleting its match.

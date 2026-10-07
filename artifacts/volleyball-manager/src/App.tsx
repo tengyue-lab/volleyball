@@ -423,13 +423,14 @@ function EditResultButton({ matchId }: { matchId: number }) {
   </div>;
 }
 
-function MatchDetail({ matchId }: { matchId: number }) {
+function MatchDetail({ matchId, onMatchCompleted }: { matchId: number; onMatchCompleted?: (match: Match) => void }) {
   const [, navigate] = useLocation();
   const { isAdmin } = useAccess();
   const query = useGetMatch(matchId, { query: { queryKey: getGetMatchQueryKey(matchId) } });
   const queryClient = useQueryClient();
   const submitResult = useSubmitMatchResult();
   const reopenResult = useReopenMatchResult();
+  const submitGuard = useRef(false);
   const [scoreA, setScoreA] = useState('');
   const [scoreB, setScoreB] = useState('');
   const [resultError, setResultError] = useState('');
@@ -466,6 +467,7 @@ function MatchDetail({ matchId }: { matchId: number }) {
   const onMatchUpdated = (updated: Match) => refreshAfterMatchUpdate(queryClient, matchId, updated);
   function saveResult(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submitGuard.current || submitResult.isPending || reopenResult.isPending) return;
     setResultError('');
     const parsedA = Number(scoreA);
     const parsedB = Number(scoreB);
@@ -477,13 +479,17 @@ function MatchDetail({ matchId }: { matchId: number }) {
       setResultError('A match cannot end in a tie. Enter the winning set score.');
       return;
     }
+    submitGuard.current = true;
     submitResult.mutate({ matchId, data: { scoreA: parsedA, scoreB: parsedB } }, {
       onSuccess: async (updated) => {
         await onMatchUpdated(updated);
         setResultError('');
-        navigate(`/match-history?match=${updated.id}`);
+        onMatchCompleted?.(updated);
       },
-      onError: (error) => setResultError(messageFor(error)),
+      onError: (error) => {
+        submitGuard.current = false;
+        setResultError(messageFor(error));
+      },
     });
   }
   function editResult() {
@@ -618,7 +624,7 @@ function DeleteMatchButton({ match, beforeDelete }: { match: Match; beforeDelete
   </>;
 }
 
-function MatchCard({ match, expanded, onToggle, beforeDelete }: { match: Match; expanded: boolean; onToggle: () => void; beforeDelete: () => void }) {
+function MatchCard({ match, expanded, onToggle, beforeDelete, onMatchCompleted }: { match: Match; expanded: boolean; onToggle: () => void; beforeDelete: () => void; onMatchCompleted?: (match: Match) => void }) {
   const { isAdmin } = useAccess();
   const completed = match.status === 'completed';
   return <article className="panel match-card" data-testid={`card-match-${match.id}`}>
@@ -627,7 +633,7 @@ function MatchCard({ match, expanded, onToggle, beforeDelete }: { match: Match; 
     <div className="match-card-foot"><span>{completed ? `${match.winner} won` : 'Match roster saved'}</span>{!completed && <button className="text-button" onClick={onToggle} aria-expanded={expanded} data-testid={`button-view-match-${match.id}`}>{expanded ? 'Hide details' : completed ? 'View results' : isAdmin ? 'Enter score' : 'View roster'} <ChevronDown size={12} style={{ verticalAlign: 'middle', transform: expanded ? 'rotate(180deg)' : undefined }} /></button>}</div>
     {completed && <HistoryDetails match={match} />}
     {isAdmin && <div className="history-actions">{completed && <EditResultButton matchId={match.id} />}<DeleteMatchButton match={match} beforeDelete={beforeDelete} /></div>}
-    {!completed && expanded && <MatchDetail matchId={match.id} />}
+    {!completed && expanded && <MatchDetail matchId={match.id} onMatchCompleted={onMatchCompleted} />}
   </article>;
 }
 
@@ -1278,6 +1284,7 @@ function MatchCollectionPage({ type }: { type: 'current' | 'history' }) {
     setExpandedMatch(isCurrent ? initialMatchId : null);
   }, [initialMatchId, isCurrent]);
   const [dismissedResult, setDismissedResult] = useState<number | null>(null);
+  const [completedMatchId, setCompletedMatchId] = useState<number | null>(null);
   const matches = (matchesQuery.data ?? [])
     .filter((match) => match.status === (isCurrent ? 'upcoming' : 'completed'))
     .sort((a, b) => {
@@ -1296,7 +1303,7 @@ function MatchCollectionPage({ type }: { type: 'current' | 'history' }) {
       <MatchDetail matchId={initialMatchId} />
     </section>}
     {matchesQuery.isLoading ? <LoadingState /> : matchesQuery.isError ? <ErrorState error={matchesQuery.error} retry={() => void matchesQuery.refetch()} /> :
-      matches.length ? <div className="match-list">{matches.map((match) => <MatchCard key={match.id} match={match} expanded={expandedMatch === match.id} onToggle={() => setExpandedMatch(expandedMatch === match.id ? null : match.id)} beforeDelete={() => {
+      matches.length ? <div className="match-list">{matches.map((match) => <MatchCard key={match.id} match={match} expanded={expandedMatch === match.id} onToggle={() => setExpandedMatch(expandedMatch === match.id ? null : match.id)} onMatchCompleted={isCurrent ? (updated) => setCompletedMatchId(updated.id) : undefined} beforeDelete={() => {
         if (expandedMatch === match.id) setExpandedMatch(null);
         if (initialMatchId === match.id) {
           setDismissedResult(match.id);
@@ -1308,6 +1315,15 @@ function MatchCollectionPage({ type }: { type: 'current' | 'history' }) {
           copy={isCurrent ? 'Saved match rosters will appear here. Start a roster for the next club match.' : 'Completed matches and results will appear here.'}
           action={isCurrent ? <Link href="/create-match" className="button button-primary"><Plus size={15} /> Create Match</Link> : undefined}
         /></section>}
+    {isCurrent && completedMatchId !== null && <ConfirmDialog
+      testId="dialog-match-complete"
+      title="Match Complete"
+      tone="warning"
+      confirmLabel="OK"
+      hideCancel
+      onCancel={() => setCompletedMatchId(null)}
+      onConfirm={() => setCompletedMatchId(null)}
+    ><p>The match result has been saved successfully.</p></ConfirmDialog>}
   </main></Shell>;
 }
 

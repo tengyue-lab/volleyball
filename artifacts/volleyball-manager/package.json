@@ -9,7 +9,7 @@
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:match-balancing": "node --experimental-strip-types --test ./tests/match-balancing.test.mjs",
-    "test:post-match-flow": "node --experimental-strip-types --test ./tests/post-match-flow.test.mjs ./tests/draft-actions.test.mjs ./tests/save-match-flow.test.mjs"
+    "test:post-match-flow": "node --experimental-strip-types --test ./tests/post-match-flow.test.mjs ./tests/draft-actions.test.mjs ./tests/save-match-flow.test.mjs ./tests/match-completion-flow.test.mjs"
   },
   "devDependencies": {
     "@clerk/react": "^6.17.5",
