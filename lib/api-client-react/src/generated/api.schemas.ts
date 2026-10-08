@@ -156,6 +156,14 @@ export interface PlayerUpdate {
   eloPublic?: boolean;
 }
 
+export interface PlayerPreferencesUpdate {
+  /**
+     * @minItems 3
+     * @maxItems 5
+     */
+  positions: Position[];
+}
+
 export type MatchStatus = typeof MatchStatus[keyof typeof MatchStatus];
 
 

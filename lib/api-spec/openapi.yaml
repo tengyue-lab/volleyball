@@ -200,6 +200,32 @@ paths:
           description: Player deleted
         "404":
           description: Player not found
+  /profile/preferences:
+    patch:
+      operationId: updateOwnPreferences
+      tags: [players]
+      summary: Update preferred positions for the signed-in account's linked player
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlayerPreferencesUpdate"
+      responses:
+        "200":
+          description: Updated linked player
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Player"
+        "400":
+          description: Invalid ranked positions
+        "401":
+          description: Sign-in required
+        "403":
+          description: A linked player profile is required
+        "404":
+          description: Linked player profile not found
   /players/{playerId}/elo-history:
     parameters:
       - name: playerId
@@ -538,6 +564,18 @@ components:
           minimum: 0
         eloPublic:
           type: boolean
+    PlayerPreferencesUpdate:
+      type: object
+      required: [positions]
+      additionalProperties: false
+      properties:
+        positions:
+          type: array
+          minItems: 3
+          maxItems: 5
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/Position"
     MatchStatus:
       type: string
       enum: [upcoming, completed]

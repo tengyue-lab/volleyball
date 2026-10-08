@@ -114,6 +114,12 @@ def install_privacy(app, database):
         ) and not g.viewer["isAdmin"]:
             return jsonify({"error": "Administrator access required."}), 403 if user_id else 401
         if request.method not in ("GET", "HEAD", "OPTIONS"):
+            if request.endpoint == "update_own_preferences":
+                if not user_id:
+                    return jsonify({"error": "Sign in to make changes."}), 401
+                if g.viewer.get("playerId") is None:
+                    return jsonify({"error": "Link your account to a player profile first."}), 403
+                return None
             if g.viewer["isAdmin"]:
                 return None
             if not user_id:

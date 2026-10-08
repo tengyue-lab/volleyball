@@ -218,6 +218,38 @@ export const DeletePlayerResponse = zod.void()
 
 
 /**
+ * @summary Update preferred positions for the signed-in account's linked player
+ */
+export const updateOwnPreferencesBodyPositionsMin = 3;
+export const updateOwnPreferencesBodyPositionsMax = 5;
+
+
+
+export const UpdateOwnPreferencesBody = zod.object({
+  "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])).min(updateOwnPreferencesBodyPositionsMin).max(updateOwnPreferencesBodyPositionsMax)
+})
+
+export const updateOwnPreferencesResponseMatchesPlayedMin = 0;
+
+
+
+export const UpdateOwnPreferencesResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
+  "elo": zod.number().int().nullable().describe('Exact rating is visible only to the linked player owner and admins; null for all other viewers regardless of public leaderboard opt-in.'),
+  "eloPublic": zod.boolean(),
+  "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
+  "matchesPlayed": zod.number().int().min(updateOwnPreferencesResponseMatchesPlayedMin),
+  "provisional": zod.boolean().describe('True below ten completed progression matches, including zero.'),
+  "createdAt": zod.coerce.date(),
+  "preferencesConfirmed": zod.boolean(),
+  "preferredRolePriority": zod.boolean(),
+  "prioritySince": zod.coerce.date().nullable()
+})
+
+
+/**
  * @summary Get a player's ELO audit history (admin only)
  */
 export const GetPlayerEloHistoryParams = zod.object({

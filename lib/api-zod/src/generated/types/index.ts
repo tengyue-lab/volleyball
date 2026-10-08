@@ -32,6 +32,7 @@ export * from './matchStatus';
 export * from './matchWinner';
 export * from './player';
 export * from './playerInput';
+export * from './playerPreferencesUpdate';
 export * from './playerUpdate';
 export * from './position';
 export * from './rankLabel';

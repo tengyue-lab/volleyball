@@ -679,6 +679,35 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             completed_counts, _ = completed_match_history(connection)
         return jsonify(serialize_player(updated, completed_counts.get(player_id, 0)))
 
+    @app.patch("/api/profile/preferences")
+    def update_own_preferences():
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict) or set(body) != {"positions"}:
+            return jsonify({"error": "Provide only your ranked positions."}), 400
+        changes, error = validate_player_fields(body, partial=True)
+        if error:
+            return jsonify({"error": error}), 400
+        positions = changes["positions"]
+        if len(positions) < 3:
+            return jsonify({"error": "Choose at least three preferred positions."}), 400
+
+        player_id = g.viewer["playerId"]
+        with database() as connection:
+            current = connection.execute(
+                "SELECT * FROM players WHERE id = ?", (player_id,)
+            ).fetchone()
+            if current is None:
+                return jsonify({"error": "Linked player profile not found."}), 404
+            connection.execute(
+                "UPDATE players SET positions_json = ?, preferences_confirmed = 1 WHERE id = ?",
+                (json.dumps(positions), player_id),
+            )
+            updated = connection.execute(
+                "SELECT * FROM players WHERE id = ?", (player_id,)
+            ).fetchone()
+            completed_counts, _ = completed_match_history(connection)
+        return jsonify(serialize_player(updated, completed_counts.get(player_id, 0)))
+
     @app.delete("/api/players/<int:player_id>")
     def delete_player(player_id: int):
         with database() as connection:

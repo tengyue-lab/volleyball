@@ -1,0 +1,196 @@
+# Replit Prompt — Unified Profile UI and Admin Position Preferences
+
+Please make two targeted improvements to the Profile tab:
+
+1. Allow admins with linked player profiles to edit their own preferred positions.
+2. Redesign the Profile layout so all existing information appears inside one unified, continuous profile card.
+
+Do not modify ELO calculations, matchmaking algorithms or unrelated functionality.
+
+## 1. Allow linked admins to edit preferred positions
+
+Currently, non-admin users who have linked their account to a player record can edit their ranked preferred positions from the Profile tab.
+
+However, admins who have also linked their account to a player record do not see this option.
+
+Please fix this.
+
+Requirements:
+- Any authenticated user with a successfully linked player record should be able to edit their own preferred positions, regardless of whether they are an admin or non-admin.
+- Admins without a linked player record should not automatically receive a personal preference editor.
+- Reuse the existing Preferred Positions component and saving functionality.
+- Do not create a separate preference editor for admins.
+- Preserve the minimum of three ranked preferences.
+- Preserve the existing position ordering and validation rules.
+- Save changes to the user's linked player record.
+- Ensure the updated preferences are used in future team generation.
+- Preserve existing admin functionality in the Players tab.
+
+IMPORTANT:
+Backend authorization must verify that the linked player record belongs to the authenticated user.
+
+Admin status should not cause the Profile tab to display or modify another player's preferences.
+
+Do not change existing matchmaking or role-assignment algorithms.
+
+## 2. Combine the three Profile sections into one continuous card
+
+Currently, the Profile tab contains three separate boxes:
+
+1. Player information: name, ELO, rank and matches played.
+2. Leaderboard Visibility.
+3. Preferred Positions.
+
+Please combine these into ONE unified Profile card.
+
+The card should contain all three sections, separated by subtle horizontal dividers rather than separate outer boxes.
+
+Recommended order:
+
+### Section A — Player Information
+
+At the top, show:
+- Player name
+- ELO
+- Rank
+- Matches Played
+
+Show the player name prominently.
+
+Below the name, display ELO, Rank and Matches Played in one consistent statistics row.
+
+Use three evenly spaced columns on mobile and desktop where practical.
+
+Keep the existing Competitive Ranks information icon next to the Rank label.
+
+Do not remove or change its popup.
+
+### Section B — Leaderboard Visibility
+
+Below a subtle divider, display:
+
+**Leaderboard Visibility**
+
+"Allow your name to appear on the public Top 5 leaderboard."
+
+Place the existing ON/OFF toggle to the right.
+
+Reuse the existing visibility setting and saving behavior.
+
+Do not introduce a new popup or separate card.
+
+### Section C — Preferred Positions
+
+Below another subtle divider, display:
+
+**Preferred Positions**
+
+Description:
+
+"Select your preferred positions in ranked order. You may occasionally need to play an unselected position to balance the teams."
+
+Display the existing ranked position editor.
+
+Keep:
+- Numbered preferences
+- Add/remove position controls
+- Reordering controls
+- Minimum three preferences
+- Save Preferences button
+
+This section must appear for both linked admins and linked non-admin players.
+
+Do not change the existing position preference functionality.
+
+## 3. Typography consistency
+
+Please standardize Profile typography.
+
+Recommended font sizes:
+
+Mobile:
+- Profile heading: 22px
+- Player name: 20px
+- ELO, Rank and Matches Played values: 20px
+- Section headings: 16px
+- Statistic labels: 12px
+- Descriptions: 13px
+- Preferred position rows: 14px
+- Button text: 14px
+
+Desktop:
+- Profile heading: 24px
+- Player name: 22px
+- ELO, Rank and Matches Played values: 22px
+- Section headings: 17px
+- Statistic labels: 13px
+- Descriptions: 14px
+- Preferred position rows: 15px
+- Button text: 14px
+
+IMPORTANT:
+All three statistic values — ELO, Rank and Matches Played — must use exactly the same font size, font weight and visual emphasis.
+
+Their labels should also use consistent font sizes and spacing.
+
+Avoid mixing different typography scales between these statistics.
+
+Use existing design tokens where possible instead of introducing unnecessary custom styles.
+
+## 4. Spacing and visual design
+
+Create a clean, modern, mobile-first layout.
+
+Requirements:
+- One main rounded Profile card.
+- No separate outer cards for each section.
+- Use subtle dividers between sections.
+- Use approximately 16–24px of internal padding.
+- Use approximately 12–16px between related content groups.
+- Use consistent spacing between labels and values.
+- Keep the leaderboard toggle aligned neatly.
+- Maintain comfortable spacing in the Preferred Positions editor.
+- Avoid unnecessary borders, nested boxes and excessive decoration.
+
+Ensure the layout works well on narrow mobile screens without horizontal scrolling.
+
+## 5. Preserve functionality
+
+Do not modify:
+- ELO calculation formula
+- ELO values
+- Competitive rank thresholds
+- Competitive Ranks information popup
+- Matches Played calculation
+- Public Top 5 leaderboard behavior
+- Leaderboard visibility setting
+- Position preference rules
+- Team balancing algorithm
+- Matchmaking
+- Match creation or completion
+- Match history
+- Account linking
+- Admin permissions outside this requested change
+
+## 6. Testing
+
+Please verify:
+
+1. Linked non-admin players can still edit preferred positions.
+2. Linked admins can now edit their own preferred positions.
+3. Unlinked admins cannot edit an unrelated player record through Profile.
+4. Changes save correctly and persist after refresh.
+5. Backend authorization prevents editing another player's preferences.
+6. The Profile displays one unified outer card.
+7. Player information, visibility and preferences appear in the correct order.
+8. ELO, Rank and Matches Played values have identical typography.
+9. Statistic labels have consistent spacing.
+10. Leaderboard Visibility toggle still works.
+11. Competitive Ranks information popup still works.
+12. Mobile layout has no horizontal scrolling.
+13. Existing functionality remains unchanged.
+14. Frontend build and relevant backend tests pass.
+
+Make the smallest targeted changes necessary.
+
+Do not deploy.
