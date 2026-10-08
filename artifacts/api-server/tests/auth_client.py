@@ -2,6 +2,7 @@
 import base64
 import json
 import time
+import uuid
 
 from privacy_auth import INITIAL_ADMIN_EMAILS, sign_request
 
@@ -37,6 +38,10 @@ class SignedClient:
         return self.open(path, "POST", **kwargs)
 
     def patch(self, path, **kwargs):
+        # Mimic the admin form's per-intent retry key; explicit test keys win.
+        if "elo" in kwargs.get("json", {}):
+            kwargs["json"] = {**kwargs["json"]}
+            kwargs["json"].setdefault("adjustmentRequestId", str(uuid.uuid4()))
         return self.open(path, "PATCH", **kwargs)
 
     def delete(self, path, **kwargs):

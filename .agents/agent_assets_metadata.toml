@@ -28,3 +28,17 @@ mtime_ms = 1791457659686
 storage_uri = "gcs://replit-rams-assets-reed/rams/assets/repl:359a38b6-3ed4-4a64-84ec-93d60078b068/9a0cfc91-03b4-4091-87e5-865722ea3e84/d4665a0f-56eb-448d-900a-30d9c39c1387"
 storage_version_token = "1791457697477208"
 content_type = "text/csv"
+
+[[outputs]]
+id = "zobpdCg9KBeKg-UxgWQOn"
+uri = "file://audits/elo-launch/implementation-report.html"
+type = "html"
+title = "ELO launch implementation report"
+description = "Approved thresholds, exact file/function inventory, audited counter repair, reversal safeguards and verification results."
+logical_id = "78c4ac4f-e502-4a53-b1c0-172aa1d4268f"
+content_hash = "sha256:775106781bdf6878cce90294444c0fb0c3bb756627c51fc6560e704b94acfd0d"
+size = 11788
+mtime_ms = 1791460726772
+storage_uri = "gcs://replit-rams-assets-reed/rams/assets/repl:359a38b6-3ed4-4a64-84ec-93d60078b068/78c4ac4f-e502-4a53-b1c0-172aa1d4268f/b6373587-173e-42ca-b0e4-abcaa83e064d"
+storage_version_token = "1791460768756519"
+content_type = "text/html"

@@ -4,12 +4,12 @@ STARTING_ELO = 800
 PLACEMENT_MATCHES = 10
 RANK_THRESHOLDS = (
     (0, "Iron 3"), (600, "Iron 2"), (700, "Iron 1"),
-    (800, "Bronze 3"), (900, "Bronze 2"), (1000, "Bronze 1"),
-    (1100, "Silver 3"), (1200, "Silver 2"), (1300, "Silver 1"),
-    (1400, "Gold 3"), (1500, "Gold 2"), (1600, "Gold 1"),
-    (1700, "Platinum 3"), (1800, "Platinum 2"), (1900, "Platinum 1"),
-    (2000, "Diamond 3"), (2100, "Diamond 2"), (2200, "Diamond 1"),
-    (2300, "Masters"),
+    (850, "Bronze 3"), (900, "Bronze 2"), (950, "Bronze 1"),
+    (1000, "Silver 3"), (1050, "Silver 2"), (1100, "Silver 1"),
+    (1150, "Gold 3"), (1200, "Gold 2"), (1250, "Gold 1"),
+    (1300, "Platinum 3"), (1350, "Platinum 2"), (1400, "Platinum 1"),
+    (1450, "Diamond 3"), (1500, "Diamond 2"), (1550, "Diamond 1"),
+    (1600, "Masters"),
 )
 RANK_ORDER = {label: index for index, (_, label) in enumerate(RANK_THRESHOLDS)}
 

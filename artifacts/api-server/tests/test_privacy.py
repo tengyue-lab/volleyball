@@ -124,13 +124,13 @@ class PrivacyTests(unittest.TestCase):
         response = self.anonymous().get("/api/rank-tiers")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json(), [
-            {"tier": "Iron", "minElo": 0, "maxElo": 799},
-            {"tier": "Bronze", "minElo": 800, "maxElo": 1099},
-            {"tier": "Silver", "minElo": 1100, "maxElo": 1399},
-            {"tier": "Gold", "minElo": 1400, "maxElo": 1699},
-            {"tier": "Platinum", "minElo": 1700, "maxElo": 1999},
-            {"tier": "Diamond", "minElo": 2000, "maxElo": 2299},
-            {"tier": "Masters", "minElo": 2300, "maxElo": None},
+            {"tier": "Iron", "minElo": 0, "maxElo": 849},
+            {"tier": "Bronze", "minElo": 850, "maxElo": 999},
+            {"tier": "Silver", "minElo": 1000, "maxElo": 1149},
+            {"tier": "Gold", "minElo": 1150, "maxElo": 1299},
+            {"tier": "Platinum", "minElo": 1300, "maxElo": 1449},
+            {"tier": "Diamond", "minElo": 1450, "maxElo": 1599},
+            {"tier": "Masters", "minElo": 1600, "maxElo": None},
         ])
 
     def test_linked_player_can_update_only_own_ranked_preferences_and_they_persist(self):
@@ -393,9 +393,9 @@ class PrivacyTests(unittest.TestCase):
             self.player_ids[0]: 3000,  # Highest rating, but only nine completed matches.
             self.player_ids[1]: 2300,  # Masters
             self.player_ids[2]: 2500,  # Higher than the public leaders, but private.
-            self.player_ids[3]: 2000,  # Diamond
-            self.player_ids[4]: 1700,  # Platinum
-            self.player_ids[5]: 1400,  # Gold; one incomplete role history.
+            self.player_ids[3]: 1500,  # Diamond
+            self.player_ids[4]: 1350,  # Platinum
+            self.player_ids[5]: 1200,  # Gold; one incomplete role history.
             self.player_ids[6]: 1100,  # Silver
         }
         with sqlite3.connect(self.app.config["DATABASE_PATH"]) as connection:

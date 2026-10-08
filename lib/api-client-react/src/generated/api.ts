@@ -36,7 +36,8 @@ import type {
   PlayerInput,
   PlayerPreferencesUpdate,
   PlayerUpdate,
-  RankTierRange
+  RankTierRange,
+  RatingAdminAudit
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -1082,6 +1083,83 @@ export const useUpdateOwnPreferences = <TError = ErrorType<void>,
       > => {
       return useMutation(getUpdateOwnPreferencesMutationOptions(options));
     }
+
+export const getGetAdminRatingAuditUrl = (playerId: number,) => {
+
+
+
+
+  return `/api/admin/players/${playerId}/rating-audit`
+}
+
+/**
+ * @summary Admin-only append-only adjustment and counter repair audit
+ */
+export const getAdminRatingAudit = async (playerId: number, options?: Parameters<typeof customFetch>[1]): Promise<RatingAdminAudit> => {
+
+  return customFetch<RatingAdminAudit>(getGetAdminRatingAuditUrl(playerId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminRatingAuditQueryKey = (playerId: number,) => {
+    return [
+    `/api/admin/players/${playerId}/rating-audit`
+    ] as const;
+    }
+
+
+export const getGetAdminRatingAuditQueryOptions = <TData = Awaited<ReturnType<typeof getAdminRatingAudit>>, TError = ErrorType<void>>(playerId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminRatingAudit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminRatingAuditQueryKey(playerId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminRatingAudit>>> = ({ signal }) => getAdminRatingAudit(playerId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: playerId !== null && playerId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminRatingAudit>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminRatingAuditQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminRatingAudit>>>
+export type GetAdminRatingAuditQueryError = ErrorType<void>
+
+
+/**
+ * @summary Admin-only append-only adjustment and counter repair audit
+ */
+
+export function useGetAdminRatingAudit<TData = Awaited<ReturnType<typeof getAdminRatingAudit>>, TError = ErrorType<void>>(
+ playerId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminRatingAudit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminRatingAuditQueryOptions(playerId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetPlayerEloHistoryUrl = (playerId: number,) => {
 

@@ -15,24 +15,24 @@ from rating_progression import k_for_matches, rank_for_elo, rank_movement, tier_
 class RatingRulesTests(unittest.TestCase):
     def test_tier_ranges_are_collapsed_from_existing_rank_thresholds(self):
         self.assertEqual(tier_elo_ranges(), [
-            {"tier": "Iron", "minElo": 0, "maxElo": 799},
-            {"tier": "Bronze", "minElo": 800, "maxElo": 1099},
-            {"tier": "Silver", "minElo": 1100, "maxElo": 1399},
-            {"tier": "Gold", "minElo": 1400, "maxElo": 1699},
-            {"tier": "Platinum", "minElo": 1700, "maxElo": 1999},
-            {"tier": "Diamond", "minElo": 2000, "maxElo": 2299},
-            {"tier": "Masters", "minElo": 2300, "maxElo": None},
+            {"tier": "Iron", "minElo": 0, "maxElo": 849},
+            {"tier": "Bronze", "minElo": 850, "maxElo": 999},
+            {"tier": "Silver", "minElo": 1000, "maxElo": 1149},
+            {"tier": "Gold", "minElo": 1150, "maxElo": 1299},
+            {"tier": "Platinum", "minElo": 1300, "maxElo": 1449},
+            {"tier": "Diamond", "minElo": 1450, "maxElo": 1599},
+            {"tier": "Masters", "minElo": 1600, "maxElo": None},
         ])
 
     def test_all_rank_boundaries_and_masters_label(self):
         thresholds = [
             (0, "Iron 3"), (600, "Iron 2"), (700, "Iron 1"),
-            (800, "Bronze 3"), (900, "Bronze 2"), (1000, "Bronze 1"),
-            (1100, "Silver 3"), (1200, "Silver 2"), (1300, "Silver 1"),
-            (1400, "Gold 3"), (1500, "Gold 2"), (1600, "Gold 1"),
-            (1700, "Platinum 3"), (1800, "Platinum 2"), (1900, "Platinum 1"),
-            (2000, "Diamond 3"), (2100, "Diamond 2"), (2200, "Diamond 1"),
-            (2300, "Masters"),
+            (850, "Bronze 3"), (900, "Bronze 2"), (950, "Bronze 1"),
+            (1000, "Silver 3"), (1050, "Silver 2"), (1100, "Silver 1"),
+            (1150, "Gold 3"), (1200, "Gold 2"), (1250, "Gold 1"),
+            (1300, "Platinum 3"), (1350, "Platinum 2"), (1400, "Platinum 1"),
+            (1450, "Diamond 3"), (1500, "Diamond 2"), (1550, "Diamond 1"),
+            (1600, "Masters"),
         ]
         for index, (minimum, label) in enumerate(thresholds):
             with self.subTest(minimum=minimum):
@@ -94,6 +94,24 @@ class ProgressionIntegrationTests(unittest.TestCase):
     record_completed_roster = results.MatchResultTests.record_completed_roster
 
     def set_state(self, ids, elo, count):
+        # Boundary tests need real appearance fixtures, not just a cached count.
+        group = tuple(ids)
+        fixtures = getattr(self, "_count_fixtures", {})
+        with sqlite3.connect(self.app.config["DATABASE_PATH"]) as connection:
+            for match_id in fixtures.get(group, []):
+                connection.execute("DELETE FROM matches WHERE id=?", (match_id,))
+            from rating_accounting import completed_counts
+            connection.row_factory = sqlite3.Row
+            existing = completed_counts(connection)
+        missing = max(count - existing.get(player_id, 0) for player_id in ids)
+        fixtures[group] = [
+            self.record_completed_roster({
+                player_id: "Setter" for player_id in ids
+                if existing.get(player_id, 0) + appearance < count
+            })
+            for appearance in range(missing)
+        ]
+        self._count_fixtures = fixtures
         with sqlite3.connect(self.app.config["DATABASE_PATH"]) as connection:
             connection.executemany(
                 "UPDATE players SET elo=?, matches_played=? WHERE id=?",
@@ -105,7 +123,7 @@ class ProgressionIntegrationTests(unittest.TestCase):
 
     def test_new_player_and_server_owned_counter(self):
         player = self.client.post("/api/players", json={"name": "New", "positions": ["Setter"]}).get_json()
-        self.assertEqual((player["elo"], player["rank"], player["matchesPlayed"], player["provisional"]), (800, "Bronze 3", 0, True))
+        self.assertEqual((player["elo"], player["rank"], player["matchesPlayed"], player["provisional"]), (800, "Iron 1", 0, True))
         for extra in [{"matchesPlayed": 61}, {"rank": "Masters"}, {"provisional": False}]:
             self.assertEqual(self.client.post("/api/players", json={"name": "Invalid", "positions": ["Setter"], **extra}).status_code, 400)
             self.assertEqual(self.client.patch(f"/api/players/{player['id']}", json=extra).status_code, 400)
@@ -219,17 +237,18 @@ class ProgressionIntegrationTests(unittest.TestCase):
             0: "Iron",
             599: "Iron",
             799: "Iron",
-            800: "Bronze",
-            1099: "Bronze",
-            1100: "Silver",
-            1399: "Silver",
-            1400: "Gold",
-            1699: "Gold",
-            1700: "Platinum",
-            1999: "Platinum",
-            2000: "Diamond",
-            2299: "Diamond",
-            2300: "Masters",
+            800: "Iron",
+            850: "Bronze",
+            999: "Bronze",
+            1000: "Silver",
+            1149: "Silver",
+            1150: "Gold",
+            1299: "Gold",
+            1300: "Platinum",
+            1449: "Platinum",
+            1450: "Diamond",
+            1599: "Diamond",
+            1600: "Masters",
             100000: "Masters",
         }
         for elo, expected in expected_tiers.items():
@@ -237,7 +256,7 @@ class ProgressionIntegrationTests(unittest.TestCase):
                 self.assertEqual(tier_for_elo(elo), expected)
         with self.assertRaises(ValueError):
             tier_for_elo(-1)
-        self.assertEqual(rank_for_elo(800), "Bronze 3")
+        self.assertEqual(rank_for_elo(800), "Iron 1")
         self.assertEqual(rank_for_elo(2300), "Masters")
 
     def test_private_rank_redaction_owner_admin_other_snapshots_and_deleted_history(self):
@@ -255,11 +274,11 @@ class ProgressionIntegrationTests(unittest.TestCase):
             self.assertEqual(response["eloChanges"], [])
         for viewer in [owner, self.client]:
             profile = viewer.get(f"/api/players/{target}").get_json()
-            self.assertEqual(profile["rank"], "Bronze 1")
+            self.assertEqual(profile["rank"], "Silver 2")
             self.assertEqual(profile["matchesPlayed"], 1)
             self.assertTrue(profile["provisional"])
         self.assertEqual(owner.get(f"/api/matches/{match['id']}").get_json()["eloChanges"], [])
-        self.assertEqual(self.client.get(f"/api/matches/{match['id']}").get_json()["eloChanges"][0]["rankAfter"], "Bronze 1")
+        self.assertEqual(self.client.get(f"/api/matches/{match['id']}").get_json()["eloChanges"][0]["rankAfter"], "Silver 2")
         self.client.delete(f"/api/players/{target}")
         for viewer, visible in [(owner, False), (self.client, True), (self.anonymous(), False)]:
             # The existing dedicated history route returns 404 for deleted
@@ -267,7 +286,7 @@ class ProgressionIntegrationTests(unittest.TestCase):
             response = viewer.get(f"/api/matches/{match['id']}").get_json()
             if visible:
                 audit = next(c for c in response["eloChanges"] if c["playerId"] == target)
-                self.assertEqual(audit["rankAfter"], "Bronze 1")
+                self.assertEqual(audit["rankAfter"], "Silver 2")
             else:
                 self.assertEqual(response["eloChanges"], [])
             expected = 404 if visible else 401 if viewer is not owner else 403
@@ -342,14 +361,17 @@ class ProgressionMigrationTests(unittest.TestCase):
             self.assertEqual((history["eloBefore"], history["eloAfter"], history["changeAmount"]), (1000, 1016, 16))
             self.assertEqual(client.get("/api/matches/1").get_json()["teamA"], roster)
             self.assertEqual(client.get("/api/players/1").get_json()["matchesPlayed"], 1)
+            self.assertEqual(client.post("/api/matches/1/reopen").status_code, 409)
+            from repair_rating_counters import repair_counters
+            repair_counters(path, "isolated-test-approval")
             self.assertEqual(client.post("/api/matches/1/reopen").status_code, 200)
             self.assertEqual(client.get("/api/players/1").get_json()["elo"], 1000)
             self.assertEqual(client.get("/api/players/1").get_json()["matchesPlayed"], 0)
             reversal = client.get("/api/players/1/elo-history").get_json()[-1]
             self.assertIsNone(reversal["kUsed"])
-            self.assertIsNone(reversal["matchesPlayedAfter"])
+            self.assertEqual(reversal["matchesPlayedAfter"], 0)
             created = client.post("/api/players", json={"name": "Fresh", "positions": ["Setter"]}).get_json()
-            self.assertEqual((created["elo"], created["matchesPlayed"], created["rank"]), (800, 0, "Bronze 3"))
+            self.assertEqual((created["elo"], created["matchesPlayed"], created["rank"]), (800, 0, "Iron 1"))
             with sqlite3.connect(path) as connection:
                 roots_after = dict(connection.execute("SELECT name,rootpage FROM sqlite_master WHERE type='table' AND name IN ('players','matches','elo_history')"))
                 self.assertEqual(roots_before, roots_after)

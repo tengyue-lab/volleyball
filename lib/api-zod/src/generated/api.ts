@@ -172,6 +172,9 @@ export const UpdatePlayerParams = zod.object({
   "playerId": zod.coerce.number().int()
 })
 
+export const updatePlayerBodyAdjustmentRequestIdMin = 8;
+export const updatePlayerBodyAdjustmentRequestIdMax = 128;
+
 export const updatePlayerBodyNameMax = 80;
 
 export const updatePlayerBodyPositionsMax = 5;
@@ -181,6 +184,7 @@ export const updatePlayerBodyEloMin = 0;
 
 
 export const UpdatePlayerBody = zod.object({
+  "adjustmentRequestId": zod.string().min(updatePlayerBodyAdjustmentRequestIdMin).max(updatePlayerBodyAdjustmentRequestIdMax).optional().describe('Admin ELO writes use one stable key per edit intent, retained across retries.'),
   "name": zod.string().min(1).max(updatePlayerBodyNameMax).optional(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])).min(1).max(updatePlayerBodyPositionsMax).optional().describe('Linked non-admin players must provide at least three preferences; admin edits retain the existing one-to-five range.'),
   "elo": zod.number().int().min(updatePlayerBodyEloMin).optional(),
@@ -246,6 +250,30 @@ export const UpdateOwnPreferencesResponse = zod.object({
   "preferencesConfirmed": zod.boolean(),
   "preferredRolePriority": zod.boolean(),
   "prioritySince": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Admin-only append-only adjustment and counter repair audit
+ */
+export const GetAdminRatingAuditParams = zod.object({
+  "playerId": zod.coerce.number().int()
+})
+
+export const GetAdminRatingAuditResponse = zod.object({
+  "adjustments": zod.array(zod.object({
+  "id": zod.number().int(),
+  "elo_before": zod.number().int(),
+  "elo_after": zod.number().int(),
+  "change_amount": zod.number().int(),
+  "created_at": zod.string()
+})),
+  "counterRepairs": zod.array(zod.object({
+  "id": zod.number().int(),
+  "matches_before": zod.number().int(),
+  "matches_after": zod.number().int(),
+  "created_at": zod.string()
+}))
 })
 
 

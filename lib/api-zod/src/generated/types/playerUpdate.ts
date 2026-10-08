@@ -9,6 +9,12 @@ import type { Position } from './position';
 
 export interface PlayerUpdate {
   /**
+     * Admin ELO writes use one stable key per edit intent, retained across retries.
+     * @minLength 8
+     * @maxLength 128
+     */
+  adjustmentRequestId?: string;
+  /**
      * @minLength 1
      * @maxLength 80
      */

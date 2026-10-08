@@ -22,6 +22,7 @@ import {
   useGetLeaderboard,
   useGetMatch,
   useGetPlayer,
+  useGetAdminRatingAudit,
   useListMatches,
   useListPlayers,
   useReopenMatchResult,
@@ -31,6 +32,7 @@ import {
   getGetMatchQueryKey,
   getGetPlayerQueryKey,
   getGetPlayerEloHistoryQueryKey,
+  getGetAdminRatingAuditQueryKey,
   getListMatchesQueryKey,
   getListPlayersQueryKey,
 } from '@workspace/api-client-react';
@@ -38,6 +40,8 @@ import type { Match, Player, PlayerInput, PlayerUpdate, Position as PositionType
 import { LogIn, LogOut, ShieldCheck, UserRound, CalendarDays, Check, ChevronDown, ClipboardList, Menu, Pencil, Plus, Search, Trophy, Trash2, Users, WandSparkles, X } from 'lucide-react';
 import { Link, Route, Switch, useLocation, useSearch, Router as WouterRouter } from 'wouter';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { playerEditFields, prepareRatingAdjustment } from '@/lib/rating-adjustment';
+import type { RatingAdjustmentIntent } from '@/lib/rating-adjustment';
 import { Toaster } from '@/components/ui/toaster';
 import { toast } from '@/hooks/use-toast';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -223,6 +227,11 @@ function PlayerEditor({ playerId, onClose, notify }: { playerId: number | null; 
   const [selectedPositions, setSelectedPositions] = useState<PositionType[]>([]);
   const [formError, setFormError] = useState('');
   const initializedFor = useRef<number | null | undefined>(undefined);
+  const initialElo = useRef<number | null>(null);
+  const adjustmentIntent = useRef<RatingAdjustmentIntent | null>(null);
+  const ratingAudit = useGetAdminRatingAudit(playerId ?? 0, {
+    query: { queryKey: getGetAdminRatingAuditQueryKey(playerId ?? 0), enabled: access.isAdmin && playerId !== null },
+  });
 
   useEffect(() => {
     if (initializedFor.current === playerId) return;
@@ -230,6 +239,7 @@ function PlayerEditor({ playerId, onClose, notify }: { playerId: number | null; 
       initializedFor.current = playerId;
       setName(playerQuery.data.name);
       setElo(playerQuery.data.elo === null ? '' : String(playerQuery.data.elo));
+      initialElo.current = playerQuery.data.elo;
       setEloPublic(playerQuery.data.eloPublic);
       setSelectedPositions(playerQuery.data.positions);
     }
@@ -246,7 +256,7 @@ function PlayerEditor({ playerId, onClose, notify }: { playerId: number | null; 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError('');
-    if (!access.isAdmin) return;
+    if (saving || !access.isAdmin) return;
     const cleanName = name.trim();
     const rating = Number(elo);
     if (!cleanName || cleanName.length > 80) return setFormError('Enter a name between 1 and 80 characters.');
@@ -259,7 +269,13 @@ function PlayerEditor({ playerId, onClose, notify }: { playerId: number | null; 
         onError: (error) => setFormError(messageFor(error)),
       });
     } else {
-      const data: PlayerUpdate = { name: cleanName, positions: selectedPositions, elo: rating, eloPublic };
+      const fields = playerEditFields(cleanName, selectedPositions, eloPublic, rating, initialElo.current);
+      let data: PlayerUpdate = fields;
+      if ('elo' in fields) {
+        const prepared = prepareRatingAdjustment(playerId, fields, adjustmentIntent.current);
+        adjustmentIntent.current = prepared.intent;
+        data = prepared.data;
+      }
       updatePlayer.mutate({ playerId, data }, {
         onSuccess: async () => { await refreshEverything(queryClient); notify(`${cleanName}'s player details saved.`); onClose(); },
         onError: (error) => setFormError(messageFor(error)),
@@ -288,6 +304,17 @@ function PlayerEditor({ playerId, onClose, notify }: { playerId: number | null; 
                 {playerQuery.data?.preferredRolePriority && <p className="priority-indicator">Priority: Preferred role next match</p>}
                 <RankedPositionInput value={selectedPositions} onChange={(value) => { setSelectedPositions(value); setFormError(''); }} />
               </fieldset>
+              {playerId !== null && <details className="form-field">
+                <summary>Rating adjustment audit</summary>
+                <p className="field-hint">Admin adjustments are preserved as amounts when a match is reversed. They do not count as matches.</p>
+                {ratingAudit.isLoading && <p>Loading audit…</p>}
+                {ratingAudit.isError && <p role="alert">Unable to load the rating audit.</p>}
+                {ratingAudit.data && <>
+                  {ratingAudit.data.adjustments.length === 0 && <p className="field-hint">No recorded admin adjustments.</p>}
+                  {ratingAudit.data.adjustments.map((entry) => <p key={entry.id} className="field-hint">{new Date(entry.created_at).toLocaleDateString()} — {entry.elo_before} → {entry.elo_after} ({entry.change_amount >= 0 ? '+' : ''}{entry.change_amount})</p>)}
+                  {ratingAudit.data.counterRepairs.map((entry) => <p key={entry.id} className="field-hint">Approved match-counter repair: {entry.matches_before} → {entry.matches_after}</p>)}
+                </>}
+              </details>}
               {formError && <div className="form-error" role="alert">{formError}</div>}
               <div className="modal-actions"><button type="button" className="button button-secondary" onClick={onClose} data-testid="button-cancel-player">Cancel</button><button className="button button-primary" type="submit" disabled={saving} data-testid="button-save-player">{saving ? 'Saving…' : playerId === null ? 'Add player' : 'Save changes'}</button></div>
             </form>}

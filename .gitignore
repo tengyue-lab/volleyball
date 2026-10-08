@@ -19,6 +19,7 @@ __pycache__/
 /artifacts/api-server/data/*.sqlite3
 /artifacts/api-server/data/*.sqlite3-shm
 /artifacts/api-server/data/*.sqlite3-wal
+/artifacts/api-server/data/backups/
 
 # IDEs and editors
 /.idea

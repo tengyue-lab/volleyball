@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ELO launch improvements — implementation report</title>
+<style>
+body{font:16px/1.6 system-ui,sans-serif;color:#19334a;background:#f7f6f0;margin:0;padding:24px}main{max-width:980px;margin:auto;background:white;padding:28px;border-radius:16px}h1,h2{line-height:1.2}h2{margin-top:32px}table{border-collapse:collapse;width:100%;font-size:14px}td,th{padding:10px;text-align:left;border-bottom:1px solid #ddd}code{overflow-wrap:anywhere;font-size:13px}li{margin:6px 0}.pass{padding:14px;background:#edf6f0;border-left:4px solid #427156}.note{padding:14px;background:#fff8e3}a{color:#19334a}@media(max-width:500px){body{padding:12px}main{padding:16px}td,th{padding:7px;font-size:12px}}
+</style>
+<main>
+<h1>ELO launch improvements</h1>
+<p>Wyndham Wombats VC · Implementation and verification report · 8 October 2026</p>
+<p class="pass"><strong>Complete:</strong> 194 automated tests passed, 1,000 numerical parity cases passed, typecheck and frontend build passed. The running app was checked on a 390px mobile viewport. Nothing was deployed.</p>
+<h2>1. Numerical ELO remains unchanged</h2>
+<ul>
+<li>Starting ELO: 800. Four-stage K: 60 for matches 1–10, 40 for 11–30, 32 for 31–60, 20 for 61+.</li>
+<li>The numerical calculator and K helper are AST-identical to their pre-change implementations. Expected wins still use live pre-result team averages, base-10 scale 400, existing rounding and a zero floor.</li>
+<li>Private players still receive real updates. Public opt-in and established-player Top 5 rules remain intact.</li>
+<li>No attendance points, seasonal inflation, rating reset, guaranteed promotion or competing ranking system was introduced. Matchmaking and balancing source were not changed.</li>
+</ul>
+<h2>2. Approved display thresholds</h2>
+<p>The audit's single recommended mapping was explained before implementation. New players display as <strong>Iron 1 at 800</strong>, or Iron on the public leaderboard. Threshold changes affect labels, not numeric ratings. Except for the retained lower Iron bounds, divisions are 50 points and tiers span 150 points. These are skill labels, not population quotas or promised progression timelines.</p>
+<table><thead><tr><th>Tier</th><th>Division 3</th><th>Division 2</th><th>Division 1</th></tr></thead><tbody>
+<tr><td>Iron</td><td>0–599</td><td>600–699</td><td>700–849</td></tr>
+<tr><td>Bronze</td><td>850–899</td><td>900–949</td><td>950–999</td></tr>
+<tr><td>Silver</td><td>1000–1049</td><td>1050–1099</td><td>1100–1149</td></tr>
+<tr><td>Gold</td><td>1150–1199</td><td>1200–1249</td><td>1250–1299</td></tr>
+<tr><td>Platinum</td><td>1300–1349</td><td>1350–1399</td><td>1400–1449</td></tr>
+<tr><td>Diamond</td><td>1450–1499</td><td>1500–1549</td><td>1550–1599</td></tr>
+<tr><td>Masters</td><td colspan="3">1600+, no division</td></tr>
+</tbody></table>
+<p>Profile, leaderboard, rank information and match-result presentation use the shared backend mapping. Original stored audit labels remain immutable and readable through the existing admin history endpoint.</p>
+<h2>3. Match-count consistency and approved repair</h2>
+<p>The original counter migration started older players at zero without backfilling prior completed appearances. All 14 stored counters matched modern completed appearances exactly, but omitted 105 older appearances.</p>
+<p>Completed roster snapshots now provide one authoritative appearance count: each player counts once per distinct completed match. K progression, provisional status and leaderboard eligibility use that history. Result writes and reversals check the cached counter rather than silently repairing it. Completion, reopen, correction and duplicate protection remain transactional.</p>
+<p>The explicitly approved repair updated 14 workspace counters: total <strong>176 → 281</strong>. It changed no numeric ELO, original audit rows, match snapshots, priority state or accounts. Verification after restarting the app also matched the private backup, excluding only the approved counters. Existing table root pages were preserved.</p>
+<p>Private backup: <code>artifacts/api-server/data/backups/before-counter-repair-20261008T114959212489Z.sqlite3</code>. Backups are ignored by Git and are not served as public assets.</p>
+<p>The repair is explicit and idempotent; it never runs automatically on application startup. For a separate database with legacy counters, its repair must be explicitly approved and run against that database. No production database was accessed or modified.</p>
+<h2>4. Admin adjustments and reversal integrity</h2>
+<p>The additive <code>elo_adjustments</code> ledger records actual before/after ELO, delta, administrator, retry identity and its position relative to result history. The additive <code>progression_repairs</code> ledger records approved counter repairs. The original audit table was not rebuilt.</p>
+<p>Reversal removes the recorded match contribution while preserving subsequent recorded adjustment amounts. Example: 800 → match win 830 → admin sets 900 (+70) → reverse win 870. Adjustments are not counted as games or reapplied on request retries. Name/preference edits omit an unchanged rating to avoid overwriting concurrent results.</p>
+<p>The existing later-result guard remains. Historical K values are never recalculated. Repaired historical results reverse to the remaining authoritative appearance count, leaving their original, potentially incomplete audit metadata unchanged. Corrections then use the correct current stage for their newly applied result.</p>
+<p>Admins can inspect adjustment and repair history in the existing player edit dialog or <code>GET /api/admin/players/{playerId}/rating-audit</code>. Anonymous requests return 401; signed-in non-admins return 403. Existing result/reversal audit access and privacy gates are preserved.</p>
+<p class="note"><strong>Intentional safeguards:</strong> Unknown unaudited legacy rating changes block ambiguous reversals for review. A reversal that would become negative after retaining manual adjustments also blocks atomically; it does not silently discard an adjustment or clamp away the conflict. No historical adjustment records were invented.</p>
+<h2>5. Verification results</h2>
+<table><thead><tr><th>Check</th><th>Result</th></tr></thead><tbody>
+<tr><td>Existing backend suite plus 19 new accounting regressions, isolated SQLite fixtures</td><td>92 passed</td></tr>
+<tr><td>Match balancing / manual team behavior</td><td>26 passed</td></tr>
+<tr><td>Post-match, draft, completion and save workflows</td><td>62 passed</td></tr>
+<tr><td>Rank rendering and admin edit-intent / retry tests</td><td>14 passed</td></tr>
+<tr><td>Numerical formula parity against the archived audit model</td><td>1,000 cases passed</td></tr>
+<tr><td>Workspace typecheck, API code generation and frontend build</td><td>Passed</td></tr>
+<tr><td>Approved database repair, backup integrity, idempotency and post-startup preservation</td><td>Passed</td></tr>
+<tr><td>Public mobile leaderboard and live admin-audit access protection</td><td>Passed</td></tr>
+</tbody></table>
+<p>Regression coverage includes tier boundaries, all four K stages, provisional placement, public/private eligibility, exact unadjusted restoration, adjusted reopen/correction/deletion, legacy counter reconciliation, duplicate/concurrent submissions, concurrent admin edits, keyed no-ops, malformed duplicate rosters, and rollback on injected failures.</p>
+<p>Commands: <code>uv run python audits/elo-launch/audit_checks.py --tests</code>; <code>node audits/elo-launch/check-model.mjs</code>; <code>pnpm run typecheck</code>; frontend <code>run build</code>, <code>run test:match-balancing</code>, <code>run test:post-match-flow</code>; <code>node --experimental-strip-types --test tests/rank-display.test.mjs tests/rating-adjustment-flow.test.mjs</code>. The backend runner discovers the same unittest suite while preventing its global app import from touching the club database.</p>
+<p>The build succeeded with non-blocking tooltip sourcemap and bundle-size warnings. Injected rollback tests intentionally log simulated SQLite failures. Initial concurrent service restarts timed out during heavy verification; unchanged services started cleanly when restarted sequentially afterward.</p>
+<h2>6. Exact application and test files changed</h2>
+<ul>
+<li><code>.gitignore</code> — private backup exclusion.</li>
+<li><code>artifacts/api-server/app.py</code> — additive initialization, shared completed history, match rank presentation, safe reversal, transactional admin update and private audit endpoint.</li>
+<li><code>artifacts/api-server/rating_progression.py</code> — approved tier thresholds only.</li>
+<li><code>artifacts/api-server/rating_accounting.py</code> — new adjustment/repair ledgers, authoritative counts, consistency checks, request deduplication and reversal offsets.</li>
+<li><code>artifacts/api-server/repair_rating_counters.py</code> — explicit backup-first approved repair.</li>
+<li><code>artifacts/api-server/tests/auth_client.py</code> — fixture keys matching admin form requests.</li>
+<li><code>artifacts/api-server/tests/test_match_results.py</code> — history fixtures with consistent counters.</li>
+<li><code>artifacts/api-server/tests/test_privacy.py</code> — approved tier expectations.</li>
+<li><code>artifacts/api-server/tests/test_rating_progression.py</code> — threshold, authoritative-history and legacy-repair expectations.</li>
+<li><code>artifacts/api-server/tests/test_rating_accounting.py</code> — new accounting regressions.</li>
+<li><code>artifacts/volleyball-manager/src/App.tsx</code> — admin request intent, unchanged-rating omission and audit detail.</li>
+<li><code>artifacts/volleyball-manager/src/lib/rating-adjustment.ts</code> — typed edit fields and stable retry keys.</li>
+<li><code>artifacts/volleyball-manager/tests/rating-adjustment-flow.test.mjs</code> — four focused edit-intent regressions.</li>
+<li><code>lib/api-spec/openapi.yaml</code> — adjustment key and protected audit contract.</li>
+<li><code>lib/api-client-react/src/generated/api.ts</code> and <code>api.schemas.ts</code> — regenerated hooks and DTOs.</li>
+<li><code>lib/api-zod/src/generated/api.ts</code>, <code>types/index.ts</code>, <code>types/playerUpdate.ts</code>, <code>types/ratingAdminAudit.ts</code>, <code>types/ratingAdminAuditAdjustmentsItem.ts</code>, <code>types/ratingAdminAuditCounterRepairsItem.ts</code> — regenerated validation/types.</li>
+</ul>
+<p>Key functions: <code>completed_match_history</code>, <code>serialize_elo_history_row</code>, <code>reverse_match_result</code>, <code>update_player</code>, <code>get_admin_rating_audit</code>, <code>submit_match_result</code>, <code>initialize_accounting</code>, <code>completed_counts</code>, <code>require_aligned_counts</code>, <code>record_adjustment</code>, <code>reversal_rating</code>, <code>repair_counters</code>, <code>playerEditFields</code>, <code>prepareRatingAdjustment</code>. <code>initialize_database</code> only adds the new audit tables; <code>calculate_elo_updates</code> and <code>k_for_matches</code> remain unchanged.</p>
+<p>Supporting documentation: this report; project memory index and policy notes for approved adjustment semantics and managed workflow restart ordering.</p>
+<h2>7. Deferred work</h2>
+<p>The unequal-team-size total-rating versus average-rating balancing concern remains for the separately approved balancer review. No balancing change was implemented. Separate production counter repair, if needed, remains an explicitly approved operational step. No data reset or deployment was performed.</p>
+</main></html>

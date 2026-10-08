@@ -17,6 +17,7 @@ from typing import Any, Iterator
 from flask import Flask, current_app, g, jsonify, request
 from privacy_auth import initialize_auth_schema, install_privacy
 from rating_progression import PLACEMENT_MATCHES, STARTING_ELO, is_provisional, k_for_matches, rank_for_elo, rank_movement, tier_elo_ranges, tier_for_elo
+from rating_accounting import AccountingConflict, completed_counts, initialize_accounting, require_aligned_counts, record_adjustment, reversal_rating
 
 
 POSITIONS = (
@@ -173,6 +174,7 @@ def initialize_database(database_path: str) -> None:
                 """, (match["id"], assignment["player_id"], assignment["status"], match["completed_at"], match["completion_order"]))
         replay_priority(connection, [row[0] for row in connection.execute("SELECT DISTINCT player_id FROM priority_events")])
         initialize_auth_schema(connection)
+        initialize_accounting(connection)
 
 
 @contextmanager
@@ -215,19 +217,18 @@ def replay_priority(connection: sqlite3.Connection, player_ids: list[int]) -> No
 
 def completed_match_history(connection: sqlite3.Connection) -> tuple[Counter[int], dict[int, str]]:
     """Count actual completed appearances and reliable assigned-role history."""
-    match_counts: Counter[int] = Counter()
     role_counts: dict[int, Counter[str]] = defaultdict(Counter)
     role_history_reliable: dict[int, bool] = {}
     rows = connection.execute(
         "SELECT team_a_json, team_b_json FROM matches WHERE status = 'completed' ORDER BY id"
     ).fetchall()
+    match_counts: Counter[int] = Counter(completed_counts(connection, rows))
     for row in rows:
         match_roles: dict[int, list[Any]] = defaultdict(list)
         for team_json in (row["team_a_json"], row["team_b_json"]):
             for player in json.loads(team_json):
                 match_roles[player["id"]].append(player.get("assignedPosition"))
         for player_id, assigned_positions in match_roles.items():
-            match_counts[player_id] += 1
             is_valid_assignment = (
                 len(assigned_positions) == 1 and assigned_positions[0] in POSITIONS
             )
@@ -270,7 +271,10 @@ def serialize_player(
     }
 
 
-def serialize_elo_history_row(row: sqlite3.Row) -> dict[str, Any]:
+def serialize_elo_history_row(row: sqlite3.Row, current_ranks: bool = False) -> dict[str, Any]:
+    # Stored historical labels stay intact; match screens use today's tier mapping.
+    before = rank_for_elo(row["elo_before"]) if current_ranks and row["rank_before"] is not None else row["rank_before"]
+    after = rank_for_elo(row["elo_after"]) if current_ranks and row["rank_after"] is not None else row["rank_after"]
     return {
         "id": row["id"],
         "playerId": row["player_id"],
@@ -279,9 +283,9 @@ def serialize_elo_history_row(row: sqlite3.Row) -> dict[str, Any]:
         "eloAfter": row["elo_after"],
         "changeAmount": row["change_amount"],
         "kUsed": row["k_used"],
-        "rankBefore": row["rank_before"],
-        "rankAfter": row["rank_after"],
-        "rankMovement": rank_movement(row["rank_before"], row["rank_after"]),
+        "rankBefore": before,
+        "rankAfter": after,
+        "rankMovement": rank_movement(before, after),
         "matchesPlayedBefore": row["matches_played_before"],
         "matchesPlayedAfter": row["matches_played_after"],
         "action": row["action"],
@@ -341,7 +345,7 @@ def active_match_elo_changes(
         """,
         (match_id, last_reversal),
     ).fetchall()
-    return [serialize_elo_history_row(row) for row in rows]
+    return [serialize_elo_history_row(row, current_ranks=True) for row in rows]
 
 
 def reverse_match_result(
@@ -384,6 +388,20 @@ def reverse_match_result(
         f"SELECT * FROM players WHERE id IN ({placeholders})", player_ids
     ).fetchall()
     players_by_id = {row["id"]: row for row in player_rows}
+    counts, _ = completed_match_history(connection)
+    roster_ids = {
+        player["id"] for player in json.loads(match["team_a_json"]) + json.loads(match["team_b_json"])
+    }
+    if set(player_ids) != roster_ids or len(player_ids) != len(set(player_ids)):
+        return None, "Result audit and completed roster disagree. Review history before reversal.", 409
+    try:
+        require_aligned_counts(player_rows, counts)
+        restored_ratings = {
+            change["playerId"]: reversal_rating(connection, change, players_by_id.get(change["playerId"]))
+            for change in elo_changes
+        }
+    except AccountingConflict as error:
+        return None, str(error), 409
     reversed_at = utc_now()
     for change in elo_changes:
         player_id = change["playerId"]
@@ -392,18 +410,13 @@ def reverse_match_result(
             current_player["elo"] if current_player is not None
             else change["eloAfter"]
         )
-        restored_elo = change["eloBefore"]
-        recorded_counter = change["matchesPlayedBefore"]
-        # Legacy results never incremented the progression counter.
-        before_counter = (
-            current_player["matches_played"] if current_player is not None
-            else change["matchesPlayedAfter"]
-        ) if recorded_counter is not None else None
+        restored_elo = restored_ratings[player_id]
+        before_counter = counts.get(player_id, 0)
+        recorded_counter = max(0, before_counter - 1)
         if current_player is not None:
             connection.execute(
                 "UPDATE players SET elo = ?, matches_played = ? WHERE id = ?",
-                (restored_elo, recorded_counter if recorded_counter is not None
-                 else current_player["matches_played"], player_id),
+                 (restored_elo, recorded_counter, player_id),
             )
         connection.execute(
             """
@@ -416,8 +429,8 @@ def reverse_match_result(
             (
                 player_id, match_id, before_reversal, restored_elo,
                 restored_elo - before_reversal, reversed_at, change["kUsed"],
-                rank_for_elo(before_reversal) if change["rankAfter"] is not None else None,
-                change["rankBefore"], before_counter, recorded_counter,
+                rank_for_elo(before_reversal),
+                rank_for_elo(restored_elo), before_counter, recorded_counter,
             ),
         )
     connection.execute(
@@ -537,9 +550,11 @@ def validate_player_fields(
     body: dict[str, Any], *, partial: bool
 ) -> tuple[dict[str, Any] | None, str | None]:
     allowed_fields = {"name", "positions", "elo", "eloPublic"}
+    if partial:
+        allowed_fields.add("adjustmentRequestId")
     if set(body) - allowed_fields:
         return None, "Only name, positions, ELO, and ELO visibility can be changed."
-    if partial and not body:
+    if partial and not (set(body) & {"name", "positions", "elo", "eloPublic"}):
         return None, "Provide at least one field to update."
 
     normalized: dict[str, Any] = {}
@@ -654,12 +669,20 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             return jsonify({"error": "Choose at least three preferred positions."}), 400
 
         with database() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             current = connection.execute(
                 "SELECT * FROM players WHERE id = ?", (player_id,)
             ).fetchone()
             if current is None:
                 return jsonify({"error": "Player not found."}), 404
 
+            try:
+                retried = record_adjustment(connection, current, changes, body, g.viewer["userId"], utc_now())
+            except AccountingConflict as error:
+                return jsonify({"error": str(error)}), 409
+            if retried:
+                counts, _ = completed_match_history(connection)
+                return jsonify(serialize_player(current, counts.get(player_id, 0)))
             name = changes.get("name", current["name"])
             positions = changes.get(
                 "positions", json.loads(current["positions_json"])
@@ -763,6 +786,20 @@ def create_app(database_path: str | Path | None = None) -> Flask:
                 (player_id,),
             ).fetchall()
         return jsonify([serialize_elo_history_row(row) for row in rows])
+
+    @app.get("/api/admin/players/<int:player_id>/rating-audit")
+    def get_admin_rating_audit(player_id: int):
+        with database() as connection:
+            if connection.execute("SELECT 1 FROM players WHERE id=?", (player_id,)).fetchone() is None:
+                return jsonify({"error": "Player not found."}), 404
+            adjustments = connection.execute(
+                "SELECT id,player_id,actor_id,request_key,elo_before,elo_after,change_amount,after_history_id,created_at "
+                "FROM elo_adjustments WHERE player_id=? ORDER BY id", (player_id,),
+            ).fetchall()
+            repairs = connection.execute(
+                "SELECT * FROM progression_repairs WHERE player_id=? ORDER BY id", (player_id,),
+            ).fetchall()
+        return jsonify({"adjustments": [dict(row) for row in adjustments], "counterRepairs": [dict(row) for row in repairs]})
 
     @app.get("/api/matches")
     def list_matches():
@@ -1008,9 +1045,12 @@ def create_app(database_path: str | Path | None = None) -> Flask:
                 f"SELECT * FROM players WHERE id IN ({placeholders})", all_ids
             ).fetchall()
             completed_counts, _ = completed_match_history(connection)
-            progression_counts = {
-                row["id"]: row["matches_played"] for row in rows
-            }
+            try:
+                require_aligned_counts(rows, completed_counts)
+            except AccountingConflict as error:
+                return jsonify({"error": str(error)}), 409
+            if len(set(all_ids)) != len(all_ids):
+                return jsonify({"error": "A player appears more than once in this match roster."}), 409
             players_by_id = {
                 row["id"]: serialize_player(row, completed_counts.get(row["id"], 0))
                 for row in rows
@@ -1022,16 +1062,8 @@ def create_app(database_path: str | Path | None = None) -> Flask:
 
             team_a_players = [players_by_id[player_id] for player_id in team_a_ids]
             team_b_players = [players_by_id[player_id] for player_id in team_b_ids]
-            rating_team_a_players = [
-                {**player, "matchesPlayed": progression_counts[player["id"]]}
-                for player in team_a_players
-            ]
-            rating_team_b_players = [
-                {**player, "matchesPlayed": progression_counts[player["id"]]}
-                for player in team_b_players
-            ]
             elo_updates = calculate_elo_updates(
-                rating_team_a_players, rating_team_b_players, winner
+                team_a_players, team_b_players, winner
             )
             completed_at = utc_now()
             completion_order = connection.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM elo_history").fetchone()[0]

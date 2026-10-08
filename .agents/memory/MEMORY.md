@@ -7,3 +7,5 @@
 - [Match continuation](match-continuation.md) — mode choice and confirmed switches preserve roster/date; completed saves remain on Teams or Current Match as specified.
 - [Placement counts](placement-counts.md) — completed history is authoritative; legacy counter repair requires explicit approval and must preserve old audits.
 - [Analysis-only verification](analysis-only-verification.md) — isolate application bootstrap as well as test fixtures; verify live-source and data fingerprints.
+- [Rating adjustments](rating-adjustment-policy.md) — reversals preserve recorded adjustment amounts; unknown legacy changes or negative restoration require review.
+- [Workflow restart ordering](workflow-restart-order.md) — finish heavy verification before sequential managed-service restarts to avoid rebuild/startup timeouts.

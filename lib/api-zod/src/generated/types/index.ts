@@ -37,3 +37,6 @@ export * from './playerUpdate';
 export * from './position';
 export * from './rankLabel';
 export * from './rankTierRange';
+export * from './ratingAdminAudit';
+export * from './ratingAdminAuditAdjustmentsItem';
+export * from './ratingAdminAuditCounterRepairsItem';

@@ -141,6 +141,12 @@ export interface PlayerInput {
 
 export interface PlayerUpdate {
   /**
+     * Admin ELO writes use one stable key per edit intent, retained across retries.
+     * @minLength 8
+     * @maxLength 128
+     */
+  adjustmentRequestId?: string;
+  /**
      * @minLength 1
      * @maxLength 80
      */
@@ -361,6 +367,28 @@ export interface MatchResultInput {
   scoreA: number;
   /** @minimum 0 */
   scoreB: number;
+}
+
+export type RatingAdminAuditAdjustmentsItem = {
+  id: number;
+  elo_before: number;
+  elo_after: number;
+  change_amount: number;
+  created_at: string;
+  [key: string]: unknown;
+ };
+
+export type RatingAdminAuditCounterRepairsItem = {
+  id: number;
+  matches_before: number;
+  matches_after: number;
+  created_at: string;
+  [key: string]: unknown;
+ };
+
+export interface RatingAdminAudit {
+  adjustments: RatingAdminAuditAdjustmentsItem[];
+  counterRepairs: RatingAdminAuditCounterRepairsItem[];
 }
 
 export interface AuthViewer {

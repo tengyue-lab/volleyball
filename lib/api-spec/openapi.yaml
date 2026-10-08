@@ -226,6 +226,27 @@ paths:
           description: A linked player profile is required
         "404":
           description: Linked player profile not found
+  /admin/players/{playerId}/rating-audit:
+    get:
+      operationId: getAdminRatingAudit
+      summary: Admin-only append-only adjustment and counter repair audit
+      tags: [players]
+      parameters:
+        - name: playerId
+          in: path
+          required: true
+          schema: {type: integer}
+      responses:
+        "200":
+          description: Administrative rating audit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RatingAdminAudit"
+        "403":
+          description: Administrator access required
+        "404":
+          description: Player not found
   /players/{playerId}/elo-history:
     parameters:
       - name: playerId
@@ -547,6 +568,11 @@ components:
       type: object
       minProperties: 1
       properties:
+        adjustmentRequestId:
+          type: string
+          minLength: 8
+          maxLength: 128
+          description: Admin ELO writes use one stable key per edit intent, retained across retries.
         name:
           type: string
           minLength: 1
@@ -721,6 +747,33 @@ components:
         scoreB:
           type: integer
           minimum: 0
+    RatingAdminAudit:
+      type: object
+      required: [adjustments, counterRepairs]
+      properties:
+        adjustments:
+          type: array
+          items:
+            type: object
+            required: [id, elo_before, elo_after, change_amount, created_at]
+            additionalProperties: true
+            properties:
+              id: {type: integer}
+              elo_before: {type: integer}
+              elo_after: {type: integer}
+              change_amount: {type: integer}
+              created_at: {type: string}
+        counterRepairs:
+          type: array
+          items:
+            type: object
+            required: [id, matches_before, matches_after, created_at]
+            additionalProperties: true
+            properties:
+              id: {type: integer}
+              matches_before: {type: integer}
+              matches_after: {type: integer}
+              created_at: {type: string}
     EloHistoryEntry:
       type: object
       required: [id, playerId, matchId, eloBefore, eloAfter, changeAmount, action, createdAt, kUsed, rankBefore, rankAfter, rankMovement, matchesPlayedBefore, matchesPlayedAfter]

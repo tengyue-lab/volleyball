@@ -246,7 +246,7 @@ class MatchResultTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 400)
 
     def record_completed_roster(self, player_roles):
-        """Insert a legacy completed snapshot without changing ratings or audits."""
+        """Insert a completed fixture with consistent counts, without rating changes."""
         players = [
             {"id": player_id, "assignedPosition": position}
             for player_id, position in player_roles.items()
@@ -262,7 +262,14 @@ class MatchResultTests(unittest.TestCase):
                 """,
                 (json.dumps(team_a), json.dumps(team_b), created_at),
             )
-            return cursor.lastrowid
+            match_id = cursor.lastrowid
+            from rating_accounting import completed_counts
+            connection.row_factory = sqlite3.Row
+            connection.executemany(
+                "UPDATE players SET matches_played=? WHERE id=?",
+                [(count, player_id) for player_id, count in completed_counts(connection).items()],
+            )
+            return match_id
 
     def complete(self, match):
         response = self.client.post(f"/api/matches/{match['id']}/result", json={"scoreA": 3, "scoreB": 1})
