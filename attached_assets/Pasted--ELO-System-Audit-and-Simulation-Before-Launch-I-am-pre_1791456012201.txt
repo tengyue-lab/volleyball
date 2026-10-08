@@ -1,0 +1,225 @@
+# ELO System Audit and Simulation — Before Launch
+
+I am preparing this volleyball app for public launch and want to improve its ELO rating system.
+
+Before implementing any changes, please inspect the existing code, evaluate the current ELO system and run isolated simulations to recommend the best configuration.
+
+**IMPORTANT: This is an investigation and testing task only. Do not change the production ELO algorithm, player ratings, database records, rank thresholds or team-balancing logic yet. Do not deploy.**
+
+## 1. Context and goals
+
+This is a social volleyball app where players are assigned to balanced teams and receive ELO updates based on completed match results.
+
+The app has seven competitive tiers:
+
+1. Iron
+2. Bronze
+3. Silver
+4. Gold
+5. Platinum
+6. Diamond
+7. Masters
+
+For launch, I intend to start with a fresh player database and empty match history. All new players should begin at the lowest tier, Iron.
+
+My goals are:
+
+- Every new player starts at the same ELO baseline, within Iron.
+- New players can move toward their appropriate skill rating relatively quickly.
+- Established players have more stable ratings.
+- Stronger and weaker players can gradually separate into meaningful skill tiers.
+- Rating changes reflect match difficulty and expected results.
+- Ratings do not fluctuate excessively from one Saturday to the next.
+- The system remains fair for a small social volleyball community.
+- The rating system works sensibly alongside the existing team-balancing algorithm.
+
+I do not want to artificially force players into a bell-curve distribution or predetermined rank percentages.
+
+## 2. Audit the existing ELO implementation
+
+Inspect the current backend, frontend and relevant database models.
+
+Identify and explain:
+
+- Current starting ELO.
+- Current ELO calculation formula.
+- Current K-factor.
+- How expected win probability is calculated.
+- Whether team-average ELO is used.
+- Whether every player on a team receives the same ELO adjustment.
+- How provisional status is determined.
+- How completed matches are counted.
+- Whether ELO is updated exactly once per completed match.
+- Current tier thresholds for Iron through Masters.
+- How the public leaderboard uses ELO and eligibility.
+- Any issues with rounding, rating floors, inconsistent data or duplicate updates.
+
+Do not assume these details. Inspect the actual code and report what is implemented.
+
+## 3. Proposed settings to investigate
+
+Please evaluate these candidate settings:
+
+- Starting ELO: 800.
+- Starting tier: Iron.
+- Provisional period: first 10 completed matches.
+- Provisional K-factor: 64.
+- Established K-factor: 24.
+- Expected result: based on team-average ELO.
+- No hard ELO floor at 800.
+- Rank tiers determined by fixed ELO thresholds.
+
+These are candidate settings for testing, not final implementation instructions.
+
+Compare them against the existing system and, where useful, alternative configurations such as:
+
+- Provisional K = 48, established K = 24.
+- Provisional K = 64, established K = 32.
+- Current existing K-factor configuration.
+
+Explain the tradeoffs.
+
+## 4. Run isolated simulations
+
+Create a temporary simulation or test harness that does not modify real player records, match history or production database state.
+
+Simulate a small social volleyball community with approximately 30–50 players.
+
+Include players with different underlying skill levels, such as:
+
+- Beginners.
+- Lower-intermediate players.
+- Intermediate players.
+- Advanced players.
+- Very strong players.
+
+These underlying skill levels must be used only by the simulation to generate realistic match outcomes. They must not be treated as actual player ELO.
+
+Simulate realistic attendance where different subsets of players attend different Saturday sessions.
+
+Use the actual team-balancing algorithm where practical. If this is not feasible, clearly distinguish simulated balancing assumptions from the real algorithm.
+
+Run enough simulated sessions to evaluate rating behavior over approximately 10, 30, 50 and 100 matches per active player where feasible.
+
+Use multiple random seeds or simulation runs rather than relying on a single lucky result.
+
+## 5. Evaluate rating accuracy and distribution
+
+For each candidate configuration, measure:
+
+- ELO distribution after different numbers of matches.
+- Minimum, median and maximum ELO.
+- Rating spread and standard deviation.
+- Number of players in each rank tier.
+- How quickly stronger players move above weaker players.
+- Whether players with different skill levels become meaningfully separated.
+- How much ratings fluctuate after establishment.
+- Whether ratings become stuck around the starting value.
+- Whether ratings drift upward or downward across the whole population.
+- Whether newer players gain an unfair advantage over established players.
+- Whether players with low attendance are unfairly ranked.
+- Whether the team balancer prevents ELO from identifying skill differences.
+
+Where possible, compare the final rating order against the simulation's underlying player skill order.
+
+Do not judge a configuration as successful merely because it produces a wider rating distribution. Rating accuracy and stability matter more than visual spread.
+
+## 6. Investigate team-based ELO limitations
+
+Because this is a team sport, please specifically investigate:
+
+- Whether balanced teams result in most players maintaining approximately 50% win rates.
+- Whether strong players can be underrated because they are consistently assigned weaker teammates.
+- Whether weaker players can be overrated because they are consistently paired with stronger teammates.
+- Whether individual provisional K-factors cause rating inflation or deflation.
+- Whether the rating system remains fair when provisional and established players participate in the same match.
+- Whether repeated teammates or opponents create rating bias.
+
+Explain any limitations that cannot be solved using match wins and losses alone.
+
+Do not change the team balancer during this investigation.
+
+## 7. Recommend competitive tier thresholds
+
+Investigate appropriate ELO ranges for:
+
+Iron, Bronze, Silver, Gold, Platinum, Diamond and Masters.
+
+Consider the proposed starting ELO of 800, the likely size of this social club and the simulated rating distribution.
+
+Recommend specific thresholds with an explanation of:
+
+- How quickly players might leave Iron.
+- Whether Bronze and Silver are realistically achievable.
+- How difficult Gold, Platinum, Diamond and Masters should be.
+- Whether the highest tiers may initially remain empty.
+- How thresholds would behave as more players and matches are added.
+
+Do not implement the thresholds yet.
+
+Do not force each tier to contain a fixed percentage of players.
+
+## 8. Provisional status and leaderboard
+
+Evaluate the existing provisional rules and public Top 5 leaderboard eligibility.
+
+Recommend whether 10 completed matches is an appropriate provisional period.
+
+Ensure the proposed system can preserve:
+
+- Public leaderboard opt-in.
+- Existing player privacy.
+- Private numeric ELO on linked player profiles.
+- Correct provisional eligibility.
+- No exposure of other players' private ELO.
+
+Do not change these features yet.
+
+## 9. Provide a clear comparison report
+
+At the end, present:
+
+### A. Current system
+A concise explanation of how the app currently calculates ELO and what weaknesses were found.
+
+### B. Simulation results
+A comparison table showing the tested configurations and key measurements.
+
+Include charts or clearly formatted distributions if practical.
+
+### C. Recommended configuration
+Your recommended:
+- Starting ELO.
+- Provisional match count.
+- Provisional K-factor.
+- Established K-factor.
+- Team expected-win calculation.
+- Seven tier thresholds.
+- Any safeguards against rating drift or duplicate updates.
+
+### D. Risks and limitations
+Explain any issues arising from team-based matches and the existing balancing algorithm.
+
+### E. Implementation plan
+List the exact files and functions that would need to change, and any migration or compatibility concerns.
+
+Separate essential launch changes from optional future improvements.
+
+## 10. Safety and scope
+
+This task is for analysis and simulation only.
+
+- Do not reset or delete player data.
+- Do not delete match history.
+- Do not modify existing ELO ratings.
+- Do not change the production ELO algorithm.
+- Do not modify the team balancer.
+- Do not change the database schema.
+- Do not alter leaderboard functionality.
+- Do not deploy.
+
+Temporary test scripts are acceptable if isolated and clearly identified.
+
+If any simulations cannot be run, explain why rather than inventing results.
+
+**Finish by giving me the report and recommendations. Wait for my approval before implementing any changes.**
