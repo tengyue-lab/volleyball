@@ -21,8 +21,20 @@ Current Match means all saved upcoming rosters, not only the newest roster. Admi
 
 **How to apply:** Keep every upcoming match separately addressable and ordered using the existing Current Match ordering. Do not silently hide other unfinished rosters or introduce a separate active-match status without a new product decision.
 
-For public launch, the user intends a fresh player database and empty match history, with all new players starting at the same baseline within Iron.
+Launch improvements must preserve existing player records, numeric ratings and match history. New players should start at 800 ELO in the Iron tier.
 
-**Why:** The user supplied this launch direction for the ELO audit and simulation; candidate settings are for evaluation, not approved implementation.
+**Why:** After reviewing the audit, the user explicitly prohibited resetting or deleting existing data and approved an Iron starting tier without changing numeric ratings.
 
-**How to apply:** Evaluate launch recommendations against an equal Iron starting baseline. Do not delete data, change ratings or thresholds, or deploy without the user's separate approval.
+**How to apply:** Use the audit's explicitly recommended tier mapping after verification. Keep old audit history intact. Request approval before historical counter repairs or significant rating-audit migrations. Do not deploy.
+
+ELO represents continuous relative skill, not guaranteed rank progression. Keep the existing four-stage K progression and starting ELO 800; do not add seasonal resets, attendance rewards or seasonal inflation.
+
+**Why:** The user explicitly approved retaining the four-stage system and rejected four-month resets and attendance-based ELO rewards.
+
+**How to apply:** Separate display-tier changes from numeric rating changes. Seasonal statistics, if requested later, must not implicitly reset or inflate ELO.
+
+Do not change the team balancer while implementing the ELO launch improvements. The total-team balancing versus team-average result expectation issue belongs to a separate review.
+
+**Why:** The user explicitly deferred the unequal-team-size concern to the next team-balancer stage.
+
+**How to apply:** Preserve role assignment, preference rules, formations and match generation until separately approved.

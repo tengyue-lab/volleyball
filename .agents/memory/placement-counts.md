@@ -1,10 +1,10 @@
 ---
-name: Placement from completed history
-description: Separate displayed placement eligibility from ELO's stored K-factor counter when older counters lag.
+name: Authoritative completed-match counts
+description: User-approved count consistency policy and approval requirements for repairing legacy counters.
 ---
 
-Use completed match roster appearances to determine displayed match counts, provisional status and established-player leaderboard eligibility. Keep the persisted counter used for K-factor progression unchanged unless the user approves an ELO progression change.
+Completed-match roster history is the authoritative count for K progression, displayed matches played, provisional status and established-player leaderboard eligibility. Count each player only once per completed match.
 
-**Why:** Older player counters can undercount completed roster appearances; using them for placement falsely keeps players provisional. The user requested accurate placement without changing ELO calculations.
+**Why:** After the audit, the user approved fixing the disagreement between historical appearances and stored counters while retaining the existing ELO formula and four-stage K progression.
 
-**How to apply:** Count each player once per completed match snapshot for display and eligibility. Leave the stored progression counter and its reversal behavior untouched.
+**How to apply:** Preserve completion, reversal, correction, duplicate and transaction safety. Historical reconciliation requires a reviewed repair plan and explicit approval before executing it; never silently rewrite counters or original historical audit metadata.

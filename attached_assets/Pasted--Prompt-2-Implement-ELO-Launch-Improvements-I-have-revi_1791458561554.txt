@@ -1,0 +1,212 @@
+# Prompt 2 — Implement ELO Launch Improvements
+
+I have reviewed the ELO audit and simulation results and approved the following direction for Wyndham Wombats VC.
+
+Please implement the approved ELO improvements while preserving the existing rating calculation and team-balancing algorithm.
+
+IMPORTANT: Do not reset or delete any existing player records, ratings or match history. Do not deploy.
+
+## 1. Keep the existing four-stage ELO calculation
+
+The audit found the existing K-factor progression to be:
+
+- Matches 1–10: K = 60
+- Matches 11–30: K = 40
+- Matches 31–60: K = 32
+- Matches 61 onward: K = 20
+
+Keep this progression unchanged.
+
+Also preserve:
+- Starting ELO of 800.
+- The current base-10 expected-win formula with scale 400.
+- Expected win probability based on pre-result team-average ELO.
+- Existing per-player ELO update behavior.
+- Existing rounding behavior, unless a correctness bug is demonstrated.
+- Existing transactional result submission.
+- Existing duplicate-completion protections.
+
+Do not implement K = 64/24, 48/24 or 64/32.
+
+Do not introduce rating inflation, attendance-based ELO rewards or seasonal rating resets.
+
+The goal is accurate relative skill ratings for team balancing, not guaranteed rank progression.
+
+## 2. Change the starting tier to Iron
+
+Currently, a player starting at 800 ELO is displayed as Bronze 3.
+
+I want all new players to start at:
+
+**800 ELO — Iron**
+
+Use the seven existing competitive tiers:
+
+1. Iron
+2. Bronze
+3. Silver
+4. Gold
+5. Platinum
+6. Diamond
+7. Masters
+
+IMPORTANT:
+
+First, locate the full tier/division threshold proposal from the completed ELO audit.
+
+Use those proposed thresholds as the starting point, but do not blindly implement them.
+
+Before changing thresholds, verify that they:
+- Place 800 ELO within Iron.
+- Preserve a sensible progression from Iron through Masters.
+- Are compatible with the existing tier/division display system.
+- Are appropriate for the rating ranges observed in the simulations.
+- Do not imply that every player must eventually reach Masters.
+- Do not force players into predetermined rank percentages.
+
+If the audit contains one clear, explicitly recommended threshold mapping, report that mapping and its rationale before applying it.
+
+If multiple mappings remain viable or no final mapping was recommended, STOP and request my approval of the exact thresholds before implementing this section.
+
+Do not invent arbitrary thresholds.
+
+After approval, use one consistent tier configuration throughout the app, including:
+- Player Profile
+- Competitive Ranks information popup
+- Public Top 5 leaderboard
+- Any other tier displays
+
+Changing the tier thresholds must not alter numeric ELO ratings.
+
+## 3. Fix match-count and ELO progression consistency
+
+The audit found that legacy completed-match counts can disagree with stored K-progression counters.
+
+Investigate the exact causes and correct the underlying logic so match progression is consistent.
+
+Requirements:
+- Define a clear authoritative rule for counting completed matches.
+- Ensure the K-factor progression uses the correct completed-match count.
+- Ensure provisional status and leaderboard eligibility are consistent with the intended placement rules.
+- Preserve correct behavior for matches that are completed, reversed or corrected.
+- Ensure a match is counted only once per player.
+- Avoid double-counting duplicate roster appearances.
+- Ensure the system remains correct after failed transactions and repeated completion attempts.
+
+IMPORTANT:
+
+Do not silently rewrite existing player counters or historical data.
+
+If historical records require reconciliation, provide a safe migration or repair plan and request approval before executing it.
+
+Preserve the existing provisional period of 10 completed matches unless the audit demonstrates a correctness issue requiring a different rule.
+
+## 4. Fix manual admin ELO edits and match reversal
+
+The audit found that manual admin ELO adjustments can be overwritten when a later match is reversed.
+
+Please fix this safely.
+
+Requirements:
+- Legitimate admin ELO adjustments must not be silently lost during match reversal.
+- Preserve the existing reversal safeguards, including blocking reversal when dependent later results exist.
+- Preserve transaction safety and auditability.
+- Prevent duplicate rating changes.
+- Do not accidentally apply an admin adjustment twice.
+- Ensure player ratings remain consistent after valid reversals.
+- Preserve the existing admin-only permissions for manual ELO changes.
+
+Inspect the existing rating and audit model before choosing an implementation.
+
+If fixing this requires a significant schema change or migration of historical audit records, present the proposed approach and request approval before applying the migration.
+
+Do not delete or overwrite existing audit history.
+
+## 5. Preserve ELO privacy
+
+Keep the existing privacy rules:
+
+- Linked players can see their own numeric ELO in Profile.
+- Authorized admins can access ELO data where permitted.
+- The public leaderboard must not expose other players' numeric ELO.
+- The public Top 5 leaderboard remains opt-in.
+- Only eligible established players can appear in the public Top 5.
+- Players who turn Leaderboard Visibility OFF must remain excluded.
+
+The Competitive Ranks popup may display public tier ranges, but not other players' private ratings.
+
+## 6. Do not change the team balancer yet
+
+The audit found a potential inconsistency:
+
+- Team balancing uses total-team ELO.
+- Expected win probability uses average-team ELO.
+
+This may matter for unequal team sizes such as 6-versus-7.
+
+Do not modify this behavior in Prompt 2.
+
+Record the issue for the next team-balancer audit and implementation stage.
+
+Do not change:
+- Role assignment
+- Ranked position preferences
+- Team formation requirements
+- Auto Balance
+- Manual Selection
+- Same-role swaps
+- Other match-generation behavior
+
+## 7. No seasonal ELO reset
+
+I have decided that ELO should represent continuous relative skill.
+
+Therefore:
+- Do not reset ELO every four months.
+- Do not add seasonal rating inflation.
+- Do not award ELO simply for attendance.
+- Do not guarantee upward rank progression.
+
+Seasonal statistics may be considered later, but they are outside the scope of this task.
+
+## 8. Testing
+
+Run relevant backend, frontend and database tests.
+
+Specifically test:
+
+1. New players start at exactly 800 ELO.
+2. New players display Iron rather than Bronze.
+3. All seven tiers use the approved thresholds consistently.
+4. K-factor progression remains 60/40/32/20.
+5. K-factor transitions occur at the correct match counts.
+6. Completed matches are counted correctly.
+7. Reversed matches update progression correctly.
+8. Duplicate result submission cannot award ELO twice.
+9. Concurrent result submissions remain safe.
+10. Admin ELO adjustments survive valid match reversals.
+11. Failed transactions do not partially update ratings.
+12. Public ELO privacy is preserved.
+13. Leaderboard opt-in and placement eligibility still work.
+14. Team balancing remains unchanged.
+15. Existing application functionality and builds pass.
+
+Add targeted regression tests for any bugs fixed.
+
+## 9. Final report
+
+When finished, provide:
+
+- Exact files and functions changed.
+- Final approved tier thresholds.
+- Explanation of match-count fixes.
+- Explanation of reversal/admin-adjustment fixes.
+- Tests run and their results.
+- Any database migration required.
+- Any remaining issues for the team-balancer review.
+
+Do not reset test data.
+
+Do not deploy.
+
+If any change requires a major migration or an unresolved design decision, pause and request approval rather than making assumptions.
