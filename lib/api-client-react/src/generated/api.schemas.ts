@@ -45,6 +45,18 @@ export interface LeaderboardEntry {
   tier: CompetitiveTier;
 }
 
+export interface RankTierRange {
+  tier: CompetitiveTier;
+  /** @minimum 0 */
+  minElo: number;
+  /**
+     * Null indicates that the tier has no configured upper bound.
+     * @minimum 0
+     * @nullable
+     */
+  maxElo: number | null;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -94,7 +106,7 @@ export interface Player {
   name: string;
   positions: Position[];
   /**
-     * Null when this viewer cannot see the rating.
+     * Exact rating is visible only to the linked player owner and admins; null for all other viewers regardless of public leaderboard opt-in.
      * @nullable
      */
   elo: number | null;

@@ -13,7 +13,7 @@ export interface Player {
   name: string;
   positions: Position[];
   /**
-     * Null when this viewer cannot see the rating.
+     * Exact rating is visible only to the linked player owner and admins; null for all other viewers regardless of public leaderboard opt-in.
      * @nullable
      */
   elo: number | null;

@@ -60,6 +60,7 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import MatchDeleteConfirmation from '@/components/MatchDeleteConfirmation';
 import MatchHistoryDetails from '@/components/MatchHistoryDetails';
 import LeaderboardTable from '@/components/LeaderboardTable';
+import CompetitiveRanksDialog from '@/components/CompetitiveRanksDialog';
 import { MatchSessionProvider, useMatchSession } from '@/match-session-context';
 import { clearDeletedMatchSession, restoreFailedDeletionSession, nextGameSession, reconcileSession, selectionCanContinue, updateMatchSessionStep, validMatchDate, visiblePool } from '@/match-session';
 
@@ -184,10 +185,10 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-function PageHeader({ eyebrow, title, description, children }: { eyebrow: string; title: string; description: string; children?: ReactNode }) {
+function PageHeader({ eyebrow, title, description, titleAccessory, children }: { eyebrow: string; title: string; description: string; titleAccessory?: ReactNode; children?: ReactNode }) {
   return (
     <div className="page-head">
-      <div><div className="eyebrow">{eyebrow}</div><h1 className="page-title">{title}</h1><p className="page-description">{description}</p></div>
+      <div><div className="eyebrow">{eyebrow}</div><h1 className={`page-title${titleAccessory ? ' page-title-with-info' : ''}`}>{title}{titleAccessory}</h1><p className="page-description">{description}</p></div>
       {children}
     </div>
   );
@@ -364,7 +365,7 @@ function LeaderboardPage() {
   const query = useGetLeaderboard();
   const ranked = query.data ?? [];
   return <Shell><main className="content">
-    <PageHeader eyebrow="Standings" title="Leaderboard" description="Saturday social leaderboard" />
+    <PageHeader eyebrow="Standings" title="Leaderboard" description="Saturday social leaderboard" titleAccessory={<CompetitiveRanksDialog testId="button-rank-info-leaderboard" />} />
     <section className="panel" aria-label="Player rankings">
       {query.isLoading ? <LoadingState /> : query.isError ? <ErrorState error={query.error} retry={() => void query.refetch()} /> : ranked.length === 0 ?
         <div className="leaderboard-empty-state" role="status">No eligible public players yet.</div> :
@@ -1364,12 +1365,20 @@ function UserPortalPage() {
         playerQuery.isLoading ? <LoadingState /> : playerQuery.isError || !player ? <section className="panel"><ErrorState error={playerQuery.error} retry={() => void playerQuery.refetch()} /></section> :
           <section className="panel profile-card" data-testid="card-my-profile">
             <div className="panel-head"><div><h2 className="panel-title" data-testid="text-my-name">{player.name}</h2><div className="panel-note">PLAYER / {String(player.id).padStart(3, '0')}</div></div><button className="button button-secondary" onClick={() => setEditing(true)} data-testid="button-edit-visibility"><Pencil size={14} /> ELO visibility</button></div>
-            <div className="profile-grid">
-              <div><span className="eyebrow">My ELO</span><strong className="profile-elo" data-testid="text-my-elo">{player.elo === null ? 'Private' : player.elo.toLocaleString()}</strong></div>
-              <div><span className="eyebrow">Rank</span>{player.elo === null ? <strong>Private</strong> : <RankBadge rank={player.rank} provisional={player.provisional} testId="badge-my-rank" />}</div>
-              <div><span className="eyebrow">Matches played</span><strong data-testid="text-my-matches">{player.matchesPlayed}</strong>{player.provisional && <div className="field-hint" data-testid="text-my-placement">Placement: {player.matchesPlayed} / 10 matches.</div>}</div>
-              <div><span className="eyebrow">Leaderboard</span><strong data-testid="text-my-visibility">{player.eloPublic ? 'Shown publicly' : 'Hidden'}</strong></div>
-              <div><span className="eyebrow">Positions</span><div className="tag-list">{player.positions.map((position, index) => <span className="tag" key={position}>{player.preferencesConfirmed ? `${index + 1}. ` : ''}{position}</span>)}</div></div>
+            <div className="profile-rank-elo">
+              <div className="profile-highlight-card" data-testid="card-my-rank">
+                <div className="profile-stat-heading"><span className="eyebrow profile-stat-label">Rank</span><CompetitiveRanksDialog testId="button-rank-info-profile" /></div>
+                {player.elo === null ? <strong>Private</strong> : <RankBadge rank={player.rank} provisional={player.provisional} testId="badge-my-rank" />}
+              </div>
+              <div className="profile-highlight-card" data-testid="card-my-elo">
+                <span className="eyebrow profile-stat-label">ELO</span>
+                <strong className="profile-elo" data-testid="text-my-elo">{player.elo === null ? 'Private' : player.elo.toLocaleString()}</strong>
+              </div>
+            </div>
+            <div className="profile-grid profile-details-grid">
+              <div className="profile-metric"><span className="eyebrow profile-stat-label">Matches Played</span><strong data-testid="text-my-matches">{player.matchesPlayed}</strong>{player.provisional && <div className="field-hint" data-testid="text-my-placement">Placement: {player.matchesPlayed} / 10 matches.</div>}</div>
+              <div className="profile-metric"><span className="eyebrow profile-stat-label">Leaderboard</span><strong data-testid="text-my-visibility">{player.eloPublic ? 'Shown publicly' : 'Hidden'}</strong></div>
+              <div className="profile-metric"><span className="eyebrow profile-stat-label">Positions</span><div className="tag-list">{player.positions.map((position, index) => <span className="tag" key={position}>{player.preferencesConfirmed ? `${index + 1}. ` : ''}{position}</span>)}</div></div>
             </div>
           </section>}
     <Notice text={notice} />

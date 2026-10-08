@@ -240,6 +240,20 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/LeaderboardEntry"
+  /rank-tiers:
+    get:
+      operationId: getRankTiers
+      tags: [players]
+      summary: Get the configured competitive rank tier ranges
+      responses:
+        "200":
+          description: Tier ranges derived from the authoritative ELO rank thresholds
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RankTierRange"
   /matches:
     get:
       operationId: listMatches
@@ -416,6 +430,20 @@ components:
     CompetitiveTier:
       type: string
       enum: [Iron, Bronze, Silver, Gold, Platinum, Diamond, Masters]
+    RankTierRange:
+      type: object
+      additionalProperties: false
+      required: [tier, minElo, maxElo]
+      properties:
+        tier:
+          $ref: "#/components/schemas/CompetitiveTier"
+        minElo:
+          type: integer
+          minimum: 0
+        maxElo:
+          type: ["integer", "null"]
+          minimum: 0
+          description: Null indicates that the tier has no configured upper bound.
     HealthStatus:
       type: object
       properties:
@@ -445,7 +473,7 @@ components:
             $ref: "#/components/schemas/Position"
         elo:
           type: ["integer", "null"]
-          description: Null when this viewer cannot see the rating.
+          description: Exact rating is visible only to the linked player owner and admins; null for all other viewers regardless of public leaderboard opt-in.
         eloPublic:
           type: boolean
         rank:

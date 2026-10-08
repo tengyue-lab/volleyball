@@ -670,6 +670,35 @@ button:focus-visible,input:focus-visible{outline:3px solid hsl(var(--accent)/.55
 .select-input{padding:9px 10px;border:1px solid hsl(var(--input));border-radius:6px;background:hsl(var(--background));color:hsl(var(--foreground));font-size:12px;min-width:200px}
 .grant-form{display:flex;gap:10px;padding:18px 21px;border-bottom:1px solid hsl(var(--border));flex-wrap:wrap}.grant-form input{flex:1;min-width:220px;padding:10px 12px;border:1px solid hsl(var(--input));border-radius:6px;background:hsl(var(--background));color:hsl(var(--foreground))}
 .rank-badge-wrap{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center}.rank-badge{display:inline-block;font-size:10px;font-weight:800;border:1px solid;border-radius:4px;padding:3px 6px;white-space:nowrap}.rank-provisional{color:#625529;border-color:#d8cf9a;background:#f1edcf}.rank-note{font-size:10px;color:hsl(var(--muted-foreground))}.rank-transition{display:flex;flex-wrap:wrap;gap:5px;align-items:center}.rank-promotion{color:#1f6b46;font-size:10px}.rank-demotion{color:#a02c28;font-size:10px}.leader-rank-text{font:500 11px var(--app-font-mono);color:hsl(var(--muted-foreground));margin-top:4px}
+.page-title-with-info{display:flex;align-items:center;gap:9px}
+.rank-info-trigger{width:30px;height:30px;flex:0 0 auto;display:grid;place-items:center;padding:0;border:1px solid hsl(var(--border));border-radius:50%;background:hsl(var(--card));color:hsl(var(--muted-foreground));transition:color .15s,border-color .15s,background .15s}
+.rank-info-trigger:hover{color:hsl(var(--primary));border-color:hsl(var(--primary));background:hsl(var(--background))}
+.rank-info-trigger:focus-visible{outline:3px solid hsl(var(--accent)/.55);outline-offset:2px}
+.rank-info-dialog{max-height:min(85vh,680px)}
+.rank-info-dialog>button{right:8px;top:8px;min-width:44px;min-height:44px;display:grid;place-items:center}
+.rank-range-table-wrap{width:100%;overflow-x:auto}
+.rank-range-table{width:100%;border-collapse:collapse;font-size:12px}
+.rank-range-table th,.rank-range-table td{padding:9px 7px;border-bottom:1px solid hsl(var(--border));text-align:left}
+.rank-range-table thead th{font-size:10px;color:hsl(var(--muted-foreground));text-transform:uppercase;letter-spacing:.09em}
+.rank-range-table tbody tr:last-child th,.rank-range-table tbody tr:last-child td{border-bottom:0}
+.rank-range-table tbody th{font-weight:600}
+.rank-range-table tbody td{text-align:right;font:500 12px var(--app-font-mono);white-space:nowrap}
+.rank-range-tier{display:inline-flex;border:1px solid;border-radius:999px;padding:4px 9px;font-size:10px;font-weight:800}
+.rank-range-tier-iron{color:#5b646a;border-color:#aeb7bc;background:#f0f2f3}
+.rank-range-tier-bronze{color:#7e4a2e;border-color:#d7ab8e;background:#f6ebe3}
+.rank-range-tier-silver{color:#54616a;border-color:#c0c9cd;background:#eef1f2}
+.rank-range-tier-gold{color:#73530c;border-color:#e1c76b;background:#fbf4d9}
+.rank-range-tier-platinum{color:#176d72;border-color:#9ecfc9;background:#e6f5f4}
+.rank-range-tier-diamond{color:#514b9a;border-color:#c0bbf1;background:#efedff}
+.rank-range-tier-masters{color:#9d3e3e;border-color:#efaaa6;background:#fff0ef}
+.rank-range-state{display:grid;justify-items:start;gap:12px;color:hsl(var(--muted-foreground));font-size:12px}
+.profile-rank-elo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;padding:20px 21px 0}
+.profile-highlight-card{min-width:0;min-height:92px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:10px;padding:14px 16px;border:1px solid hsl(var(--border));border-radius:9px;background:hsl(var(--background)/.45)}
+.profile-stat-heading{display:flex;align-items:center;gap:5px}
+.profile-stat-label.eyebrow{margin:0}
+.profile-grid.profile-details-grid{gap:20px;padding-top:22px}
+.profile-metric{min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.profile-metric>.field-hint{margin-top:-2px}
 
 /* Compact navigation on every screen size. */
 .app-shell{display:block}
@@ -729,6 +758,11 @@ button:focus-visible,input:focus-visible{outline:3px solid hsl(var(--accent)/.55
   .grant-form .button{width:100%}
   .select-input{min-width:0;width:100%;max-width:100%}
   .profile-grid{grid-template-columns:minmax(0,1fr)}
+  .profile-rank-elo{gap:10px;padding:16px 14px 0}
+  .profile-highlight-card{min-height:88px;padding:12px}
+  .profile-elo{font-size:28px}
+  .profile-grid.profile-details-grid{gap:18px;padding:20px 14px}
+  .rank-info-trigger{width:44px;height:44px}
   .match-card-head,.match-card-foot{flex-wrap:wrap;gap:8px}
   .match-card-foot .text-button{display:inline-flex;align-items:center;gap:5px;padding:8px 0}
   .leader-stat{flex-wrap:wrap;gap:8px}

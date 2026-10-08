@@ -86,7 +86,7 @@ export const ListPlayersResponseItem = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
-  "elo": zod.number().int().nullable().describe('Null when this viewer cannot see the rating.'),
+  "elo": zod.number().int().nullable().describe('Exact rating is visible only to the linked player owner and admins; null for all other viewers regardless of public leaderboard opt-in.'),
   "eloPublic": zod.boolean(),
   "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
   "matchesPlayed": zod.number().int().min(listPlayersResponseMatchesPlayedMin),
@@ -126,7 +126,7 @@ export const CreatePlayerResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
-  "elo": zod.number().int().nullable().describe('Null when this viewer cannot see the rating.'),
+  "elo": zod.number().int().nullable().describe('Exact rating is visible only to the linked player owner and admins; null for all other viewers regardless of public leaderboard opt-in.'),
   "eloPublic": zod.boolean(),
   "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
   "matchesPlayed": zod.number().int().min(createPlayerResponseMatchesPlayedMin),
@@ -153,7 +153,7 @@ export const GetPlayerResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
-  "elo": zod.number().int().nullable().describe('Null when this viewer cannot see the rating.'),
+  "elo": zod.number().int().nullable().describe('Exact rating is visible only to the linked player owner and admins; null for all other viewers regardless of public leaderboard opt-in.'),
   "eloPublic": zod.boolean(),
   "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
   "matchesPlayed": zod.number().int().min(getPlayerResponseMatchesPlayedMin),
@@ -195,7 +195,7 @@ export const UpdatePlayerResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])),
-  "elo": zod.number().int().nullable().describe('Null when this viewer cannot see the rating.'),
+  "elo": zod.number().int().nullable().describe('Exact rating is visible only to the linked player owner and admins; null for all other viewers regardless of public leaderboard opt-in.'),
   "eloPublic": zod.boolean(),
   "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
   "matchesPlayed": zod.number().int().min(updatePlayerResponseMatchesPlayedMin),
@@ -264,6 +264,23 @@ export const GetLeaderboardResponseItem = zod.object({
   "tier": zod.enum(['Iron', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Masters'])
 })
 export const GetLeaderboardResponse = zod.array(GetLeaderboardResponseItem)
+
+
+/**
+ * @summary Get the configured competitive rank tier ranges
+ */
+export const getRankTiersResponseMinEloMin = 0;
+
+export const getRankTiersResponseMaxEloMin = 0;
+
+
+
+export const GetRankTiersResponseItem = zod.object({
+  "tier": zod.enum(['Iron', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Masters']),
+  "minElo": zod.number().int().min(getRankTiersResponseMinEloMin),
+  "maxElo": zod.number().int().min(getRankTiersResponseMaxEloMin).nullable().describe('Null indicates that the tier has no configured upper bound.')
+})
+export const GetRankTiersResponse = zod.array(GetRankTiersResponseItem)
 
 
 /**

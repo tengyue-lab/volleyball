@@ -26,6 +26,24 @@ def tier_for_elo(elo: int) -> str:
     return rank_for_elo(elo).split(" ", 1)[0]
 
 
+def tier_elo_ranges() -> list[dict[str, int | str | None]]:
+    """Collapse the existing division thresholds into display-tier ranges."""
+    tier_starts: list[tuple[int, str]] = []
+    for minimum, label in RANK_THRESHOLDS:
+        tier = label.split(" ", 1)[0]
+        if not tier_starts or tier_starts[-1][1] != tier:
+            tier_starts.append((minimum, tier))
+
+    return [
+        {
+            "tier": tier,
+            "minElo": minimum,
+            "maxElo": tier_starts[index + 1][0] - 1 if index + 1 < len(tier_starts) else None,
+        }
+        for index, (minimum, tier) in enumerate(tier_starts)
+    ]
+
+
 def k_for_matches(matches_played: int) -> int:
     """Count BEFORE this result: the tenth placement match still uses K=60."""
     if matches_played < 0:

@@ -90,6 +90,38 @@ class PrivacyTests(unittest.TestCase):
         self.assertEqual(owner.get("/api/auth/me").get_json()["playerId"], target)
         self.assertFalse(owner.get("/api/auth/me").get_json()["isAdmin"])
 
+    def test_public_opt_in_never_exposes_exact_elo_to_other_viewers(self):
+        target = self.player_ids[0]
+        owner = self.owner(target)
+        other = SignedClient(self.app, "user_test_public_other", "public-other@example.test")
+        admin_elo = self.client.get(f"/api/players/{target}").get_json()["elo"]
+        self.assertIsNotNone(admin_elo)
+        for viewer in (self.anonymous(), other):
+            detail = viewer.get(f"/api/players/{target}").get_json()
+            listed = next(
+                player for player in viewer.get("/api/players").get_json()
+                if player["id"] == target
+            )
+            for profile in (detail, listed):
+                self.assertTrue(profile["eloPublic"])
+                self.assertIsNone(profile["elo"])
+                self.assertIsNone(profile["rank"])
+        self.assertEqual(owner.get(f"/api/players/{target}").get_json()["elo"], admin_elo)
+        self.assertEqual(self.client.get(f"/api/players/{target}").get_json()["elo"], admin_elo)
+
+    def test_public_rank_tier_ranges_reflect_configured_thresholds(self):
+        response = self.anonymous().get("/api/rank-tiers")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), [
+            {"tier": "Iron", "minElo": 0, "maxElo": 799},
+            {"tier": "Bronze", "minElo": 800, "maxElo": 1099},
+            {"tier": "Silver", "minElo": 1100, "maxElo": 1399},
+            {"tier": "Gold", "minElo": 1400, "maxElo": 1699},
+            {"tier": "Platinum", "minElo": 1700, "maxElo": 1999},
+            {"tier": "Diamond", "minElo": 2000, "maxElo": 2299},
+            {"tier": "Masters", "minElo": 2300, "maxElo": None},
+        ])
+
     def test_nonadmin_mutations_and_ownership_are_denied(self):
         target = self.player_ids[0]
         owner = self.owner(target)

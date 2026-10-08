@@ -16,7 +16,7 @@ from typing import Any, Iterator
 
 from flask import Flask, current_app, jsonify, request
 from privacy_auth import initialize_auth_schema, install_privacy
-from rating_progression import PLACEMENT_MATCHES, STARTING_ELO, is_provisional, k_for_matches, rank_for_elo, rank_movement, tier_for_elo
+from rating_progression import PLACEMENT_MATCHES, STARTING_ELO, is_provisional, k_for_matches, rank_for_elo, rank_movement, tier_elo_ranges, tier_for_elo
 
 
 POSITIONS = (
@@ -688,6 +688,10 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             if cursor.rowcount == 0:
                 return jsonify({"error": "Player not found."}), 404
         return "", 204
+
+    @app.get("/api/rank-tiers")
+    def get_rank_tiers():
+        return jsonify(tier_elo_ranges())
 
     @app.get("/api/leaderboard")
     def get_leaderboard():

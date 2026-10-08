@@ -9,10 +9,21 @@ from pathlib import Path
 import test_match_results as results
 from app import calculate_elo_updates, create_app, initialize_database
 from auth_client import SignedClient
-from rating_progression import k_for_matches, rank_for_elo, rank_movement, tier_for_elo
+from rating_progression import k_for_matches, rank_for_elo, rank_movement, tier_elo_ranges, tier_for_elo
 
 
 class RatingRulesTests(unittest.TestCase):
+    def test_tier_ranges_are_collapsed_from_existing_rank_thresholds(self):
+        self.assertEqual(tier_elo_ranges(), [
+            {"tier": "Iron", "minElo": 0, "maxElo": 799},
+            {"tier": "Bronze", "minElo": 800, "maxElo": 1099},
+            {"tier": "Silver", "minElo": 1100, "maxElo": 1399},
+            {"tier": "Gold", "minElo": 1400, "maxElo": 1699},
+            {"tier": "Platinum", "minElo": 1700, "maxElo": 1999},
+            {"tier": "Diamond", "minElo": 2000, "maxElo": 2299},
+            {"tier": "Masters", "minElo": 2300, "maxElo": None},
+        ])
+
     def test_all_rank_boundaries_and_masters_label(self):
         thresholds = [
             (0, "Iron 3"), (600, "Iron 2"), (700, "Iron 1"),

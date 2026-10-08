@@ -79,6 +79,31 @@ test('public leaderboard renders up to five uniform rows in placement order', as
   assert.ok(css.includes('.leaderboard-place-3{background:#fbf2ed'));
 });
 
+test('shared competitive-rank dialog uses server ranges and profile metrics have spacing', async () => {
+  const dialog = await readFile(new URL('../src/components/CompetitiveRanksDialog.tsx', import.meta.url), 'utf8');
+  assert.ok(dialog.includes('useGetRankTiers'));
+  assert.ok(dialog.includes('<Dialog open={open} onOpenChange={setOpen}>'));
+  assert.ok(dialog.includes('<DialogTrigger asChild>'));
+  assert.ok(dialog.includes('<DialogTitle>Competitive Ranks</DialogTitle>'));
+  assert.ok(dialog.includes('<th scope="col">Rank</th><th scope="col">ELO Range</th>'));
+  assert.ok(dialog.includes('maxElo === null'));
+  assert.ok(dialog.includes('${minElo.toLocaleString()}+'));
+  assert.ok(dialog.includes('rank-info-trigger'));
+
+  const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  assert.ok(app.includes('button-rank-info-leaderboard'));
+  assert.ok(app.includes('button-rank-info-profile'));
+  assert.ok(app.includes('profile-rank-elo'));
+  assert.ok(app.includes('data-testid="text-my-elo"'));
+  assert.ok(app.includes('Matches Played'));
+  assert.ok(app.includes('text-my-visibility'));
+
+  const css = await readFile(new URL('../src/index.css', import.meta.url), 'utf8');
+  assert.ok(css.includes('.profile-rank-elo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))'));
+  assert.ok(css.includes('.profile-metric{min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:8px}'));
+  assert.ok(css.includes('.rank-info-dialog>button{right:8px;top:8px;min-width:44px;min-height:44px'));
+});
+
 test('result promotions and demotions expose transition text and distinct styling', () => {
   const promotion = render(RankTransition, { before: 'Silver 3', after: 'Silver 2', movement: 'promotion', provisional: true });
   assert.ok(promotion.includes('Silver 3 to Silver 2'));

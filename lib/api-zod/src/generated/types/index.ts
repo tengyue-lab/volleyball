@@ -35,3 +35,4 @@ export * from './playerInput';
 export * from './playerUpdate';
 export * from './position';
 export * from './rankLabel';
+export * from './rankTierRange';

@@ -165,14 +165,12 @@ def install_privacy(app, database):
             response.set_data(app.json.dumps(payload))
             return response
         with database() as connection:
-            public_ids = {row[0] for row in connection.execute("SELECT id FROM players WHERE elo_public=1")}
             own_ids = {viewer["playerId"]} if viewer.get("playerId") is not None else set()
             if viewer.get("userId"):
                 own_ids.update(row[0] for row in connection.execute(
                     "SELECT player_id FROM archived_player_owners WHERE account_id=?",
                     (viewer["userId"],),
                 ))
-        visible = public_ids | own_ids
 
         def project(value):
             if isinstance(value, list):
@@ -180,11 +178,11 @@ def install_privacy(app, database):
             if not isinstance(value, dict):
                 return value
             result = {key: project(item) for key, item in value.items()}
-            if "positions" in result and "elo" in result and result.get("id") not in visible:
+            if "positions" in result and "elo" in result and result.get("id") not in own_ids:
                 for key in ("elo", "rank"):
                     if key in result:
                         result[key] = None
-            if "eloBefore" in result and result.get("playerId") not in visible:
+            if "eloBefore" in result and result.get("playerId") not in own_ids:
                 for key in ("eloBefore", "eloAfter", "changeAmount", "rankBefore", "rankAfter", "rankMovement"):
                     if key in result:
                         result[key] = None
