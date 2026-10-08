@@ -6,3 +6,4 @@
 - [Browser-test fixtures](browser-test-cleanup.md) — close contexts before cleanup to prevent QA account recreation; use accepted Clerk test email domains.
 - [Match continuation](match-continuation.md) — mode choice and confirmed switches preserve roster/date; completed saves remain on Teams or Current Match as specified.
 - [Placement counts](placement-counts.md) — derive displayed provisional status from completed match snapshots without changing the stored ELO progression counter.
+- [Analysis-only verification](analysis-only-verification.md) — isolate application bootstrap as well as test fixtures; verify live-source and data fingerprints.

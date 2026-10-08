@@ -1,0 +1,12 @@
+{
+  "original_files_checked": 87,
+  "changed_original_files": [],
+  "local_sqlite_unchanged": true,
+  "production_database_accessed": false,
+  "synthetic_runs": 500,
+  "existing_backend_tests_passed": 73,
+  "existing_balancer_tests_passed": 26,
+  "parity_fixtures_passed": 1000,
+  "concurrent_submission_passed": true,
+  "seed_reproducibility_passed": true
+}

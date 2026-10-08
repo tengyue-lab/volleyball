@@ -1,0 +1,22 @@
+{
+  "players": 14,
+  "stored_counter_range": [
+    11,
+    13
+  ],
+  "appearance_count_range": [
+    17,
+    21
+  ],
+  "players_with_counter_disagreement": 14,
+  "rating_min_median_max": [
+    861,
+    990.5,
+    1379
+  ],
+  "public_opt_in_count": 14,
+  "completed_matches": 27,
+  "completed_without_result_audits": 0,
+  "audit_rows_without_match": 0,
+  "matches_without_stored_game_date": 15
+}

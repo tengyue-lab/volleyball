@@ -1,0 +1,218 @@
+[
+  {
+    "size": 12,
+    "seed": 1,
+    "actualMs": 117.27700399999999,
+    "actualPreferred": 12,
+    "proxyPreferred": 11,
+    "actualGap": 0.33333333333325754,
+    "proxyGap": 0.33333333333325754
+  },
+  {
+    "size": 12,
+    "seed": 2,
+    "actualMs": 99.055057,
+    "actualPreferred": 12,
+    "proxyPreferred": 10,
+    "actualGap": 3.1666666666666288,
+    "proxyGap": 0.16666666666662877
+  },
+  {
+    "size": 12,
+    "seed": 3,
+    "actualMs": 89.333418,
+    "actualPreferred": 12,
+    "proxyPreferred": 12,
+    "actualGap": 0.16666666666662877,
+    "proxyGap": 0.16666666666662877
+  },
+  {
+    "size": 12,
+    "seed": 4,
+    "actualMs": 84.92953600000004,
+    "actualPreferred": 10,
+    "proxyPreferred": 10,
+    "actualGap": 1,
+    "proxyGap": 4.333333333333371
+  },
+  {
+    "size": 12,
+    "seed": 5,
+    "actualMs": 84.28689800000001,
+    "actualPreferred": 12,
+    "proxyPreferred": 11,
+    "actualGap": 2.3333333333333712,
+    "proxyGap": 2.3333333333333712
+  },
+  {
+    "size": 12,
+    "seed": 6,
+    "actualMs": 88.70857999999998,
+    "actualPreferred": 11,
+    "proxyPreferred": 11,
+    "actualGap": 2.3333333333333712,
+    "proxyGap": 2.3333333333333712
+  },
+  {
+    "size": 12,
+    "seed": 7,
+    "actualMs": 91.56317100000001,
+    "actualPreferred": 12,
+    "proxyPreferred": 11,
+    "actualGap": 0.16666666666674246,
+    "proxyGap": 0.16666666666674246
+  },
+  {
+    "size": 12,
+    "seed": 8,
+    "actualMs": 91.16196300000001,
+    "actualPreferred": 12,
+    "proxyPreferred": 12,
+    "actualGap": 1.5,
+    "proxyGap": 1.5
+  },
+  {
+    "size": 13,
+    "seed": 1,
+    "actualMs": 606.547173,
+    "actualPreferred": 13,
+    "proxyPreferred": 13,
+    "actualGap": 142.95238095238096,
+    "proxyGap": 140.47619047619048
+  },
+  {
+    "size": 13,
+    "seed": 2,
+    "actualMs": 529.711333,
+    "actualPreferred": 13,
+    "proxyPreferred": 12,
+    "actualGap": 152.16666666666674,
+    "proxyGap": 152.16666666666674
+  },
+  {
+    "size": 13,
+    "seed": 3,
+    "actualMs": 501.87894100000017,
+    "actualPreferred": 13,
+    "proxyPreferred": 12,
+    "actualGap": 122.92857142857144,
+    "proxyGap": 17.904761904761926
+  },
+  {
+    "size": 13,
+    "seed": 4,
+    "actualMs": 554.5190169999996,
+    "actualPreferred": 12,
+    "proxyPreferred": 11,
+    "actualGap": 132.42857142857144,
+    "proxyGap": 30.69047619047626
+  },
+  {
+    "size": 13,
+    "seed": 5,
+    "actualMs": 560.7966820000001,
+    "actualPreferred": 13,
+    "proxyPreferred": 13,
+    "actualGap": 136.1190476190477,
+    "proxyGap": 137.97619047619048
+  },
+  {
+    "size": 13,
+    "seed": 6,
+    "actualMs": 583.2653579999997,
+    "actualPreferred": 13,
+    "proxyPreferred": 12,
+    "actualGap": 126.3809523809523,
+    "proxyGap": 7.833333333333371
+  },
+  {
+    "size": 13,
+    "seed": 7,
+    "actualMs": 594.8584629999996,
+    "actualPreferred": 13,
+    "proxyPreferred": 12,
+    "actualGap": 143.3571428571429,
+    "proxyGap": 145.83333333333337
+  },
+  {
+    "size": 13,
+    "seed": 8,
+    "actualMs": 519.1538529999998,
+    "actualPreferred": 13,
+    "proxyPreferred": 13,
+    "actualGap": 128.6428571428571,
+    "proxyGap": 36.95238095238096
+  },
+  {
+    "size": 14,
+    "seed": 1,
+    "actualMs": 700.0246400000005,
+    "actualPreferred": 14,
+    "proxyPreferred": 14,
+    "actualGap": 0.14285714285711038,
+    "proxyGap": 0.4285714285713311
+  },
+  {
+    "size": 14,
+    "seed": 2,
+    "actualMs": 707.1083859999999,
+    "actualPreferred": 14,
+    "proxyPreferred": 14,
+    "actualGap": 0.14285714285711038,
+    "proxyGap": 1.8571428571428896
+  },
+  {
+    "size": 14,
+    "seed": 3,
+    "actualMs": 670.5022520000002,
+    "actualPreferred": 14,
+    "proxyPreferred": 13,
+    "actualGap": 0.7142857142856656,
+    "proxyGap": 0.7142857142856656
+  },
+  {
+    "size": 14,
+    "seed": 4,
+    "actualMs": 662.6977589999997,
+    "actualPreferred": 14,
+    "proxyPreferred": 13,
+    "actualGap": 0,
+    "proxyGap": 0.28571428571433444
+  },
+  {
+    "size": 14,
+    "seed": 5,
+    "actualMs": 723.5500870000005,
+    "actualPreferred": 14,
+    "proxyPreferred": 13,
+    "actualGap": 0.14285714285711038,
+    "proxyGap": 0.14285714285711038
+  },
+  {
+    "size": 14,
+    "seed": 6,
+    "actualMs": 729.7202099999995,
+    "actualPreferred": 14,
+    "proxyPreferred": 13,
+    "actualGap": 0.28571428571433444,
+    "proxyGap": 0.28571428571433444
+  },
+  {
+    "size": 14,
+    "seed": 7,
+    "actualMs": 713.6959479999987,
+    "actualPreferred": 14,
+    "proxyPreferred": 14,
+    "actualGap": 0.28571428571433444,
+    "proxyGap": 0.5714285714285552
+  },
+  {
+    "size": 14,
+    "seed": 8,
+    "actualMs": 785.2613810000003,
+    "actualPreferred": 14,
+    "proxyPreferred": 13,
+    "actualGap": 0.28571428571422075,
+    "proxyGap": 0.28571428571422075
+  }
+]

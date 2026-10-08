@@ -1,0 +1,11 @@
+{
+  "concurrent_result_statuses": [
+    200,
+    409
+  ],
+  "result_audit_rows_after_concurrent_submit": 12,
+  "counters_incremented_exactly_once": true,
+  "reversal_restored_ratings_and_counters": true,
+  "intervening_admin_rating_edit_overwritten_by_reversal": true,
+  "candidate_k_64_rejected_by_current_schema": true
+}

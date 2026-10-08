@@ -1,0 +1,30 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "320q22nqwxqIuL3T2_ds0"
+uri = "file://audits/elo-launch/elo-launch-audit.html"
+type = "html"
+title = "ELO launch audit and simulation report"
+description = "Analysis-only audit: 500 synthetic runs, four-stage versus two-stage comparisons, threshold proposal, integrity findings, limitations and future implementation plan."
+logical_id = "7d262a39-a462-49e5-bdc4-f378310abd9d"
+content_hash = "sha256:6d769878086e949ba0105eae0615b5d0c6803daa270021df67860725805e7607"
+size = 39784
+mtime_ms = 1791457659793
+storage_uri = "gcs://replit-rams-assets-reed/rams/assets/repl:359a38b6-3ed4-4a64-84ec-93d60078b068/7d262a39-a462-49e5-bdc4-f378310abd9d/d87719a2-a61b-400d-b568-c9261a66cd66"
+storage_version_token = "1791457696917467"
+content_type = "text/html"
+
+[[outputs]]
+id = "R1I-DdZFgIMZdig3opmkQ"
+uri = "file://audits/elo-launch/results/comparison.csv"
+type = "table"
+title = "Synthetic simulation comparison — CSV"
+description = "2,000 seed/configuration checkpoint rows from isolated simulations. No real player records."
+logical_id = "9a0cfc91-03b4-4091-87e5-865722ea3e84"
+content_hash = "sha256:298519ea6404c9d468fc3c00126f74ff3be0c93c27b9e1a2c98d2174d3d6a61b"
+size = 258620
+mtime_ms = 1791457659686
+storage_uri = "gcs://replit-rams-assets-reed/rams/assets/repl:359a38b6-3ed4-4a64-84ec-93d60078b068/9a0cfc91-03b4-4091-87e5-865722ea3e84/d4665a0f-56eb-448d-900a-30d9c39c1387"
+storage_version_token = "1791457697477208"
+content_type = "text/csv"
