@@ -1189,7 +1189,10 @@ function AdminMatchesPage() {
               </div>}
             </div>
             <div className="team-step" hidden={!stepVisibility.teams} data-testid="step-team-assignment">
-            <div className="pool-actions"><button className="button button-secondary touch-44" onClick={() => setDraft((current) => updateMatchSessionStep(current, 'players'))} data-testid="button-back-players">Back to players</button></div>
+            <div className="team-navigation">
+              <button className="button button-secondary touch-44" onClick={() => setDraft((current) => updateMatchSessionStep(current, 'players'))} data-testid="button-back-players">Back to Players</button>
+              {!showTeamModeSelection && <button type="button" className="button button-primary touch-44" onClick={backToTeamSelection} disabled={busy} data-testid="button-back-team-selection">← Back to Team Selection</button>}
+            </div>
             {showTeamModeSelection ? <section className="team-mode-selection" aria-label="Choose team selection mode" data-testid="team-mode-selection">
               <h3>Choose how to build your teams</h3>
               <div className="team-mode-choice-grid">
@@ -1203,16 +1206,6 @@ function AdminMatchesPage() {
                 </button>
               </div>
             </section> : <>
-            <div className="team-mode-back">
-              <button type="button" className="button button-secondary touch-44" onClick={backToTeamSelection} disabled={busy} data-testid="button-back-team-selection">← Back to Team Selection</button>
-            </div>
-            <div className="builder-intro"><strong>Exact role formation</strong><p>Every side gets 1 Setter, 2 Outside Hitters, 2 Middle Blockers, and 1 Opposite. Seven-player sides add 1 Libero. Auto-Balance preserves these roles while reducing the team ELO gap.</p></div>
-            <div className="role-legend" aria-label="Role assignment legend">
-              <strong>Role badges</strong>
-              <RoleBadge assignedPosition="Setter" status="preferred" />
-              <RoleBadge assignedPosition="Middle Blocker" status="filled" />
-              <span>Preferred means the role is on the player profile; Filled means they covered a role no preferred player could fill.</span>
-            </div>
             {stepVisibility.teams && !showTeamModeSelection && mode === 'auto' && <div className="pool-actions">
               <button className="button button-primary touch-44" onClick={autoBalance} disabled={poolCount < 12 || poolCount > 14} data-testid="button-auto-balance"><WandSparkles size={14} />Generate Balanced Teams</button>
               <button className="button button-quiet touch-44" onClick={clearTeamAssignments} disabled={teamA.length === 0 && teamB.length === 0 && locks.length === 0} data-testid="button-clear-teams">Clear Selection</button>

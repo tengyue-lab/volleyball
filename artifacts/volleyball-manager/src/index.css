@@ -514,7 +514,8 @@ button:focus-visible,input:focus-visible{outline:3px solid hsl(var(--accent)/.55
 .team-mode-card strong{display:block;font-size:13px;font-weight:800}
 .team-mode-card small{display:block;margin-top:6px;color:hsl(var(--muted-foreground));font-size:11px;line-height:1.5}
 .team-mode-icon{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;border-radius:9px;background:#e5eee6;color:#285643}
-.team-mode-back{margin:-5px 0 12px}
+.team-navigation{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 18px 0;margin-bottom:14px}
+.team-navigation .button{min-height:44px}
 .pool-selection{padding:17px 18px 15px;border-bottom:1px solid hsl(var(--border))}
 .pool-selection-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:11px}
 .pool-selection-head h3{margin:0;font-size:12px}
@@ -559,9 +560,6 @@ button:focus-visible,input:focus-visible{outline:3px solid hsl(var(--accent)/.55
 .balance-feedback.complete{background:#edf4eb;border:1px solid #d6e4d6}
 .balance-feedback.warning{background:#fbf1e6;border:1px solid #eddfc8}
 .balance-feedback.warning span{color:#7d6241}
-.role-legend{display:flex;align-items:center;flex-wrap:wrap;gap:7px;padding:11px 18px;border-bottom:1px solid hsl(var(--border));background:#fafaf5}
-.role-legend>strong{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:hsl(var(--muted-foreground));margin-right:2px}
-.role-legend>span:last-child{font-size:9px;color:hsl(var(--muted-foreground));line-height:1.45}
 .assignment-badge{display:inline-flex;align-items:center;gap:4px;width:max-content;border-radius:999px;padding:3px 7px;font-size:8px;font-weight:800;white-space:nowrap}
 .assignment-badge.preferred{background:#e0eee3;color:#2d654d}
 .assignment-badge.filled{background:#fae8d3;color:#965b20}
@@ -582,6 +580,8 @@ button:focus-visible,input:focus-visible{outline:3px solid hsl(var(--accent)/.55
 .team-column+.team-column{min-width:0}
 .team-column .assigned-list{min-width:0}
 @media(max-width:600px){
+  .team-navigation{flex-direction:column;align-items:stretch;gap:12px}
+  .team-navigation .button{width:100%}
   .pool-selection-head{align-items:flex-start}
   .team-mode-choice-grid{grid-template-columns:1fr}
   .team-mode-card{min-height:82px;padding:13px}

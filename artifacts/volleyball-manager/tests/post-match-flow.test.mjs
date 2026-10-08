@@ -142,11 +142,16 @@ test('mode chooser hides roster/session summaries and residual team details with
 
 test('back preserves assignments and switching mode requires confirmation before clearing them', () => {
   const chooserStart = createMatchSource.indexOf('{showTeamModeSelection ? <section className="team-mode-selection"');
-  const builderStart = createMatchSource.indexOf(': <>', chooserStart);
-  const backButtonIndex = createMatchSource.indexOf('data-testid="button-back-team-selection"', builderStart);
-  const teamColumnsIndex = createMatchSource.indexOf('{mode !== null && !modeChoiceVisible && <div className="team-columns">', builderStart);
-  assert.ok(builderStart < backButtonIndex && backButtonIndex < teamColumnsIndex);
-  assert.match(createMatchSource.slice(builderStart, teamColumnsIndex), /className="button button-secondary touch-44"[^>]*data-testid="button-back-team-selection">← Back to Team Selection/);
+  const navigationStart = createMatchSource.indexOf('<div className="team-navigation">');
+  const navigationEnd = createMatchSource.indexOf('</div>', navigationStart);
+  const navigationMarkup = createMatchSource.slice(navigationStart, navigationEnd);
+  assert.ok(navigationStart >= 0 && navigationEnd > navigationStart && navigationEnd < chooserStart);
+  assert.match(navigationMarkup, /className="button button-secondary touch-44" onClick=\{\(\) => setDraft\(\(current\) => updateMatchSessionStep\(current, 'players'\)\)\} data-testid="button-back-players">Back to Players/);
+  assert.match(navigationMarkup, /!showTeamModeSelection && <button type="button" className="button button-primary touch-44" onClick=\{backToTeamSelection\} disabled=\{busy\} data-testid="button-back-team-selection">← Back to Team Selection/);
+  assert.match(createMatchStyles, /\.team-navigation\{display:flex;align-items:center;gap:14px/);
+  const mobileStyles = createMatchStyles.match(/@media\(max-width:600px\)\{([\s\S]*?)\n\}/)?.[1] ?? '';
+  assert.match(mobileStyles, /\.team-navigation\{flex-direction:column;align-items:stretch;gap:12px\}/);
+  assert.match(mobileStyles, /\.team-navigation \.button\{width:100%\}/);
 
   for (const mode of ['auto', 'manual']) {
     const byMode = teamModeFixture({ mode });
@@ -190,6 +195,13 @@ test('back preserves assignments and switching mode requires confirmation before
   assert.equal(f.state.balanceResult, null);
   assert.deepEqual(f.state.selectedPlayerIds, previous.selectedPlayerIds);
   assert.equal(f.state.matchDate, previous.matchDate);
+});
+
+test('role instruction panels are removed while assigned players retain role badges', () => {
+  assert.doesNotMatch(createMatchSource, /Exact role formation|builder-intro|role-legend|Role badges|Preferred means the role/);
+  assert.match(createMatchSource, /teamAPlayers\.map\(\(player\) => <AssignedPlayer/);
+  assert.match(createMatchSource, /teamBPlayers\.map\(\(player\) => <AssignedPlayer/);
+  assert.match(assignedPlayerSource, /RoleBadge assignedPosition=\{roleAssignment\.assignedPosition\} status=\{roleAssignment\.assignmentStatus\}/);
 });
 
 test('team mode choices stack at phone widths and keep 44-pixel tap targets', () => {
