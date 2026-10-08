@@ -1203,7 +1203,7 @@ function AdminMatchesPage() {
               </div>
             </section> : <>
             <div className="team-mode-back">
-              <button type="button" className="button button-quiet touch-44" onClick={backToTeamSelection} disabled={busy} data-testid="button-back-team-selection">Back to Team Selection</button>
+              <button type="button" className="button button-secondary touch-44" onClick={backToTeamSelection} disabled={busy} data-testid="button-back-team-selection">← Back to Team Selection</button>
             </div>
             <div className="builder-intro"><strong>Exact role formation</strong><p>Every side gets 1 Setter, 2 Outside Hitters, 2 Middle Blockers, and 1 Opposite. Seven-player sides add 1 Libero. Auto-Balance preserves these roles while reducing the team ELO gap.</p></div>
             <div className="role-legend" aria-label="Role assignment legend">

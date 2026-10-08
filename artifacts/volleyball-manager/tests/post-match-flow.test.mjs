@@ -130,6 +130,22 @@ test('mode selection starts without team controls; choosing either mode opens on
 });
 
 test('back preserves assignments and switching mode requires confirmation before clearing them', () => {
+  const chooserStart = createMatchSource.indexOf('{showTeamModeSelection ? <section className="team-mode-selection"');
+  const builderStart = createMatchSource.indexOf(': <>', chooserStart);
+  const backButtonIndex = createMatchSource.indexOf('data-testid="button-back-team-selection"', builderStart);
+  const teamColumnsIndex = createMatchSource.indexOf('{mode !== null && <div className="team-columns">', builderStart);
+  assert.ok(builderStart < backButtonIndex && backButtonIndex < teamColumnsIndex);
+  assert.match(createMatchSource.slice(builderStart, teamColumnsIndex), /className="button button-secondary touch-44"[^>]*data-testid="button-back-team-selection">← Back to Team Selection/);
+
+  for (const mode of ['auto', 'manual']) {
+    const byMode = teamModeFixture({ mode });
+    const before = structuredClone(byMode.state);
+    byMode.actions().backToTeamSelection();
+    assert.equal(byMode.state.showTeamModeSelection, true);
+    for (const key of ['teamA', 'teamB', 'locks', 'selectedPlayerIds']) assert.deepEqual(byMode.state[key], before[key]);
+    assert.equal(byMode.state.matchDate, before.matchDate);
+  }
+
   const f = teamModeFixture();
   const previous = structuredClone(f.state);
   f.actions().backToTeamSelection();
