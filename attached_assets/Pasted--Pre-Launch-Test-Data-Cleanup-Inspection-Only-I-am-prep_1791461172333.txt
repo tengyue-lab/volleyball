@@ -1,0 +1,41 @@
+# Pre-Launch Test Data Cleanup — Inspection Only
+
+I am preparing Wyndham Wombats VC for its first public launch.
+
+I want to remove all test players, test matches, test results and associated test ELO history so the app starts clean.
+
+However, I must preserve the app's functionality, administrator access, configuration and database integrity.
+
+IMPORTANT: This is an inspection and planning task only. Do not delete, reset, truncate or modify any database records yet.
+
+Please:
+
+1. Inspect the current database schema and identify every table containing test player data, matches, match results, ELO history, team assignments, leaderboard data, counters and related audit records.
+
+2. Identify any foreign-key relationships or dependencies that require a specific cleanup order.
+
+3. Identify all authentication, user-account, administrator and configuration tables that must be preserved.
+
+4. Explain how to preserve my admin login while removing test player profiles, including any linked player record.
+
+5. Check whether any test data exists in both development and deployed production databases. Clearly identify which environment would be affected. Do not touch production.
+
+6. Propose a safe, one-time cleanup procedure that:
+   - Creates a verified database backup first.
+   - Shows the exact records and record counts to be deleted.
+   - Preserves admin accounts and app settings.
+   - Removes only approved test data and its dependent records.
+   - Uses a transaction with rollback on failure.
+   - Respects foreign-key constraints.
+   - Verifies that the app still works afterward.
+   - Allows restoration from the backup if necessary.
+
+7. Explain whether this cleanup can be performed with a simple existing admin function or requires a one-time script.
+
+Do not create a permanent public-facing Reset Database button.
+
+Do not change the ELO calculation, team balancer, application features or UI.
+
+Do not deploy.
+
+Keep the response concise. Show me the cleanup plan, the records affected and any risks, then STOP and wait for my explicit approval before executing anything.
