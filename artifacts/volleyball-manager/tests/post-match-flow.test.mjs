@@ -673,3 +673,87 @@ test('date validation uses local calendar values and rejects impossible or blank
     assert.equal(validMatchDate(value), false);
   }
 });
+
+function historyMatch(id, status, matchDate, completedAt = `2026-10-03T0${id}:00:00Z`) {
+  return { id, status, matchDate, completedAt };
+}
+
+test('completed matches group by game date newest first and retain their existing order within each date', () => {
+  const source = [
+    historyMatch(1, 'completed', '2026-09-26', '2026-10-03T12:00:00Z'),
+    historyMatch(2, 'completed', '2026-10-03', '2026-10-03T11:00:00Z'),
+    historyMatch(3, 'completed', '2026-09-26', '2026-10-03T10:00:00Z'),
+    historyMatch(4, 'completed', '2026-10-03', '2026-10-03T09:00:00Z'),
+    historyMatch(5, 'completed', '2026-09-26', '2026-10-03T08:00:00Z'),
+    historyMatch(6, 'completed', '2026-10-03', '2026-10-03T07:00:00Z'),
+    historyMatch(7, 'upcoming', '2026-10-10'),
+    historyMatch(8, 'cancelled', '2026-10-03'),
+  ];
+  const groups = groupCompletedMatchesByGameDate(source);
+
+  assert.deepEqual(groups.map((group) => [group.matchDate, group.matches.map((match) => match.id)]), [
+    ['2026-10-03', [2, 4, 6]],
+    ['2026-09-26', [1, 3, 5]],
+  ]);
+  assert.deepEqual(groups.map((group) => group.matches.length), [3, 3]);
+});
+
+test('legacy and invalid game dates share a final Date not recorded group', () => {
+  const groups = groupCompletedMatchesByGameDate([
+    historyMatch(1, 'completed', '2026-09-26'),
+    historyMatch(2, 'completed', null),
+    historyMatch(3, 'completed', '2026-02-30'),
+    historyMatch(4, 'upcoming', null),
+  ]);
+  assert.deepEqual(groups.map((group) => [group.key, group.matchDate, group.matches.map((match) => match.id)]), [
+    ['2026-09-26', '2026-09-26', [1]],
+    ['date-not-recorded', null, [2, 3]],
+  ]);
+  assert.equal(formatGameDateLabel(groups[1].matchDate), 'Date not recorded');
+});
+
+test('game-date labels use local calendar values without changing across timezones', () => {
+  const originalTimezone = process.env.TZ;
+  try {
+    for (const timezone of ['Pacific/Honolulu', 'Australia/Sydney', 'Europe/London', 'Pacific/Kiritimati']) {
+      process.env.TZ = timezone;
+      assert.equal(formatGameDateLabel('2026-10-03'), 'Saturday, 3 October 2026');
+      assert.equal(formatGameDateLabel('2026-09-26'), 'Saturday, 26 September 2026');
+    }
+  } finally {
+    if (originalTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTimezone;
+  }
+  assert.equal(formatGameDateLabel('2026-02-30'), 'Date not recorded');
+});
+
+test('date groups render collapsed accessible rows with singular/plural counts and existing match cards', () => {
+  const groups = groupCompletedMatchesByGameDate([
+    historyMatch(1, 'completed', '2026-10-03'),
+    historyMatch(2, 'completed', '2026-09-26'),
+    historyMatch(3, 'completed', '2026-09-26'),
+  ]);
+  const markup = renderToStaticMarkup(createElement(MatchHistoryDateGroups, {
+    groups,
+    renderMatch: (match) => createElement('article', { 'data-testid': `card-match-${match.id}` }, `Match ${match.id}`),
+  }));
+
+  assert.equal((markup.match(/aria-expanded="false"/g) ?? []).length, 2);
+  assert.equal((markup.match(/hidden=""/g) ?? []).length, 2);
+  assert.match(markup, /Saturday, 3 October 2026/);
+  assert.match(markup, /Saturday, 26 September 2026/);
+  assert.match(markup, /1 match played/);
+  assert.match(markup, /2 matches played/);
+  assert.match(markup, /aria-controls="history-date-panel-2026-10-03"/);
+  for (const id of [1, 2, 3]) assert.match(markup, new RegExp(`data-testid="card-match-${id}"`));
+});
+
+test('multiple date groups can remain open independently', () => {
+  const first = toggleExpandedDateGroup(new Set(), '2026-10-03');
+  const both = toggleExpandedDateGroup(first, '2026-09-26');
+  const one = toggleExpandedDateGroup(both, '2026-10-03');
+
+  assert.deepEqual([...first], ['2026-10-03']);
+  assert.deepEqual(new Set(both), new Set(['2026-10-03', '2026-09-26']));
+  assert.deepEqual([...one], ['2026-09-26']);
+});

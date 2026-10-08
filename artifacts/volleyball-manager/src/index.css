@@ -865,6 +865,23 @@ button:focus-visible,input:focus-visible{outline:3px solid hsl(var(--accent)/.55
 .history-elo-list li{padding:6px 0;border-bottom:1px solid hsl(var(--border))}.history-elo-list strong{font-family:var(--app-font-mono)}
 .elo-change-private,.elo-change-zero{color:hsl(var(--muted-foreground))}
 .history-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.history-date-list{display:grid;gap:12px;min-width:0}
+.history-date-group{min-width:0;overflow:hidden;border:1px solid hsl(var(--border));border-radius:10px;background:hsl(var(--card))}
+.history-date-trigger{width:100%;min-height:68px;display:grid;grid-template-columns:24px minmax(0,1fr) 20px;align-items:center;gap:12px;padding:12px 16px;border:0;background:transparent;color:hsl(var(--foreground));text-align:left;cursor:pointer}
+.history-date-trigger:hover{background:hsl(var(--background)/.55)}
+.history-date-trigger:focus-visible{outline:2px solid hsl(var(--ring));outline-offset:-3px}
+.history-date-icon{color:hsl(var(--primary))}
+.history-date-copy{display:grid;gap:4px;min-width:0}
+.history-date-copy strong{font-size:13px;line-height:1.35;overflow-wrap:anywhere}
+.history-date-copy span{color:hsl(var(--muted-foreground));font-size:11px}
+.history-date-chevron{justify-self:end;color:hsl(var(--muted-foreground));transition:transform .16s ease}
+.history-date-chevron[data-expanded="true"]{transform:rotate(180deg)}
+.history-date-panel{padding:0 14px 14px;min-width:0}
+.history-date-panel[hidden]{display:none}
+.history-date-matches{gap:12px}
+.history-date-match{min-width:0}
+.history-empty-state{padding:18px}
+.history-empty-state p{margin:0;color:hsl(var(--muted-foreground));font-size:13px}
 .post-save-result{margin-bottom:18px;padding:16px 18px;border-color:#90b9a5}
 .post-save-result .post-save-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .saved-summary{margin-bottom:18px}.saved-summary-body{padding:14px 18px;display:grid;gap:12px}
@@ -875,4 +892,4 @@ button:focus-visible,input:focus-visible{outline:3px solid hsl(var(--accent)/.55
 .saved-summary-actions{display:flex;flex-wrap:wrap;gap:10px}
 .session-date .start-over-button{min-height:44px}
 .confirm-copy{font-size:13px;line-height:1.6;margin-bottom:12px}
-@media(max-width:680px){.history-teams{grid-template-columns:1fr}.saved-summary-actions .button{flex:1 1 100%}.modal-actions .button{flex:1}}
+@media(max-width:680px){.history-teams{grid-template-columns:1fr}.history-date-trigger{min-height:64px;padding:12px}.history-date-panel{padding:0 10px 10px}.saved-summary-actions .button{flex:1 1 100%}.modal-actions .button{flex:1}}

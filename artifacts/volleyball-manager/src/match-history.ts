@@ -50,12 +50,13 @@ export function formatGameDateLabel(matchDate: string | null): string {
   if (!matchDate) return 'Date not recorded';
   const localDate = localDateFromKey(matchDate);
   if (!localDate) return 'Date not recorded';
-  return new Intl.DateTimeFormat('en-AU', {
-    weekday: 'long',
+  const weekday = new Intl.DateTimeFormat('en-AU', { weekday: 'long' }).format(localDate);
+  const calendarDate = new Intl.DateTimeFormat('en-AU', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
   }).format(localDate);
+  return `${weekday}, ${calendarDate}`;
 }
 
 export function toggleExpandedDateGroup(current: ReadonlySet<string>, key: string): Set<string> {
