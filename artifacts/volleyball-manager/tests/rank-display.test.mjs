@@ -104,6 +104,43 @@ test('shared competitive-rank dialog uses server ranges and profile metrics have
   assert.ok(css.includes('.rank-info-dialog>button{right:8px;top:8px;min-width:44px;min-height:44px'));
 });
 
+test('ranked position input supports minimum selection, ordered labels, and mobile-friendly reordering', async () => {
+  const inputSource = await readFile(new URL('../src/components/RankedPositionInput.tsx', import.meta.url), 'utf8');
+  const transformedInput = await transformWithEsbuild(inputSource, 'RankedPositionInput.tsx', { loader: 'tsx', jsx: 'automatic', format: 'esm' });
+  const inputCode = transformedInput.code
+    .replace('import "./ranked-position-input.css";', '')
+    .replaceAll('"react"', JSON.stringify(import.meta.resolve('react')))
+    .replaceAll('"react/jsx-runtime"', JSON.stringify(import.meta.resolve('react/jsx-runtime')));
+  const { default: RankedPositionInput } = await import(`data:text/javascript;base64,${Buffer.from(inputCode).toString('base64')}`);
+  const markup = render(RankedPositionInput, {
+    value: ['Setter', 'Outside Hitter', 'Libero'],
+    onChange: () => {},
+    minSelected: 3,
+    showHelp: false,
+  });
+  assert.ok(markup.includes('data-testid="ranked-position-input"'));
+  assert.ok(markup.includes('>1</span>') && markup.includes('>2</span>') && markup.includes('>3</span>'));
+  assert.ok(markup.includes('aria-label="Move Setter up"'));
+  assert.ok(markup.includes('aria-label="Move Setter down"'));
+  assert.match(markup, /<input\b(?=[^>]*\btype="checkbox")(?=[^>]*\bchecked="")(?=[^>]*\bdisabled="")[^>]*>/);
+  assert.ok(markup.includes('data-testid="checkbox-position-opposite"'));
+  assert.ok(!markup.includes('Choose 1–5 unique roles'));
+
+  const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  assert.ok(app.includes('function PreferredPositionsSection'));
+  assert.ok(app.includes("Select your preferred positions in order, from most to least preferred. You may occasionally be assigned a position you haven't selected if needed to balance the teams."));
+  assert.ok(app.includes('updatePlayer.mutate({ playerId: player.id, data: { positions: selectedPositions } }'));
+  assert.ok(app.includes('queryClient.invalidateQueries({ queryKey: getListPlayersQueryKey() })'));
+  assert.ok(app.includes('{!access.isAdmin && <PreferredPositionsSection'));
+  assert.ok(app.includes('Choose at least three preferred positions before saving.'));
+  assert.ok(app.includes('title="Linking needed"'));
+
+  const css = await readFile(new URL('../src/index.css', import.meta.url), 'utf8');
+  assert.ok(css.includes('.preferred-position-description'));
+  assert.ok(css.includes('.preferred-position-body'));
+  assert.ok(css.includes('.preferred-position-actions>.button{width:100%}'));
+});
+
 test('result promotions and demotions expose transition text and distinct styling', () => {
   const promotion = render(RankTransition, { before: 'Silver 3', after: 'Silver 2', movement: 'promotion', provisional: true });
   assert.ok(promotion.includes('Silver 3 to Silver 2'));

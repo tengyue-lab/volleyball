@@ -141,6 +141,11 @@ class PrivacyTests(unittest.TestCase):
         self.assertTrue(saved.get_json()["preferencesConfirmed"])
         self.assertEqual(saved.get_json()["elo"], before["elo"])
         self.assertEqual(owner.get(f"/api/players/{target}").get_json()["positions"], preferences)
+        refreshed_roster = owner.get("/api/players").get_json()
+        self.assertEqual(
+            next(player for player in refreshed_roster if player["id"] == target)["positions"],
+            preferences,
+        )
 
         # Account ownership is resolved by the verified identity, not trusted
         # from an arbitrary player ID or combined mutation payload.

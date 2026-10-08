@@ -130,7 +130,6 @@ export interface PlayerInput {
      */
   name: string;
   /**
-     * Linked non-admin players must provide at least three preferences; admin edits retain the existing one-to-five range.
      * @minItems 1
      * @maxItems 5
      */
@@ -147,6 +146,7 @@ export interface PlayerUpdate {
      */
   name?: string;
   /**
+     * Linked non-admin players must provide at least three preferences; admin edits retain the existing one-to-five range.
      * @minItems 1
      * @maxItems 5
      */
