@@ -58,7 +58,6 @@ async function load(name) {
 const history = await load('MatchHistoryDetails');
 const MatchHistoryDetails = history.default;
 const { default: ConfirmDialog } = await load('ConfirmDialog');
-const { default: SavedRosterSummary } = await load('SavedRosterSummary');
 const { default: MatchDeleteConfirmation } = await load('MatchDeleteConfirmation');
 
 test('Create Match keeps Date, Players and Teams as distinct stages', () => {
@@ -129,11 +128,12 @@ test('mode selection starts without team controls; choosing either mode opens on
   assert.equal(automatic.state.showTeamModeSelection, false);
 });
 
-test('mode chooser hides roster/session summaries and residual team details without clearing saved work', () => {
+test('mode chooser and selected team mode have no saved-upcoming-roster interruption', () => {
   assert.match(createMatchSource, /const modeChoiceVisible = stepVisibility\.teams && showTeamModeSelection/);
   assert.match(createMatchSource, /\{!modeChoiceVisible && <div className="summary-strip match-session-summary">/);
-  assert.match(createMatchSource, /\{!modeChoiceVisible && <SavedRosterSummary/);
-  assert.match(createMatchSource, /\{!modeChoiceVisible && draft\.editingMatchId !== null && <div[^>]+data-testid="status-editing-target"/);
+  assert.doesNotMatch(createMatchSource, /SavedRosterSummary|Continue to Team Assignment|Reset Current Match|status-editing-target/);
+  assert.match(createMatchSource, /createMatch\.mutate\(\{ data \}/);
+  assert.doesNotMatch(createMatchSource, /updateDraft\.mutate/);
   assert.match(createMatchSource, /\{!modeChoiceVisible && <div className="panel-head">/);
   assert.match(createMatchSource, /\{mode !== null && !modeChoiceVisible && <div className="team-columns">/);
   assert.match(createMatchSource, /\{mode === 'manual' && !modeChoiceVisible && <div className="available-list">/);
@@ -512,17 +512,6 @@ test('public history never renders ELO even with audit data and an initially ope
   assert.ok(markup.includes('Team Detail') && markup.includes('Zed') && markup.includes('Setter'));
   assert.ok(!/ELO|elo-changes|text-elo-change|\\+12|-12|900|Rank|Bronze|Provisional/.test(markup));
   assert.equal((markup.match(/aria-expanded=/g) ?? []).length, 1);
-});
-
-test('saved roster summary requires explicit target and protects non-editable drafts', () => {
-  const rosters = [{ id: 7, createdAt: 'x', teamA: [1], teamB: [2], draftEditable: true }, { id: 8, createdAt: 'x', teamA: [1], teamB: [2], draftEditable: false }];
-  const none = renderToStaticMarkup(createElement(SavedRosterSummary, { rosters, targetId: null, busy: false, onSelect() {}, onContinue() {}, onReset() {} }));
-  assert.equal((none.match(/disabled/g) ?? []).length, 2);
-  const ok = renderToStaticMarkup(createElement(SavedRosterSummary, { rosters, targetId: 7, busy: false, onSelect() {}, onContinue() {}, onReset() {} }));
-  assert.ok(ok.includes('Reset Current Match') && ok.includes('Continue to Team Assignment') && !/disabled/.test(ok));
-  const prot = renderToStaticMarkup(createElement(SavedRosterSummary, { rosters, targetId: 8, busy: false, onSelect() {}, onContinue() {}, onReset() {} }));
-  assert.equal((prot.match(/disabled/g) ?? []).length, 1);
-  assert.equal(renderToStaticMarkup(createElement(SavedRosterSummary, { rosters: [], targetId: null, busy: false, onSelect() {}, onContinue() {}, onReset() {} })), '');
 });
 
 test('reset confirmation names the roster, warns, and locks while pending', () => {

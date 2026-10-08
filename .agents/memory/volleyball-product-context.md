@@ -15,8 +15,8 @@ The app is used mostly on phones.
 
 **How to apply:** Prioritize compact navigation, readable narrow layouts, and touch-friendly controls when changing the interface.
 
-Current Match means all saved upcoming rosters, not only the newest roster.
+Current Match means all saved upcoming rosters, not only the newest roster. Admins may create several independent upcoming matches for one session from the same selected player pool; completing one leaves the others upcoming.
 
 **Why:** The user chose “Show all upcoming rosters” when asked how the existing upcoming status should map to Current Match.
 
-**How to apply:** Do not silently hide other unfinished rosters or introduce a separate active-match status without a new product decision.
+**How to apply:** Keep every upcoming match separately addressable and ordered using the existing Current Match ordering. Do not silently hide other unfinished rosters or introduce a separate active-match status without a new product decision.

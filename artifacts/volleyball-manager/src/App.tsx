@@ -10,7 +10,6 @@ import {
   Position,
   useCreateMatch,
   useDeleteMatchDraft,
-  useUpdateMatchDraft,
   useGetAuthViewer,
   useGrantAdminAccess,
   useListAdminAccess,
@@ -61,9 +60,8 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import MatchDeleteConfirmation from '@/components/MatchDeleteConfirmation';
 import MatchHistoryDetails from '@/components/MatchHistoryDetails';
 import LeaderboardTable from '@/components/LeaderboardTable';
-import SavedRosterSummary, { rosterLabel } from '@/components/SavedRosterSummary';
 import { MatchSessionProvider, useMatchSession } from '@/match-session-context';
-import { clearDeletedMatchSession, restoreFailedDeletionSession, draftEditable, editSession, nextGameSession, reconcileSession, selectionCanContinue, updateMatchSessionStep, validMatchDate, visiblePool } from '@/match-session';
+import { clearDeletedMatchSession, restoreFailedDeletionSession, nextGameSession, reconcileSession, selectionCanContinue, updateMatchSessionStep, validMatchDate, visiblePool } from '@/match-session';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchInterval: 5000, staleTime: 0, refetchIntervalInBackground: false, retry: 1 } } });
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -643,13 +641,7 @@ function AdminMatchesPage() {
   const playersQuery = useListPlayers();
   const matchesQuery = useListMatches();
   const createMatch = useCreateMatch();
-  const updateDraft = useUpdateMatchDraft();
-  const deleteDraft = useMatchDeletion();
-  const [targetId, setTargetId] = useState<number | null>(draft.editingMatchId);
-  const [resetTarget, setResetTarget] = useState<Match | null>(null);
-  const [resetError, setResetError] = useState('');
   const [confirmStartOver, setConfirmStartOver] = useState(false);
-  const [summaryError, setSummaryError] = useState('');
   const queryClient = useQueryClient();
   const { notice } = useNotice();
   const [mode, setMode] = useState<'auto' | 'manual' | null>(null);
@@ -1020,10 +1012,7 @@ function AdminMatchesPage() {
     } catch (error) { setCreateError(messageFor(error)); }
   }
 
-  const busy = createMatch.isPending || updateDraft.isPending || deleteDraft.isPending || createdMatchId !== null;
-  const upcomingRosters = (matchesQuery.data ?? []).filter((m) => m.status === 'upcoming').sort((x, y) => new Date(y.createdAt).getTime() - new Date(x.createdAt).getTime() || y.id - x.id);
-  const effectiveTargetId = upcomingRosters.length === 1 ? upcomingRosters[0].id : upcomingRosters.some((m) => m.id === targetId) ? targetId : null;
-  const targetMatch = upcomingRosters.find((m) => m.id === effectiveTargetId) ?? null;
+  const busy = createMatch.isPending || createdMatchId !== null;
   const nextGame = matchesQuery.isSuccess && playersQuery.isSuccess ? nextGameSession(matchesQuery.data, playersQuery.data, 0) : null;
   const hasDraftState = selectedPlayerIds.length > 0 || teamA.length > 0 || teamB.length > 0 || draft.editingMatchId !== null || draft.step !== 'date';
   const stepVisibility = {
@@ -1044,30 +1033,10 @@ function AdminMatchesPage() {
     if (!fresh) return;
     replaceSession((generation) => ({ ...fresh, generation }));
   }
-  function continueTarget() {
-    if (busy || !targetMatch || !draftEditable(targetMatch)) return;
-    setSummaryError('');
-    replaceSession((generation) => editSession(targetMatch, generation));
-  }
-  function confirmReset() {
-    if (!resetTarget || deleteDraft.isPending) return;
-    setResetError('');
-    deleteDraft.remove(resetTarget, {
-      onSuccess: () => {
-        setResetTarget(null);
-        // A new, unsaved selection can be reset normally. Do not discard an
-        // unrelated saved roster being edited while another target is deleted.
-        if (draft.editingMatchId === null) startOver();
-      },
-      onError: (error) => setResetError(messageFor(error)),
-    });
-  }
-
   function matchSaved(saved: Match) {
     queryClient.setQueryData(getGetMatchQueryKey(saved.id), saved);
     queryClient.setQueryData<Match[]>(getListMatchesQueryKey(), (current) =>
       current ? [saved, ...current.filter((match) => match.id !== saved.id)] : current);
-    setTargetId(saved.id);
     setCreatedMatchId(saved.id);
     void queryClient.invalidateQueries({ queryKey: getListMatchesQueryKey() });
   }
@@ -1104,14 +1073,6 @@ function AdminMatchesPage() {
       teamAAssignments: toApi(roleAssignments.teamAAssignments),
       teamBAssignments: toApi(roleAssignments.teamBAssignments),
     };
-    const editingId = draft.editingMatchId;
-    if (editingId !== null) {
-      updateDraft.mutate({ matchId: editingId, data }, {
-        onSuccess: matchSaved,
-        onError: matchSaveFailed,
-      });
-      return;
-    }
     createMatch.mutate({ data }, {
       onSuccess: matchSaved,
       onError: matchSaveFailed,
@@ -1128,10 +1089,7 @@ function AdminMatchesPage() {
       {hasDraftState && <button className="button button-secondary touch-44 start-over-button" disabled={busy} onClick={requestStartOver} data-testid="button-start-over">Start Over</button>}
     </div>}
     {!modeChoiceVisible && matchesQuery.isError && <div className="form-error" role="alert">Saved rosters could not be loaded. <button className="text-button" onClick={() => void matchesQuery.refetch()}>Try again</button></div>}
-    {!modeChoiceVisible && <SavedRosterSummary rosters={upcomingRosters} targetId={effectiveTargetId} busy={busy} onSelect={setTargetId} onContinue={continueTarget} onReset={() => { if (targetMatch) { setResetError(''); setResetTarget(targetMatch); } }} />}
-    {!modeChoiceVisible && summaryError && <div className="form-error" role="alert">{summaryError}</div>}
-    {!modeChoiceVisible && draft.editingMatchId !== null && <div className="position-warning" role="status" data-testid="status-editing-target"><strong>Editing saved {rosterLabel(upcomingRosters.find((m) => m.id === draft.editingMatchId) ?? { id: draft.editingMatchId, createdAt: '', teamA: [], teamB: [] })}</strong><span>Saving updates this roster instead of creating a new one.</span></div>}
-    {stepVisibility.date && draft.editingMatchId === null && nextGame && <aside className="panel next-game-shortcut" aria-label="Reuse the previous match roster" data-testid="card-next-game">
+    {stepVisibility.date && nextGame && <aside className="panel next-game-shortcut" aria-label="Reuse the previous match roster" data-testid="card-next-game">
       <div><strong>Start with the last roster</strong><p>{nextGame.selectedPlayerIds.length} eligible players from the most recent completed match will be pre-selected.</p></div>
       <button className="button button-secondary touch-44" disabled={busy} onClick={startNextGame} data-testid="button-next-game">Next Game</button>
     </aside>}
@@ -1285,7 +1243,7 @@ function AdminMatchesPage() {
               </div>)}
             </div>}
             {!modeChoiceVisible && createError && <div className="form-error" style={{ margin: '0 18px 12px' }} role="alert">{createError}</div>}
-            {!modeChoiceVisible && <div className="builder-footer"><div className={`validation-note ${isRosterValid ? 'valid' : ''}`} role="status" data-testid="status-roster-validation">{isRosterValid && <Check size={12} style={{ verticalAlign: 'middle', marginRight: 5 }} />}{validation}</div><button className="button button-primary" onClick={saveMatch} disabled={!isRosterValid || !canContinue || busy} data-testid="button-create-match">{busy ? 'Saving roster…' : draft.editingMatchId !== null ? 'Save changes to roster' : 'Save upcoming match'}</button></div>}
+            {!modeChoiceVisible && <div className="builder-footer"><div className={`validation-note ${isRosterValid ? 'valid' : ''}`} role="status" data-testid="status-roster-validation">{isRosterValid && <Check size={12} style={{ verticalAlign: 'middle', marginRight: 5 }} />}{validation}</div><button className="button button-primary" onClick={saveMatch} disabled={!isRosterValid || !canContinue || busy} data-testid="button-create-match">{busy ? 'Saving roster…' : 'Save upcoming match'}</button></div>}
             </>}
             </div>
           </>}
@@ -1295,7 +1253,6 @@ function AdminMatchesPage() {
     {confirmStartOver && <ConfirmDialog testId="dialog-start-over" title="Start over?" tone="warning" confirmLabel="Start Over" onCancel={() => setConfirmStartOver(false)} onConfirm={() => { setConfirmStartOver(false); startOver(); }}><p>This clears the {poolCount} selected {poolCount === 1 ? 'player' : 'players'}, assignments and locks. No saved match is deleted.</p></ConfirmDialog>}
     {createdMatchId !== null && <ConfirmDialog testId="dialog-match-created" title="Match Created" tone="warning" confirmLabel="OK" hideCancel onCancel={dismissMatchCreated} onConfirm={dismissMatchCreated}><p>The match has been created successfully.</p></ConfirmDialog>}
     {pendingMode !== null && <ConfirmDialog testId="dialog-switch-team-mode" title="Switch team mode?" tone="warning" confirmLabel="Switch mode" onCancel={cancelModeSwitch} onConfirm={confirmModeSwitch}><p>Switching modes will discard your current team assignments and role locks. Continue?</p></ConfirmDialog>}
-    {resetTarget && <ConfirmDialog testId="dialog-reset-match" title="Reset Current Match?" confirmLabel="Reset Current Match" pendingLabel="Resetting…" pending={deleteDraft.isPending} error={resetError} onCancel={() => setResetTarget(null)} onConfirm={confirmReset}><p><strong>{rosterLabel(resetTarget)}</strong> will be deleted. This cannot be undone.</p></ConfirmDialog>}
   </main></Shell>;
 }
 

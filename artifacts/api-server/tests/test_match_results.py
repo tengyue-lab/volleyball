@@ -84,6 +84,36 @@ class MatchResultTests(unittest.TestCase):
     def test_existing_match_creation_without_date_remains_compatible(self):
         self.assertIsNone(self.create_match()["matchDate"])
 
+    def test_multiple_upcoming_matches_remain_independent_and_only_completion_applies_elo(self):
+        ratings_before = {player_id: self.player_elo(player_id) for player_id in self.player_ids}
+        matches = [self.create_match(matchDate="2026-10-10") for _ in range(3)]
+        match_ids = [match["id"] for match in matches]
+        self.assertEqual(len(set(match_ids)), 3)
+        self.assertEqual([match["status"] for match in matches], ["upcoming"] * 3)
+        self.assertEqual(
+            {player_id: self.player_elo(player_id) for player_id in self.player_ids},
+            ratings_before,
+        )
+        created_collection = self.client.get("/api/matches").get_json()
+        self.assertEqual([match["id"] for match in created_collection], list(reversed(match_ids)))
+
+        completed = self.complete(matches[0])
+        self.assertEqual(completed["status"], "completed")
+        self.assertEqual(len(completed["eloChanges"]), 12)
+
+        for original in matches[1:]:
+            still_upcoming = self.client.get(f"/api/matches/{original['id']}").get_json()
+            self.assertEqual(still_upcoming["status"], "upcoming")
+            self.assertIsNone(still_upcoming["scoreA"])
+            self.assertIsNone(still_upcoming["scoreB"])
+            self.assertIsNone(still_upcoming["winner"])
+            self.assertEqual(still_upcoming["teamA"], original["teamA"])
+            self.assertEqual(still_upcoming["teamB"], original["teamB"])
+            self.assertEqual(still_upcoming["eloChanges"], [])
+
+        collection = self.client.get("/api/matches").get_json()
+        self.assertEqual(sum(match["status"] == "upcoming" for match in collection), 2)
+
     def test_invalid_match_dates_do_not_create_a_roster(self):
         match = self.create_match()
         body = {

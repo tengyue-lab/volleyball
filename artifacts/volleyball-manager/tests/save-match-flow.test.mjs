@@ -12,12 +12,12 @@ const clearTeams = app.slice(app.indexOf('function clearTeamAssignments('), app.
 const compiled = await transformWithEsbuild(`
   export function handlers(env) {
     const { queryClient, getGetMatchQueryKey, getListMatchesQueryKey,
-      setTargetId, setCreatedMatchId, setTeamA, setTeamB, setLocks,
+      setCreatedMatchId, setTeamA, setTeamB, setLocks,
       setBalanceResult, setBalancedProfiles, setSwapSelectionId,
       setCreateError, setSavedRolesInvalidated, setDraft, setMode,
       setShowTeamModeSelection, saveInFlight,
       messageFor, isRosterValid, roleAssignments, canContinue, draft,
-      busy, apiPositionByRole, teamA, teamB, updateDraft, createMatch } = env;
+      busy, apiPositionByRole, teamA, teamB, createMatch } = env;
     ${clearTeams}
     ${saveHandlers}
     return { saveMatch, dismissMatchCreated };
@@ -36,11 +36,11 @@ function fixture(count = 12, editingMatchId = null) {
     locks: [{ playerId: 1, team: 'A', position: 'Outside Hitter' }],
     balanceResult: { teamAAssignments: assignments.slice(0, 6), teamBAssignments: assignments.slice(6) },
     balancedProfiles: 'profile-fingerprint', swapSelectionId: 1,
-    savedRolesInvalidated: false, createdMatchId: null, targetId: null, createError: '',
+    savedRolesInvalidated: false, createdMatchId: null, createError: '',
     mode: 'auto', showTeamModeSelection: false,
   };
   const setters = Object.fromEntries(['TeamA', 'TeamB', 'Locks', 'BalanceResult', 'BalancedProfiles',
-    'SwapSelectionId', 'CreateError', 'SavedRolesInvalidated', 'CreatedMatchId', 'TargetId', 'Draft',
+    'SwapSelectionId', 'CreateError', 'SavedRolesInvalidated', 'CreatedMatchId', 'Draft',
     'Mode', 'ShowTeamModeSelection'].map((name) => {
     const key = name[0].toLowerCase() + name.slice(1);
     return [`set${name}`, (value) => { state[key] = typeof value === 'function' ? value(state[key]) : value; }];
@@ -61,7 +61,7 @@ function fixture(count = 12, editingMatchId = null) {
       },
       invalidateQueries: (key) => { invalidations.push(key); return Promise.resolve(); },
     },
-    createMatch: mutation('create'), updateDraft: mutation('update'),
+    createMatch: mutation('create'),
   });
   return { state, saves, cache, invalidations, saveInFlight, actions: () => handlers(env()) };
 }
@@ -85,7 +85,6 @@ for (const count of [12, 13, 14]) {
     assert.deepEqual(f.state.draft, before.draft);
     assert.deepEqual(f.cache.get('["match",101]'), saved);
     assert.deepEqual(f.cache.get('["matches"]').map((match) => match.id), [101, 50]);
-    assert.equal(f.state.targetId, 101);
     assert.equal(f.invalidations.length, 1);
     f.actions().saveMatch();
     assert.equal(f.saves.length, 1); // Modal never submits another request.
@@ -94,7 +93,6 @@ for (const count of [12, 13, 14]) {
     assert.equal(f.state.draft.step, 'teams');
     assert.equal(f.state.showTeamModeSelection, true);
     assert.equal(f.state.mode, null);
-    assert.equal(f.state.targetId, 101);
     assert.equal(f.state.draft.matchDate, before.draft.matchDate);
     assert.equal(f.state.draft.generation, before.draft.generation);
     assert.deepEqual(f.state.draft.selectedPlayerIds, before.draft.selectedPlayerIds);
@@ -118,27 +116,73 @@ for (const count of [12, 13, 14]) {
   });
 }
 
-test('failed create or update preserves all teams, locks, roles and session and allows retry', () => {
+test('consecutive auto and manual saves create three independent upcoming matches with the roster retained', () => {
+  const f = fixture(14);
+  const selected = [...f.state.draft.selectedPlayerIds];
+  const assign = (playerId) => ({
+    playerId, assignedPosition: 'Outside Hitter', assignmentStatus: 'Preferred', preferenceRank: 1,
+  });
+  const arrange = (teamA, teamB) => {
+    f.state.teamA = teamA;
+    f.state.teamB = teamB;
+    f.state.balanceResult = {
+      teamAAssignments: teamA.map(assign),
+      teamBAssignments: teamB.map(assign),
+    };
+  };
+  const saveAndAcknowledge = (id) => {
+    f.actions().saveMatch();
+    const request = f.saves.at(-1);
+    assert.equal(request.kind, 'create');
+    assert.deepEqual([...request.input.data.teamAPlayerIds, ...request.input.data.teamBPlayerIds].sort((a, b) => a - b), selected);
+    request.callbacks.onSuccess({ id, status: 'upcoming', ...request.input.data });
+    f.actions().dismissMatchCreated();
+    assert.deepEqual(f.state.draft.selectedPlayerIds, selected);
+    assert.equal(f.state.draft.step, 'teams');
+    assert.equal(f.state.showTeamModeSelection, true);
+    assert.equal(f.state.mode, null);
+    assert.deepEqual(f.state.teamA, []);
+    assert.deepEqual(f.state.teamB, []);
+  };
+
+  arrange(selected.slice(0, 7), selected.slice(7));
+  saveAndAcknowledge(101);
+  f.state.mode = 'auto';
+  f.state.showTeamModeSelection = false;
+  arrange(selected.slice(7), selected.slice(0, 7));
+  saveAndAcknowledge(102);
+  f.state.mode = 'manual';
+  f.state.showTeamModeSelection = false;
+  arrange(selected.slice(0, 7), selected.slice(7));
+  saveAndAcknowledge(103);
+
+  assert.deepEqual(f.cache.get('["matches"]').map((match) => match.id), [103, 102, 101, 50]);
+  assert.equal(f.saves.length, 3);
+});
+
+test('failed new-match save preserves all teams, locks, roles and session and allows retry', () => {
   for (const editingId of [null, 50]) {
     const f = fixture(12, editingId), before = structuredClone(f.state);
     f.actions().saveMatch();
+    assert.equal(f.saves[0].kind, 'create');
     f.saves[0].callbacks.onError(new Error('Save failed'));
     assert.deepEqual(f.state, { ...before, createError: 'Save failed' });
     assert.equal(f.saveInFlight.current, false);
     assert.equal(f.invalidations.length, 0);
     f.actions().saveMatch();
     assert.equal(f.saves.length, 2);
+    assert.equal(f.saves[1].kind, 'create');
     assert.equal(f.state.createError, '');
   }
 });
 
-test('saving an edited roster updates once then detaches the edit target for the next match', () => {
+test('a saved-roster edit marker cannot make Create Match overwrite an existing upcoming match', () => {
   const f = fixture(14, 50);
   f.actions().saveMatch();
-  assert.equal(f.saves[0].kind, 'update');
-  assert.equal(f.saves[0].input.matchId, 50);
-  f.saves[0].callbacks.onSuccess({ id: 50, status: 'upcoming' });
-  assert.equal(f.cache.get('["matches"]').length, 1); // Replaces, never duplicates.
+  assert.equal(f.saves[0].kind, 'create');
+  assert.equal(f.saves[0].input.matchId, undefined);
+  f.saves[0].callbacks.onSuccess({ id: 101, status: 'upcoming', ...f.saves[0].input.data });
+  assert.deepEqual(f.cache.get('["matches"]').map((match) => match.id), [101, 50]);
   f.actions().dismissMatchCreated();
   assert.equal(f.state.draft.editingMatchId, null);
   assert.equal(f.state.draft.savedRoster, null);
