@@ -1,0 +1,119 @@
+# Replit Prompt — Clean Vertical Top 5 Leaderboard
+
+Please update the Leaderboard UI design.
+
+I no longer want a podium layout. Instead, display the Top 5 players in a clean, modern vertical list, ordered from first to fifth.
+
+## 1. Leaderboard layout
+
+Display players in this exact descending order:
+
+1. First place
+2. Second place
+3. Third place
+4. Fourth place
+5. Fifth place
+
+All five players should use the same general row/card layout.
+
+Do not use a podium, columns of ranked players or staggered heights.
+
+Keep:
+- Title: Leaderboard
+- Subtitle: Saturday social leaderboard
+
+## 2. Information displayed
+
+Each player row should show ONLY:
+
+- Placement number (1–5)
+- Player name
+- Most-played volleyball position
+- Competitive tier (Iron, Bronze, Silver, Gold, Platinum, Diamond or Masters)
+
+Recommended layout:
+
+**[Placement] [Player Name / Most-Played Position] [Tier Badge]**
+
+Do not display:
+- ELO rating
+- Avatars or initials
+- Win/loss statistics
+- Match counts
+- Provisional labels for established players
+- Extra descriptions or explanatory text
+
+## 3. Visual styling
+
+Create a polished gaming-inspired interface consistent with the existing app theme.
+
+- Use rounded rectangular cards.
+- Make placement numbers prominent.
+- Use comfortable spacing between rows.
+- Give first place a subtle gold accent.
+- Give second place a subtle silver accent.
+- Give third place a subtle bronze accent.
+- Use neutral styling for fourth and fifth.
+- Show competitive tiers as small, attractive badges.
+- Use tier-specific colours where appropriate.
+- Avoid excessive gradients, animations and decorative icons.
+
+The overall appearance should feel modern, premium and minimal.
+
+## 4. Mobile-first design
+
+Prioritize mobile devices.
+
+- All five players should appear in a single vertical column.
+- No horizontal scrolling.
+- Long names should truncate gracefully.
+- Tier badges should remain readable.
+- Maintain consistent alignment and touch-friendly spacing.
+- Adapt naturally to desktop screens.
+
+## 5. Preserve existing ranking behavior
+
+Keep all previously agreed leaderboard requirements:
+
+- Public leaderboard shows only the Top 5 eligible opted-in players.
+- Players below the Top 5 are not publicly listed.
+- Existing ELO determines leaderboard ordering.
+- Competitive tiers are derived from ELO using the agreed threshold system.
+- Most-played position comes from actual completed match history.
+- Provisional eligibility is calculated correctly.
+- Public opt-in settings remain functional.
+- Exact ELO ratings remain private.
+- Private personal ranking remains available only to the appropriate player.
+
+If any of these features have not yet been implemented, do not assume they exist. Report missing dependencies rather than introducing unrelated changes without review.
+
+## 6. Do not change
+
+- ELO calculations
+- Tier thresholds
+- Matchmaking
+- Team balancing
+- Match creation
+- Match completion
+- Match history
+- Player permissions
+- Existing saved data
+
+This is primarily a leaderboard presentation change.
+
+## 7. Testing
+
+Verify:
+1. Players appear in descending order from rank 1 to rank 5.
+2. No podium is displayed.
+3. Each row shows only the four requested fields.
+4. Top-three accent colours display correctly.
+5. Tier badges display correctly.
+6. Mobile layout is responsive.
+7. Opt-in and provisional rules are preserved.
+8. Public ELO values remain hidden.
+9. Frontend build passes.
+
+Make the smallest targeted changes necessary.
+
+Do not deploy.

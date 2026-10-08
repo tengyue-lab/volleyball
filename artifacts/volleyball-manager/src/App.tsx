@@ -272,7 +272,7 @@ function PlayerEditor({ playerId, onClose, notify }: { playerId: number | null; 
     }
   }
 
-  const visibility = <div className="form-field visibility-field"><label className="check-row" htmlFor="player-elo-public"><input id="player-elo-public" type="checkbox" checked={eloPublic} onChange={(event) => setEloPublic(event.target.checked)} data-testid="checkbox-elo-public" /><span>Show me on the public leaderboard.</span></label><div className="field-hint">Only the top ten public players are listed, with rank tiers rather than numeric ELO. You always see your own rating.</div></div>;
+  const visibility = <div className="form-field visibility-field"><label className="check-row" htmlFor="player-elo-public"><input id="player-elo-public" type="checkbox" checked={eloPublic} onChange={(event) => setEloPublic(event.target.checked)} data-testid="checkbox-elo-public" /><span>Show me on the public leaderboard.</span></label><div className="field-hint">Only the top five public players are listed, with rank tiers rather than numeric ELO. You always see your own rating.</div></div>;
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
@@ -366,9 +366,8 @@ function LeaderboardPage() {
   return <Shell><main className="content">
     <PageHeader eyebrow="Standings" title="Leaderboard" description="Saturday social leaderboard" />
     <section className="panel" aria-label="Player rankings">
-      <div className="panel-head"><div><h2 className="panel-title">Top 5</h2><div className="panel-note">Established players who opted in</div></div></div>
       {query.isLoading ? <LoadingState /> : query.isError ? <ErrorState error={query.error} retry={() => void query.refetch()} /> : ranked.length === 0 ?
-        <EmptyState title="No eligible public players yet." copy="Players must opt in and complete 10 matches to appear." /> :
+        <div className="leaderboard-empty-state" role="status">No eligible public players yet.</div> :
           <LeaderboardTable players={ranked} />}
     </section>
   </main></Shell>;
