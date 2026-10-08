@@ -1,0 +1,121 @@
+# Replit Prompt — Allow Linked Players to Edit Preferred Positions
+
+Please add a feature allowing non-admin players to edit their own ranked position preferences from the Profile tab after successfully linking their account to an existing player record.
+
+This should reuse the existing ranked position preference system already used by the team-balancing algorithm.
+
+## 1. Profile — Preferred Positions
+
+For authenticated non-admin users who have successfully linked their account to a player record, add a section in their Profile tab titled:
+
+**Preferred Positions**
+
+Display the player's currently saved ranked position preferences.
+
+Allow them to edit and save these preferences.
+
+Use the same five volleyball positions already supported by the application:
+- Setter
+- Outside Hitter
+- Middle Blocker
+- Opposite
+- Libero
+
+Reuse the existing position names and identifiers from the app rather than introducing duplicate values.
+
+## 2. Short description
+
+Display the following description under Preferred Positions:
+
+"Select your preferred positions in order, from most to least preferred. You may occasionally be assigned a position you haven't selected if needed to balance the teams."
+
+Keep the description subtle, readable and mobile-friendly.
+
+## 3. Ranked position selection
+
+Players must select at least three different preferred positions.
+
+Requirements:
+- Allow three to five preferences.
+- Each position can appear only once.
+- Preference #1 is their most preferred position.
+- Preference #2 is their second preference, and so on.
+- Allow easy reordering using up/down arrows.
+- Allow players to add or remove positions.
+- Do not allow saving fewer than three preferences.
+- Clearly show the preference order using numbers.
+
+Use a clean mobile-friendly UI.
+
+## 4. Account linking and permissions
+
+Only allow users to edit position preferences for the player record linked to their authenticated account.
+
+Requirements:
+- If the user has not linked their account, show the existing account-linking workflow instead.
+- Once linked, display the saved preferences and allow editing.
+- Do not allow users to edit another player's preferences.
+- Enforce ownership and permissions on the backend/API, not only through frontend visibility.
+- Do not trust a player ID supplied by the frontend without verifying account ownership.
+- Preserve existing admin editing functionality.
+
+Admins should still be able to manage player preferences using the existing Players tab.
+
+## 5. Saving changes
+
+When the player clicks Save Preferences:
+
+- Validate that at least three unique positions are selected.
+- Save the ranked preferences to the existing player record.
+- Show a small success confirmation.
+- Update the Profile display immediately.
+- Ensure the preferences remain saved after refreshing or logging out and back in.
+- If saving fails, show an error and preserve the user's unsaved selections.
+
+Do not create a separate preference system for linked accounts.
+
+## 6. Team-balancing integration
+
+The updated preferences must automatically be used by the existing team-building algorithm when generating future teams.
+
+IMPORTANT:
+- Do not modify the matchmaking algorithm.
+- Do not modify ELO calculations.
+- Do not change team formation requirements.
+- Do not retroactively change previously saved matches.
+- Do not change existing team assignments when a player updates preferences.
+
+Only ensure that the existing algorithm reads the newly saved preferences from the same player record.
+
+## 7. UI consistency
+
+Keep the Preferred Positions section consistent with the existing Profile design.
+
+Use:
+- Clear numbered preference rows
+- Up/down reorder controls
+- Add/remove position controls
+- Save Preferences button
+- Short description beneath the heading
+
+Make the interface responsive and easy to use on mobile.
+
+## 8. Testing
+
+Verify:
+
+1. A linked non-admin player can view their existing preferences.
+2. They can reorder their preferences.
+3. They can add or remove positions while maintaining at least three.
+4. Duplicate positions cannot be selected.
+5. Preferences save correctly and persist after refresh.
+6. An unlinked account cannot edit a player record.
+7. One player cannot modify another player's preferences through the API.
+8. Admin editing functionality still works.
+9. Future team generation uses the updated preferences.
+10. Previously saved matches remain unchanged.
+11. Frontend build and relevant backend tests pass.
+
+Make the smallest safe changes necessary.
+
+Do not deploy.

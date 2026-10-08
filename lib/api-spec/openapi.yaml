@@ -508,6 +508,7 @@ components:
           minItems: 1
           maxItems: 5
           uniqueItems: true
+          description: Linked non-admin players must provide at least three preferences; admin edits retain the existing one-to-five range.
           items:
             $ref: "#/components/schemas/Position"
         elo:

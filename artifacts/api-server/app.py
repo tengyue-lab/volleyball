@@ -14,7 +14,7 @@ from pathlib import Path
 import sqlite3
 from typing import Any, Iterator
 
-from flask import Flask, current_app, jsonify, request
+from flask import Flask, current_app, g, jsonify, request
 from privacy_auth import initialize_auth_schema, install_privacy
 from rating_progression import PLACEMENT_MATCHES, STARTING_ELO, is_provisional, k_for_matches, rank_for_elo, rank_movement, tier_elo_ranges, tier_for_elo
 
@@ -646,6 +646,12 @@ def create_app(database_path: str | Path | None = None) -> Flask:
         changes, error = validate_player_fields(body, partial=True)
         if error:
             return jsonify({"error": error}), 400
+        if (
+            "positions" in changes
+            and not g.viewer.get("isAdmin")
+            and len(changes["positions"]) < 3
+        ):
+            return jsonify({"error": "Choose at least three preferred positions."}), 400
 
         with database() as connection:
             current = connection.execute(

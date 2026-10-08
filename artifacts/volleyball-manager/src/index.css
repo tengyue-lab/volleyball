@@ -734,6 +734,11 @@ button:focus-visible,input:focus-visible{outline:3px solid hsl(var(--accent)/.55
 .topbar-brand-logo{width:36px;height:36px;flex:0 0 auto;display:block;object-fit:cover;border-radius:50%;background:#111}
 .match-builder-layout{display:grid;grid-template-columns:minmax(0,1fr)}
 .match-list{display:grid;gap:18px}
+.preferred-position-description{max-width:640px;margin:8px 0 0;color:hsl(var(--muted-foreground));font-size:12px;line-height:1.6}
+.preferred-position-body{display:grid;gap:13px;padding:16px 21px 20px}
+.preferred-position-minimum{margin:0}
+.preferred-position-actions{display:flex;justify-content:flex-end}
+.preferred-position-success{margin:0;color:#276543;font-size:12px;font-weight:650}
 
 @media(max-width:680px){
   .topbar{height:64px;padding:0 14px;gap:10px}
@@ -762,6 +767,8 @@ button:focus-visible,input:focus-visible{outline:3px solid hsl(var(--accent)/.55
   .profile-highlight-card{min-height:88px;padding:12px}
   .profile-elo{font-size:28px}
   .profile-grid.profile-details-grid{gap:18px;padding:20px 14px}
+  .preferred-position-body{padding:14px}
+  .preferred-position-actions>.button{width:100%}
   .rank-info-trigger{width:44px;height:44px}
   .match-card-head,.match-card-foot{flex-wrap:wrap;gap:8px}
   .match-card-foot .text-button{display:inline-flex;align-items:center;gap:5px;padding:8px 0}

@@ -14,7 +14,12 @@ function move<T>(list: T[], from: number, to: number): T[] {
   return next;
 }
 
-export default function RankedPositionInput({ value, onChange }: { value: Position[]; onChange: (value: Position[]) => void }) {
+export default function RankedPositionInput({ value, onChange, minSelected = 0, showHelp = true }: {
+  value: Position[];
+  onChange: (value: Position[]) => void;
+  minSelected?: number;
+  showHelp?: boolean;
+}) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const [announce, setAnnounce] = useState('');
@@ -23,7 +28,12 @@ export default function RankedPositionInput({ value, onChange }: { value: Positi
   valueRef.current = value;
 
   function toggle(p: Position) {
-    onChange(value.includes(p) ? value.filter((v) => v !== p) : value.length >= 5 ? value : [...value, p]);
+    if (value.includes(p)) {
+      if (value.length <= minSelected) return;
+      onChange(value.filter((v) => v !== p));
+      return;
+    }
+    if (value.length < 5) onChange([...value, p]);
   }
   function reorder(from: number, to: number) {
     if (from === to) return;
@@ -64,12 +74,18 @@ export default function RankedPositionInput({ value, onChange }: { value: Positi
 
   return (
     <div className="rpi" data-testid="ranked-position-input">
-      <p className="rpi-help">Choose 1–5 unique roles, then order them. Rank 1 is your strongest.</p>
+      {showHelp && <p className="rpi-help">Choose 1–5 unique roles, then order them. Rank 1 is your strongest.</p>}
       {value.length > 0 && value.length < 3 && <p className="field-hint" data-testid="preference-nudge">Adding more preferences helps us build fairer teams.</p>}
       <div className="position-options">
         {ROLES.map((p) => (
           <label className="position-option" key={p}>
-            <input type="checkbox" checked={value.includes(p)} onChange={() => toggle(p)} data-testid={`checkbox-position-${slug(p)}`} />
+            <input
+              type="checkbox"
+              checked={value.includes(p)}
+              disabled={value.includes(p) ? value.length <= minSelected : value.length >= 5}
+              onChange={() => toggle(p)}
+              data-testid={`checkbox-position-${slug(p)}`}
+            />
             {p}
           </label>
         ))}

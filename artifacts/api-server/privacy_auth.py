@@ -118,14 +118,15 @@ def install_privacy(app, database):
                 return None
             if not user_id:
                 return jsonify({"error": "Sign in to make changes."}), 401
-            # Owners may only toggle their own visibility. They cannot set ELO,
-            # preferences, identity, ownership, role flags, or domain results.
+            # Owners may only toggle visibility or edit ranked preferences on
+            # their own linked player record. They cannot set ELO, identity,
+            # ownership, role flags, or domain results.
             owns_profile = (
                 request.endpoint == "update_player"
                 and request.view_args.get("player_id") == g.viewer["playerId"]
             )
             body = request.get_json(silent=True)
-            if not owns_profile or not isinstance(body, dict) or set(body) != {"eloPublic"}:
+            if not owns_profile or not isinstance(body, dict) or set(body) not in ({"eloPublic"}, {"positions"}):
                 return jsonify({"error": "Administrator access required for this change."}), 403
         return None
 

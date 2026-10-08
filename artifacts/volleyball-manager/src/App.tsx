@@ -1348,6 +1348,65 @@ function HomeRoute() {
   return <Redirect to={hasUpcomingMatch ? '/current-match' : '/create-match'} />;
 }
 
+function PreferredPositionsSection({ player }: { player: Player }) {
+  const queryClient = useQueryClient();
+  const updatePlayer = useUpdatePlayer();
+  const [selectedPositions, setSelectedPositions] = useState<PositionType[]>(player.positions);
+  const [formError, setFormError] = useState('');
+  const [saved, setSaved] = useState(false);
+  const valid = selectedPositions.length >= 3
+    && selectedPositions.length <= 5
+    && new Set(selectedPositions).size === selectedPositions.length;
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError('');
+    setSaved(false);
+    if (!valid) {
+      setFormError('Choose at least three unique preferred positions.');
+      return;
+    }
+    updatePlayer.mutate({ playerId: player.id, data: { positions: selectedPositions } }, {
+      onSuccess: async (updated) => {
+        queryClient.setQueryData(getGetPlayerQueryKey(player.id), updated);
+        setSelectedPositions(updated.positions);
+        setSaved(true);
+        await queryClient.invalidateQueries({ queryKey: getListPlayersQueryKey() });
+      },
+      onError: (error) => setFormError(messageFor(error)),
+    });
+  }
+
+  return (
+    <section className="panel preferred-position-panel" data-testid="card-preferred-positions">
+      <div className="panel-head">
+        <div>
+          <h2 className="panel-title">Preferred Positions</h2>
+          <p className="preferred-position-description">Select your preferred positions in order, from most to least preferred. You may occasionally be assigned a position you haven't selected if needed to balance the teams.</p>
+        </div>
+      </div>
+      <form className="preferred-position-body" onSubmit={submit}>
+        {!player.preferencesConfirmed && <p className="field-hint" data-testid="text-legacy-preferences">Review the order of these existing positions, then save to confirm your ranked preferences.</p>}
+        <RankedPositionInput
+          value={selectedPositions}
+          minSelected={3}
+          showHelp={false}
+          onChange={(next) => { setSelectedPositions(next); setFormError(''); setSaved(false); }}
+        />
+        <p className="field-hint preferred-position-minimum" data-testid="text-preference-minimum">Choose at least three positions. To replace one when three are selected, add another first.</p>
+        {selectedPositions.length < 3 && <p className="form-error" role="alert" data-testid="error-preference-minimum">Choose at least three preferred positions before saving.</p>}
+        {formError && <p className="form-error" role="alert" data-testid="error-preferences">{formError}</p>}
+        {saved && <p className="preferred-position-success" role="status" data-testid="status-preferences-saved">Preferences saved.</p>}
+        <div className="preferred-position-actions">
+          <button className="button button-primary" type="submit" disabled={updatePlayer.isPending || !valid} data-testid="button-save-preferences">
+            {updatePlayer.isPending ? 'Saving…' : 'Save Preferences'}
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
 function UserPortalPage() {
   const access = useAccess();
   const { signOut } = useClerk();
@@ -1363,24 +1422,27 @@ function UserPortalPage() {
     {access.status === 'error' ? <section className="panel"><ErrorState error={new Error('We could not verify your account.')} retry={access.retry} /></section> :
       access.playerId === null ? <section className="panel"><EmptyState title="Linking needed" copy="Your account is not linked to a club player yet. Ask a club admin to link it to your roster profile." action={<button className="button button-secondary" onClick={() => void viewerQuery.refetch()} data-testid="button-check-link">Check again</button>} /></section> :
         playerQuery.isLoading ? <LoadingState /> : playerQuery.isError || !player ? <section className="panel"><ErrorState error={playerQuery.error} retry={() => void playerQuery.refetch()} /></section> :
-          <section className="panel profile-card" data-testid="card-my-profile">
-            <div className="panel-head"><div><h2 className="panel-title" data-testid="text-my-name">{player.name}</h2><div className="panel-note">PLAYER / {String(player.id).padStart(3, '0')}</div></div><button className="button button-secondary" onClick={() => setEditing(true)} data-testid="button-edit-visibility"><Pencil size={14} /> ELO visibility</button></div>
-            <div className="profile-rank-elo">
-              <div className="profile-highlight-card" data-testid="card-my-rank">
-                <div className="profile-stat-heading"><span className="eyebrow profile-stat-label">Rank</span><CompetitiveRanksDialog testId="button-rank-info-profile" /></div>
-                {player.elo === null ? <strong>Private</strong> : <RankBadge rank={player.rank} provisional={player.provisional} testId="badge-my-rank" />}
+          <>
+            <section className="panel profile-card" data-testid="card-my-profile">
+              <div className="panel-head"><div><h2 className="panel-title" data-testid="text-my-name">{player.name}</h2><div className="panel-note">PLAYER / {String(player.id).padStart(3, '0')}</div></div><button className="button button-secondary" onClick={() => setEditing(true)} data-testid="button-edit-visibility"><Pencil size={14} /> ELO visibility</button></div>
+              <div className="profile-rank-elo">
+                <div className="profile-highlight-card" data-testid="card-my-rank">
+                  <div className="profile-stat-heading"><span className="eyebrow profile-stat-label">Rank</span><CompetitiveRanksDialog testId="button-rank-info-profile" /></div>
+                  {player.elo === null ? <strong>Private</strong> : <RankBadge rank={player.rank} provisional={player.provisional} testId="badge-my-rank" />}
+                </div>
+                <div className="profile-highlight-card" data-testid="card-my-elo">
+                  <span className="eyebrow profile-stat-label">ELO</span>
+                  <strong className="profile-elo" data-testid="text-my-elo">{player.elo === null ? 'Private' : player.elo.toLocaleString()}</strong>
+                </div>
               </div>
-              <div className="profile-highlight-card" data-testid="card-my-elo">
-                <span className="eyebrow profile-stat-label">ELO</span>
-                <strong className="profile-elo" data-testid="text-my-elo">{player.elo === null ? 'Private' : player.elo.toLocaleString()}</strong>
+              <div className="profile-grid profile-details-grid">
+                <div className="profile-metric"><span className="eyebrow profile-stat-label">Matches Played</span><strong data-testid="text-my-matches">{player.matchesPlayed}</strong>{player.provisional && <div className="field-hint" data-testid="text-my-placement">Placement: {player.matchesPlayed} / 10 matches.</div>}</div>
+                <div className="profile-metric"><span className="eyebrow profile-stat-label">Leaderboard</span><strong data-testid="text-my-visibility">{player.eloPublic ? 'Shown publicly' : 'Hidden'}</strong></div>
+                {access.isAdmin && <div className="profile-metric"><span className="eyebrow profile-stat-label">Positions</span><div className="tag-list">{player.positions.map((position, index) => <span className="tag" key={position}>{player.preferencesConfirmed ? `${index + 1}. ` : ''}{position}</span>)}</div></div>}
               </div>
-            </div>
-            <div className="profile-grid profile-details-grid">
-              <div className="profile-metric"><span className="eyebrow profile-stat-label">Matches Played</span><strong data-testid="text-my-matches">{player.matchesPlayed}</strong>{player.provisional && <div className="field-hint" data-testid="text-my-placement">Placement: {player.matchesPlayed} / 10 matches.</div>}</div>
-              <div className="profile-metric"><span className="eyebrow profile-stat-label">Leaderboard</span><strong data-testid="text-my-visibility">{player.eloPublic ? 'Shown publicly' : 'Hidden'}</strong></div>
-              <div className="profile-metric"><span className="eyebrow profile-stat-label">Positions</span><div className="tag-list">{player.positions.map((position, index) => <span className="tag" key={position}>{player.preferencesConfirmed ? `${index + 1}. ` : ''}{position}</span>)}</div></div>
-            </div>
-          </section>}
+            </section>
+            {!access.isAdmin && <PreferredPositionsSection key={player.id} player={player} />}
+          </>}
     <Notice text={notice} />
     {editing && access.playerId !== null && <PlayerEditor playerId={access.playerId} onClose={() => setEditing(false)} notify={setNotice} />}
   </main></Shell>;

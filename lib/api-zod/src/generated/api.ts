@@ -113,7 +113,7 @@ export const createPlayerBodyEloPublicDefault = true;
 
 export const CreatePlayerBody = zod.object({
   "name": zod.string().min(1).max(createPlayerBodyNameMax),
-  "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])).min(1).max(createPlayerBodyPositionsMax),
+  "positions": zod.array(zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero'])).min(1).max(createPlayerBodyPositionsMax).describe('Linked non-admin players must provide at least three preferences; admin edits retain the existing one-to-five range.'),
   "elo": zod.number().int().min(createPlayerBodyEloMin).default(createPlayerBodyEloDefault),
   "eloPublic": zod.boolean().default(createPlayerBodyEloPublicDefault)
 })

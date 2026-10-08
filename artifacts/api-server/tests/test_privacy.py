@@ -122,6 +122,92 @@ class PrivacyTests(unittest.TestCase):
             {"tier": "Masters", "minElo": 2300, "maxElo": None},
         ])
 
+    def test_linked_player_can_update_only_own_ranked_preferences_and_they_persist(self):
+        target = self.player_ids[0]
+        other_player_id = self.player_ids[1]
+        owner = self.owner(target)
+        before = owner.get(f"/api/players/{target}").get_json()
+        match = self.create_match()
+        with sqlite3.connect(self.app.config["DATABASE_PATH"]) as conn:
+            snapshot_before = conn.execute(
+                "SELECT team_a_json, team_b_json FROM matches WHERE id=?",
+                (match["id"],),
+            ).fetchone()
+
+        preferences = ["Outside Hitter", "Setter", "Opposite", "Libero"]
+        saved = owner.patch(f"/api/players/{target}", json={"positions": preferences})
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.get_json()["positions"], preferences)
+        self.assertTrue(saved.get_json()["preferencesConfirmed"])
+        self.assertEqual(saved.get_json()["elo"], before["elo"])
+        self.assertEqual(owner.get(f"/api/players/{target}").get_json()["positions"], preferences)
+
+        # Account ownership is resolved by the verified identity, not trusted
+        # from an arbitrary player ID or combined mutation payload.
+        self.assertEqual(
+            owner.patch(f"/api/players/{other_player_id}", json={"positions": preferences}).status_code,
+            403,
+        )
+        self.assertEqual(
+            owner.patch(f"/api/players/{target}", json={"positions": preferences, "eloPublic": False}).status_code,
+            403,
+        )
+        other = SignedClient(self.app, "user_test_other_player", "other-player@example.test")
+        other.get("/api/auth/me")
+        self.assertEqual(
+            self.client.patch(
+                "/api/admin/accounts/user_test_other_player",
+                json={"playerId": other_player_id},
+            ).status_code,
+            200,
+        )
+        self.assertEqual(
+            other.patch(f"/api/players/{target}", json={"positions": preferences}).status_code,
+            403,
+        )
+
+        unlinked = SignedClient(self.app, "user_test_unlinked_preferences", "unlinked-preferences@example.test")
+        unlinked.get("/api/auth/me")
+        self.assertEqual(
+            unlinked.patch(f"/api/players/{target}", json={"positions": preferences}).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.anonymous().patch(f"/api/players/{target}", json={"positions": preferences}).status_code,
+            401,
+        )
+
+        with sqlite3.connect(self.app.config["DATABASE_PATH"]) as conn:
+            snapshot_after = conn.execute(
+                "SELECT team_a_json, team_b_json FROM matches WHERE id=?",
+                (match["id"],),
+            ).fetchone()
+        self.assertEqual(snapshot_after, snapshot_before)
+
+    def test_linked_player_preferences_require_three_to_five_unique_supported_positions(self):
+        target = self.player_ids[0]
+        owner = self.owner(target)
+        invalid_preferences = (
+            ["Setter", "Libero"],
+            ["Setter", "Setter", "Libero"],
+            ["Setter", "Outside Hitter", "Unsupported"],
+            ["Setter", "Outside Hitter", "Middle Blocker", "Opposite", "Libero", "Setter"],
+        )
+        for positions in invalid_preferences:
+            with self.subTest(positions=positions):
+                response = owner.patch(f"/api/players/{target}", json={"positions": positions})
+                self.assertEqual(response.status_code, 400)
+
+        self.assertEqual(
+            owner.patch(f"/api/players/{target}", json={"positions": ["Setter", "Libero", "Opposite"]}).status_code,
+            200,
+        )
+        # Admins retain the pre-existing one-to-five preference editing range.
+        self.assertEqual(
+            self.client.patch(f"/api/players/{target}", json={"positions": ["Setter"]}).status_code,
+            200,
+        )
+
     def test_nonadmin_mutations_and_ownership_are_denied(self):
         target = self.player_ids[0]
         owner = self.owner(target)
