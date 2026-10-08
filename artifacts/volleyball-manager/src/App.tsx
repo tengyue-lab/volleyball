@@ -1031,6 +1031,7 @@ function AdminMatchesPage() {
     players: draft.step === 'players',
     teams: draft.step === 'teams',
   };
+  const modeChoiceVisible = stepVisibility.teams && showTeamModeSelection;
 
   function requestStartOver() {
     if (busy) return;
@@ -1122,14 +1123,14 @@ function AdminMatchesPage() {
     <ol className="session-steps" aria-label="Match creation steps">
       {(['date', 'players', 'teams'] as const).map((step, index) => <li key={step} aria-current={draft.step === step ? 'step' : undefined}>{index + 1}. {step === 'date' ? 'Date' : step === 'players' ? 'Players' : 'Teams'}</li>)}
     </ol>
-    <div className="summary-strip match-session-summary">
+    {!modeChoiceVisible && <div className="summary-strip match-session-summary">
       <span className="summary-num" data-testid="text-selected-count">Selected: {poolCount} / 12–14</span>
       {hasDraftState && <button className="button button-secondary touch-44 start-over-button" disabled={busy} onClick={requestStartOver} data-testid="button-start-over">Start Over</button>}
-    </div>
-    {matchesQuery.isError && <div className="form-error" role="alert">Saved rosters could not be loaded. <button className="text-button" onClick={() => void matchesQuery.refetch()}>Try again</button></div>}
-    <SavedRosterSummary rosters={upcomingRosters} targetId={effectiveTargetId} busy={busy} onSelect={setTargetId} onContinue={continueTarget} onReset={() => { if (targetMatch) { setResetError(''); setResetTarget(targetMatch); } }} />
-    {summaryError && <div className="form-error" role="alert">{summaryError}</div>}
-    {draft.editingMatchId !== null && <div className="position-warning" role="status" data-testid="status-editing-target"><strong>Editing saved {rosterLabel(upcomingRosters.find((m) => m.id === draft.editingMatchId) ?? { id: draft.editingMatchId, createdAt: '', teamA: [], teamB: [] })}</strong><span>Saving updates this roster instead of creating a new one.</span></div>}
+    </div>}
+    {!modeChoiceVisible && matchesQuery.isError && <div className="form-error" role="alert">Saved rosters could not be loaded. <button className="text-button" onClick={() => void matchesQuery.refetch()}>Try again</button></div>}
+    {!modeChoiceVisible && <SavedRosterSummary rosters={upcomingRosters} targetId={effectiveTargetId} busy={busy} onSelect={setTargetId} onContinue={continueTarget} onReset={() => { if (targetMatch) { setResetError(''); setResetTarget(targetMatch); } }} />}
+    {!modeChoiceVisible && summaryError && <div className="form-error" role="alert">{summaryError}</div>}
+    {!modeChoiceVisible && draft.editingMatchId !== null && <div className="position-warning" role="status" data-testid="status-editing-target"><strong>Editing saved {rosterLabel(upcomingRosters.find((m) => m.id === draft.editingMatchId) ?? { id: draft.editingMatchId, createdAt: '', teamA: [], teamB: [] })}</strong><span>Saving updates this roster instead of creating a new one.</span></div>}
     {stepVisibility.date && draft.editingMatchId === null && nextGame && <aside className="panel next-game-shortcut" aria-label="Reuse the previous match roster" data-testid="card-next-game">
       <div><strong>Start with the last roster</strong><p>{nextGame.selectedPlayerIds.length} eligible players from the most recent completed match will be pre-selected.</p></div>
       <button className="button button-secondary touch-44" disabled={busy} onClick={startNextGame} data-testid="button-next-game">Next Game</button>
@@ -1149,7 +1150,7 @@ function AdminMatchesPage() {
     </div> : null}
     <div className="match-builder-layout" hidden={stepVisibility.date}>
       <section className="panel builder-panel" aria-label="Build a match roster">
-        <div className="panel-head"><div><h2 className="panel-title">Build a match</h2><div className="panel-note">Select players in Step 2, then assign and balance teams in Step 3.</div></div><span className="count-chip">{poolCount} / 14 selected</span></div>
+        {!modeChoiceVisible && <div className="panel-head"><div><h2 className="panel-title">Build a match</h2><div className="panel-note">Select players in Step 2, then assign and balance teams in Step 3.</div></div><span className="count-chip">{poolCount} / 14 selected</span></div>}
         {playersQuery.isLoading ? <LoadingState lines={3} /> : playersQuery.isError ? <ErrorState error={playersQuery.error} retry={() => void playersQuery.refetch()} /> :
           <>
             <div className="pool-selection" hidden={!stepVisibility.players} data-testid="step-player-selection">
@@ -1226,7 +1227,7 @@ function AdminMatchesPage() {
               </div>
               {(lockError || createError) && <div className="position-warning" role="alert" data-testid="warning-manual-locks"><strong>Manual roster needs attention</strong><span>{lockError || createError}</span></div>}
             </>}
-            {mode !== null && <div className="team-columns">
+            {mode !== null && !modeChoiceVisible && <div className="team-columns">
               <section className="team-column" aria-label="Team A">
                 <div className="team-header"><span className="team-label a">Team A</span><span className={`count-chip ${teamA.length >= 6 && teamA.length <= 7 ? 'ready' : ''}`}>{teamA.length} / 6–7</span></div>
                 <TeamMetrics team="A" players={teamAPlayers} total={teamAElo} />
@@ -1272,26 +1273,26 @@ function AdminMatchesPage() {
                 />) : <div className="field-hint">{mode === 'manual' ? 'Assign selected players here' : 'Run Auto-Balance Teams to build this side'}</div>}</div>
               </section>
             </div>}
-            {swapSelectionId !== null && swapCandidates.length === 0 && <div className="field-hint" role="status" data-testid="status-no-swap-candidates">No valid players available to swap with.</div>}
-            <div className="balance-summary" data-testid="summary-elo-gap">
+            {!modeChoiceVisible && swapSelectionId !== null && swapCandidates.length === 0 && <div className="field-hint" role="status" data-testid="status-no-swap-candidates">No valid players available to swap with.</div>}
+            {!modeChoiceVisible && <div className="balance-summary" data-testid="summary-elo-gap">
               <span>Team ELO difference</span><strong>{eloGap.toLocaleString()}</strong>
               <small>Team A total {teamAElo.toLocaleString()} · Team B total {teamBElo.toLocaleString()}</small>
-            </div>
-            {balanceResult && roleAssignments && <div className={`balance-feedback ${balanceResult.positionShortages.length ? 'warning' : 'complete'}`} role="status" data-testid="status-auto-balance">
+            </div>}
+            {!modeChoiceVisible && balanceResult && roleAssignments && <div className={`balance-feedback ${balanceResult.positionShortages.length ? 'warning' : 'complete'}`} role="status" data-testid="status-auto-balance">
               <strong>Exact role slots assigned</strong>
               <span>Team ELO gap: {balanceResult.totalEloGap.toLocaleString()}.</span>
               {balanceResult.positionShortages.length === 0 && <span>Every assigned role is Preferred.</span>}
               {poolCount === 13 && !balanceResult.underdogCoreGetsLibero && <span>The lower-ELO six-player core could not receive the extra Libero role.</span>}
             </div>}
-            {mode === 'manual' && <div className="available-list">
+            {mode === 'manual' && !modeChoiceVisible && <div className="available-list">
               <div className="available-head"><span>Selected, unassigned players</span><span>{unassignedSelected.length} unassigned</span></div>
               {unassignedSelected.length === 0 ? <div className="field-hint" style={{ padding: 12 }} data-testid="text-unassigned-state">{poolCount === 0 ? 'Choose a player pool above.' : 'All selected players are assigned to a side.'}</div> : unassignedSelected.map((player) => <div className="available-row" key={player.id} data-testid={`available-player-${player.id}`}>
                 <div className="available-info"><strong>{player.name}</strong><span>{player.positions.join(' · ')}{player.positions.includes(Position.Libero) ? ' · Libero eligible' : ''} · ELO {player.elo.toLocaleString()}</span></div>
                 <div className="assign-actions"><button className="assign-button" onClick={() => assign(player.id, 'A')} disabled={teamA.length >= 7} data-testid={`button-assign-a-${player.id}`}>+ A</button><button className="assign-button b" onClick={() => assign(player.id, 'B')} disabled={teamB.length >= 7} data-testid={`button-assign-b-${player.id}`}>+ B</button></div>
               </div>)}
             </div>}
-            {createError && <div className="form-error" style={{ margin: '0 18px 12px' }} role="alert">{createError}</div>}
-            <div className="builder-footer"><div className={`validation-note ${isRosterValid ? 'valid' : ''}`} role="status" data-testid="status-roster-validation">{isRosterValid && <Check size={12} style={{ verticalAlign: 'middle', marginRight: 5 }} />}{validation}</div><button className="button button-primary" onClick={saveMatch} disabled={!isRosterValid || !canContinue || busy} data-testid="button-create-match">{busy ? 'Saving roster…' : draft.editingMatchId !== null ? 'Save changes to roster' : 'Save upcoming match'}</button></div>
+            {!modeChoiceVisible && createError && <div className="form-error" style={{ margin: '0 18px 12px' }} role="alert">{createError}</div>}
+            {!modeChoiceVisible && <div className="builder-footer"><div className={`validation-note ${isRosterValid ? 'valid' : ''}`} role="status" data-testid="status-roster-validation">{isRosterValid && <Check size={12} style={{ verticalAlign: 'middle', marginRight: 5 }} />}{validation}</div><button className="button button-primary" onClick={saveMatch} disabled={!isRosterValid || !canContinue || busy} data-testid="button-create-match">{busy ? 'Saving roster…' : draft.editingMatchId !== null ? 'Save changes to roster' : 'Save upcoming match'}</button></div>}
             </>}
             </div>
           </>}

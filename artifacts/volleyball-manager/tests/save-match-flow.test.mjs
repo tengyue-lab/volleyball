@@ -94,6 +94,7 @@ for (const count of [12, 13, 14]) {
     assert.equal(f.state.draft.step, 'teams');
     assert.equal(f.state.showTeamModeSelection, true);
     assert.equal(f.state.mode, null);
+    assert.equal(f.state.targetId, 101);
     assert.equal(f.state.draft.matchDate, before.draft.matchDate);
     assert.equal(f.state.draft.generation, before.draft.generation);
     assert.deepEqual(f.state.draft.selectedPlayerIds, before.draft.selectedPlayerIds);
