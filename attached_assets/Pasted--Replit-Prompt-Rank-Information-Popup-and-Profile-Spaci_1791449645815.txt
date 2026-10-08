@@ -1,0 +1,131 @@
+# Replit Prompt — Rank Information Popup and Profile Spacing Improvements
+
+Please make the following small UI improvements to the Leaderboard and Profile tabs.
+
+This is primarily a frontend/UI task. Preserve all existing ELO calculations, competitive rank thresholds and leaderboard functionality.
+
+## 1. Leaderboard — Rank Information Icon
+
+On the Leaderboard page, add a small information icon (ⓘ) near the Leaderboard heading.
+
+When clicked, open a clean modal popup titled:
+
+**Competitive Ranks**
+
+The popup should show every competitive tier and its corresponding ELO range.
+
+Tiers:
+- Iron
+- Bronze
+- Silver
+- Gold
+- Platinum
+- Diamond
+- Masters
+
+Requirements:
+- Read the actual ELO thresholds from the application's existing tier configuration.
+- Do not invent or modify tier thresholds.
+- Display the minimum and maximum ELO values for each tier, where applicable.
+- Masters should show its actual configured minimum and any upper-bound behavior.
+- Use a simple two-column layout: Rank | ELO Range.
+- Make the popup responsive on mobile.
+- Allow closing via an X button, tapping outside or pressing Escape.
+- Use accessible modal behavior and keyboard focus management.
+- Keep the main leaderboard layout unchanged.
+
+The information icon should be subtle and not take up too much space.
+
+## 2. Profile — Display Rank and ELO Side by Side
+
+In the Profile tab, display the player's competitive Rank and exact numeric ELO next to each other.
+
+Suggested layout:
+
+[ Rank: Gold ⓘ ]    [ ELO: 1245 ]
+
+Use two clean, evenly spaced cards or columns.
+
+Requirements:
+- Show the player's actual current competitive tier.
+- Show their actual current numeric ELO.
+- Add the same information icon beside the Rank label.
+- Clicking it should open the same Competitive Ranks popup used on the Leaderboard page.
+- Reuse a shared modal component rather than duplicating its implementation.
+- Ensure the two cards display neatly on mobile.
+
+IMPORTANT:
+The exact ELO number should be visible only to the authenticated player viewing their own Profile and to appropriately authorized admins.
+
+Do not expose other players' private ELO ratings through public leaderboard data or APIs.
+
+Preserve the existing provisional-player behavior. If provisional players do not yet have an official competitive tier, display the correct provisional state rather than inventing a rank.
+
+## 3. Profile — Matches Played Spacing
+
+In the Profile tab, the text **Matches Played** and its corresponding numeric value are currently too close together.
+
+Add a little more spacing so the label and number are visually separated.
+
+Use consistent spacing with the other profile statistics.
+
+Do not change the actual match count or calculation.
+
+## 4. Profile — Leaderboard Text Spacing
+
+In the Profile tab, the label **Leaderboard** and its corresponding value or description are also too close together.
+
+Add a small amount of spacing between them.
+
+Ensure the layout remains visually balanced and consistent with the Matches Played section.
+
+Do not change the meaning, data or behavior of the Leaderboard field.
+
+## 5. Design Consistency
+
+Use the existing app theme and styling conventions.
+
+Keep the UI:
+- Modern
+- Minimal
+- Mobile-friendly
+- Consistent with the current Leaderboard design
+
+Use consistent padding, label spacing and typography.
+
+Avoid excessive visual effects or unnecessary additional information.
+
+## 6. Preserve Existing Functionality
+
+Do not modify:
+- ELO calculation algorithm
+- ELO tier thresholds
+- Matchmaking
+- Team balancing
+- Match creation or completion
+- Match history
+- Public Top 5 leaderboard rules
+- Leaderboard opt-in behavior
+- Player ranking order
+- Provisional status logic
+- Existing permissions
+
+## 7. Testing
+
+Please verify:
+
+1. Information icon appears on the Leaderboard page.
+2. Clicking it opens the Competitive Ranks popup.
+3. All seven tiers show their correct ELO ranges.
+4. Popup works on mobile and desktop.
+5. Profile shows Rank and numeric ELO side by side.
+6. Profile information icon opens the same popup.
+7. ELO is visible only to the correct authenticated player and authorized admins.
+8. Matches Played label and number have improved spacing.
+9. Leaderboard label and corresponding text have improved spacing.
+10. Existing ranking calculations remain unchanged.
+11. Frontend build passes.
+
+Make the smallest targeted changes necessary.
+
+Do not deploy.
