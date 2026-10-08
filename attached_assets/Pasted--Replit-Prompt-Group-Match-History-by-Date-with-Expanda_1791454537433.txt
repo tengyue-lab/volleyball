@@ -1,0 +1,147 @@
+# Replit Prompt — Group Match History by Date with Expandable Sections
+
+Please redesign the Match History page to group completed matches by their game date.
+
+Currently, Match History displays individual matches directly.
+
+Instead, I want the first thing users see to be a list of game dates, with the number of matches played on each date.
+
+Each date should be an expandable/collapsible section containing the existing match details.
+
+This is primarily a UI and data-grouping change. Preserve all existing match data and functionality.
+
+## 1. Group completed matches by date
+
+Group all completed matches according to their existing scheduled match/game date.
+
+Example:
+
+Saturday, 3 October 2026
+3 matches played
+
+Saturday, 26 September 2026
+3 matches played
+
+If three matches were created for 26 September and another three for 3 October, Match History should display two date rows, each containing its corresponding three completed matches.
+
+Requirements:
+- Group by the match's actual game date, not the date the match record was created or completed.
+- Use the existing stored match date field.
+- Group matches with the same calendar date together.
+- Use the application's appropriate local date handling to avoid timezone-related date shifts.
+- Do not create duplicate date groups for the same calendar day.
+- Count only completed matches.
+- Do not include upcoming, incomplete or cancelled matches in completed match counts.
+
+## 2. Date rows — collapsed by default
+
+When opening Match History, initially display only the date-group rows.
+
+Each row should contain:
+- Small calendar icon
+- Full formatted date, such as "Saturday, 3 October 2026"
+- Match count, such as "3 matches played"
+- Chevron indicating that the row can expand
+
+Use correct singular/plural wording:
+- 1 match played
+- 2 matches played
+- 3 matches played
+
+Order date groups newest first.
+
+Use a clean, modern design consistent with the rest of the app.
+
+## 3. Expand and collapse behavior
+
+Clicking or tapping a date row should expand that section.
+
+When expanded, display all completed matches associated with that date.
+
+Clicking the same row again should collapse it.
+
+Requirements:
+- Allow multiple date groups to remain expanded simultaneously.
+- Use a subtle expand/collapse transition if appropriate.
+- Make the entire date row clickable.
+- Make the interaction keyboard-accessible.
+- Use correct expanded/collapsed accessibility attributes.
+- Ensure the layout works on mobile without horizontal scrolling.
+
+## 4. Preserve existing match details
+
+Inside each expanded date section, reuse the existing Match History match cards/components.
+
+Do not redesign or remove the individual match details.
+
+Preserve all currently available information, including:
+- Team A and Team B
+- Player names
+- Assigned positions
+- Match scores
+- Winning team
+- Any other existing match information
+- Admin-only ELO changes
+
+IMPORTANT:
+ELO changes must remain visible only to authorised admins.
+
+Do not expose private ELO data to non-admin users through the frontend or backend.
+
+## 5. Match ordering within each date
+
+Show matches within each date group in a consistent order.
+
+Prefer their existing match/session sequence if one is stored.
+
+Otherwise use the existing match ordering or a stable chronological order.
+
+Do not invent match numbers or reorder saved match data unpredictably.
+
+## 6. Empty state
+
+If there are no completed matches, show a simple message:
+
+"No completed matches yet."
+
+Do not display empty date groups.
+
+## 7. Preserve existing functionality
+
+Do not modify:
+- Match creation
+- Match dates
+- Match completion
+- Match scores
+- Team assignments
+- Position assignments
+- ELO calculations
+- ELO history
+- Leaderboard
+- Player profiles
+- Existing admin permissions
+
+Do not migrate or overwrite match data unless a genuine compatibility issue is identified and explained.
+
+## 8. Testing
+
+Please verify:
+
+1. Three completed matches on 26 September appear under one date group.
+2. Three completed matches on 3 October appear under a separate date group.
+3. Each group correctly displays "3 matches played".
+4. Newest dates appear first.
+5. All date groups start collapsed.
+6. Clicking a date expands the correct matches.
+7. Clicking again collapses the group.
+8. Multiple groups can be expanded at once.
+9. Existing match details remain unchanged.
+10. Admin-only ELO changes remain private.
+11. Upcoming matches are excluded.
+12. Date grouping works correctly across timezones.
+13. Mobile layout is responsive.
+14. Frontend build and relevant tests pass.
+
+Make the smallest targeted changes necessary.
+
+Do not deploy.

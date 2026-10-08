@@ -60,10 +60,12 @@ import { RankBadge, RankTransition } from '@/components/RankBadge';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import MatchDeleteConfirmation from '@/components/MatchDeleteConfirmation';
 import MatchHistoryDetails from '@/components/MatchHistoryDetails';
+import MatchHistoryDateGroups from '@/components/MatchHistoryDateGroups';
 import LeaderboardTable from '@/components/LeaderboardTable';
 import CompetitiveRanksDialog from '@/components/CompetitiveRanksDialog';
 import { MatchSessionProvider, useMatchSession } from '@/match-session-context';
 import { clearDeletedMatchSession, restoreFailedDeletionSession, nextGameSession, reconcileSession, selectionCanContinue, updateMatchSessionStep, validMatchDate, visiblePool } from '@/match-session';
+import { groupCompletedMatchesByGameDate } from '@/match-history';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchInterval: 5000, staleTime: 0, refetchIntervalInBackground: false, retry: 1 } } });
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -1278,6 +1280,14 @@ function MatchCollectionPage({ type }: { type: 'current' | 'history' }) {
       const dateB = new Date(isCurrent ? b.createdAt : b.completedAt ?? b.createdAt).getTime();
       return dateB - dateA || b.id - a.id;
     });
+  const historyDateGroups = isCurrent ? [] : groupCompletedMatchesByGameDate(matches);
+  const handleBeforeDelete = (match: Match) => {
+    if (expandedMatch === match.id) setExpandedMatch(null);
+    if (initialMatchId === match.id) {
+      setDismissedResult(match.id);
+      navigate(isCurrent ? '/current-match' : '/match-history');
+    }
+  };
   return <Shell><main className="content">
     <PageHeader
       eyebrow={isCurrent ? 'Match day / upcoming rosters' : 'Match day / completed results'}
@@ -1289,18 +1299,19 @@ function MatchCollectionPage({ type }: { type: 'current' | 'history' }) {
       <MatchDetail matchId={initialMatchId} />
     </section>}
     {matchesQuery.isLoading ? <LoadingState /> : matchesQuery.isError ? <ErrorState error={matchesQuery.error} retry={() => void matchesQuery.refetch()} /> :
-      matches.length ? <div className="match-list">{matches.map((match) => <MatchCard key={match.id} match={match} expanded={expandedMatch === match.id} onToggle={() => setExpandedMatch(expandedMatch === match.id ? null : match.id)} onMatchCompleted={isCurrent ? (updated) => setCompletedMatchId(updated.id) : undefined} beforeDelete={() => {
-        if (expandedMatch === match.id) setExpandedMatch(null);
-        if (initialMatchId === match.id) {
-          setDismissedResult(match.id);
-          navigate(isCurrent ? '/current-match' : '/match-history');
-        }
-      }} />)}</div> :
-        <section className="panel"><EmptyState
-          title={isCurrent ? 'No upcoming matches yet' : 'No completed matches yet'}
-          copy={isCurrent ? 'Saved match rosters will appear here. Start a roster for the next club match.' : 'Completed matches and results will appear here.'}
-          action={isCurrent ? <Link href="/create-match" className="button button-primary"><Plus size={15} /> Create Match</Link> : undefined}
-        /></section>}
+      matches.length ? isCurrent
+        ? <div className="match-list">{matches.map((match) => <MatchCard key={match.id} match={match} expanded={expandedMatch === match.id} onToggle={() => setExpandedMatch(expandedMatch === match.id ? null : match.id)} onMatchCompleted={(updated) => setCompletedMatchId(updated.id)} beforeDelete={() => handleBeforeDelete(match)} />)}</div>
+        : <MatchHistoryDateGroups
+          groups={historyDateGroups}
+          renderMatch={(match) => <MatchCard match={match} expanded={false} onToggle={() => {}} beforeDelete={() => handleBeforeDelete(match)} />}
+        />
+        : isCurrent
+          ? <section className="panel"><EmptyState
+            title="No upcoming matches yet"
+            copy="Saved match rosters will appear here. Start a roster for the next club match."
+            action={<Link href="/create-match" className="button button-primary"><Plus size={15} /> Create Match</Link>}
+          /></section>
+          : <section className="panel history-empty-state" data-testid="empty-match-history"><p>No completed matches yet.</p></section>}
     {isCurrent && completedMatchId !== null && <ConfirmDialog
       testId="dialog-match-complete"
       title="Match Complete"

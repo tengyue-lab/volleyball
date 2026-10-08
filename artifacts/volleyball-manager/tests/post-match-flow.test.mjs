@@ -6,6 +6,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { getManualSwapCandidates, preserveSwappedRoles, swapManualTeamMembers } from '../src/match-swap.ts';
 import { fillMatchTeams, validateMatchLocks } from '../src/match-balancing.ts';
+import { formatGameDateLabel, groupCompletedMatchesByGameDate, toggleExpandedDateGroup } from '../src/match-history.ts';
 import {
   freshSession, clearDeletedMatchSession, restoreFailedDeletionSession, localToday, nextSession, nextGameSession, editSession, latestCompletedMatch, reconcileSession,
   resultActionsReady, selectionCanContinue, updateMatchSessionStep, validMatchDate, visiblePool,
@@ -53,10 +54,17 @@ async function load(name) {
     const dep = dependency.code.replaceAll('"react/jsx-runtime"', JSON.stringify(import.meta.resolve('react/jsx-runtime'))).replaceAll('from "react"', `from ${JSON.stringify(import.meta.resolve('react'))}`);
     code = code.replace('"./ConfirmDialog"', JSON.stringify(`data:text/javascript;base64,${Buffer.from(dep).toString('base64')}`));
   }
+  if (name === 'MatchHistoryDateGroups') {
+    code = code
+      .replaceAll('from "lucide-react"', `from ${JSON.stringify(import.meta.resolve('lucide-react'))}`)
+      .replaceAll('from "@/match-history"', `from ${JSON.stringify(new URL('../src/match-history.ts', import.meta.url).href)}`);
+  }
   return import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 }
 const history = await load('MatchHistoryDetails');
 const MatchHistoryDetails = history.default;
+const dateGroupsModule = await load('MatchHistoryDateGroups');
+const MatchHistoryDateGroups = dateGroupsModule.default;
 const { default: ConfirmDialog } = await load('ConfirmDialog');
 const { default: MatchDeleteConfirmation } = await load('MatchDeleteConfirmation');
 
