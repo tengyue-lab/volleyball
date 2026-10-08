@@ -38,6 +38,7 @@ class MatchResultTests(unittest.TestCase):
                     "name": f"Player {index + 1}",
                     "positions": ["Setter", "Outside Hitter", "Middle Blocker"],
                     "elo": elo,
+                    "eloPublic": True,
                 },
             )
             self.assertEqual(response.status_code, 201)

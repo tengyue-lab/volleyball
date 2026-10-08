@@ -76,6 +76,17 @@ class PrivacyTests(unittest.TestCase):
         self.assertEqual(changed["positions"], ["Libero", "Setter"])
         self.assertEqual(changed["elo"], 800)
 
+    def test_new_player_without_visibility_choice_is_private(self):
+        response = self.client.post(
+            "/api/players",
+            json={"name": "Opt-in not selected", "positions": ["Setter"]},
+        )
+        self.assertEqual(response.status_code, 201)
+        created = response.get_json()
+        self.assertFalse(created["eloPublic"])
+        public_ids = [player["id"] for player in self.anonymous().get("/api/leaderboard").get_json()]
+        self.assertNotIn(created["id"], public_ids)
+
     def test_private_profile_owner_admin_other_and_anonymous(self):
         target = self.player_ids[0]
         owner = self.owner(target)

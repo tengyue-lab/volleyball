@@ -1,6 +1,6 @@
 - [Filled-role priority](filled-role-priority.md) — keep shortage fallback; preferred-role priority changes on match completion, not roster save.
 - [Manual team rules](manual-lock-fill.md) — pending swaps stay pending; post-Fill swaps preserve same-role assignments; Clear Roles resets roles, not teams or selection.
-- [ELO privacy scope](elo-privacy-scope.md) — public opt-in controls leaderboard inclusion; exact ELO is owner/admin-only.
+- [ELO privacy scope](elo-privacy-scope.md) — explicit public opt-in defaults OFF; exact ELO is owner/admin-only.
 - [Vite runtime dependencies](vite-runtime-dependencies.md) — matching installed React versions do not guarantee matching prebundled browser runtimes.
 - [Volleyball product context](volleyball-product-context.md) — 3–4 matches weekly, phone-first use, and all upcoming rosters count as Current Match.
 - [Browser-test fixtures](browser-test-cleanup.md) — close contexts before cleanup to prevent QA account recreation; use accepted Clerk test email domains.

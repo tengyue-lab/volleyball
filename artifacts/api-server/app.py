@@ -572,7 +572,7 @@ def validate_player_fields(
             return None, "ELO visibility must be true or false."
         normalized["eloPublic"] = body["eloPublic"]
     elif not partial:
-        normalized["eloPublic"] = True
+        normalized["eloPublic"] = False
 
     return normalized, None
 

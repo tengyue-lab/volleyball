@@ -516,7 +516,7 @@ components:
           minimum: 0
         eloPublic:
           type: boolean
-          default: true
+          default: false
     PlayerUpdate:
       type: object
       minProperties: 1

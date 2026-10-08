@@ -109,7 +109,7 @@ export const createPlayerBodyPositionsMax = 5;
 export const createPlayerBodyEloDefault = 800;
 export const createPlayerBodyEloMin = 0;
 
-export const createPlayerBodyEloPublicDefault = true;
+export const createPlayerBodyEloPublicDefault = false;
 
 export const CreatePlayerBody = zod.object({
   "name": zod.string().min(1).max(createPlayerBodyNameMax),
