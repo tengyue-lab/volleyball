@@ -33,6 +33,12 @@ Successful Create Match saves retain the date, selected player pool and Teams st
 
 **How to apply:** Distinguish successful roster creation/saving from score entry or match completion. An explicitly continued saved roster is still edited in place, but after its successful save the subsequent setup must no longer target that saved roster for editing.
 
+The Teams step opens on Auto Balance / Manual Selection choices. “Back to Team Selection” preserves the date, selected pool, teams and locks; choosing a different mode asks before clearing team work. Dismissing “Match Created” clears teams but keeps the date, pool and Teams step, then returns to the two choices.
+
+**Why:** The user wants a deliberate mode choice while avoiding accidental loss of manual or balanced work and preserving the established repeat-match setup after a save.
+
+**How to apply:** Keep the assigned mode while its chooser is open so reselecting it restores work; clear team state only on a confirmed different-mode switch or after successful-save acknowledgement.
+
 After a score is successfully saved, admins stay on Current Match and receive a “Match Complete” acknowledgement. Refresh the existing upcoming/completed collections and let Current Match show remaining upcoming matches or its existing empty state; Match History remains a manual destination.
 
 **Why:** The user wants to complete multiple social matches from Current Match without repeated navigation to Match History.

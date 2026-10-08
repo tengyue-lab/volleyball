@@ -4,4 +4,4 @@
 - [Vite runtime dependencies](vite-runtime-dependencies.md) — matching installed React versions do not guarantee matching prebundled browser runtimes.
 - [Volleyball product context](volleyball-product-context.md) — 3–4 matches weekly, phone-first use, and all upcoming rosters count as Current Match.
 - [Browser-test fixtures](browser-test-cleanup.md) — close contexts before cleanup to prevent QA account recreation; use accepted Clerk test email domains.
-- [Match continuation](match-continuation.md) — saves retain roster/date on Teams; completed results keep admins on Current Match; sessions remain memory-only.
+- [Match continuation](match-continuation.md) — mode choice and confirmed switches preserve roster/date; completed saves remain on Teams or Current Match as specified.

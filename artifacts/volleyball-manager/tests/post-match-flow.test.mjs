@@ -14,6 +14,23 @@ import {
 const now = new Date(2026, 9, 7, 0, 15);
 const createMatchSource = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
 const assignedPlayerSource = await readFile(new URL('../src/components/AssignedPlayer.tsx', import.meta.url), 'utf8');
+const createMatchStyles = await readFile(new URL('../src/index.css', import.meta.url), 'utf8');
+const clearTeamStart = createMatchSource.indexOf('  function clearTeamAssignments()');
+const clearTeamEnd = createMatchSource.indexOf('\n  function clearPlayerSelection()', clearTeamStart);
+const clearTeamSource = createMatchSource.slice(clearTeamStart, clearTeamEnd);
+const modeTransitionStart = createMatchSource.indexOf('  function backToTeamSelection()');
+const modeTransitionEnd = createMatchSource.indexOf('\n  function fillManualTeams()', modeTransitionStart);
+const modeTransitionSource = createMatchSource.slice(modeTransitionStart, modeTransitionEnd);
+const modeTransitionsCompiled = await transformWithEsbuild(`
+  export function makeModeTransitions(env) {
+    const { teamA, teamB, locks, pendingMode, mode, setTeamA, setTeamB, setLocks,
+      setBalanceResult, setBalancedProfiles, setSwapSelectionId, setCreateError,
+      setSavedRolesInvalidated, setMode, setShowTeamModeSelection, setPendingMode } = env;
+    ${clearTeamSource}
+    ${modeTransitionSource}
+    return { backToTeamSelection, cancelModeSwitch, confirmModeSwitch, changeMode };
+  }`, 'team-mode-transitions.ts', { loader: 'ts', format: 'esm' });
+const { makeModeTransitions } = await import(`data:text/javascript;base64,${Buffer.from(modeTransitionsCompiled.code).toString('base64')}`);
 const pool = Array.from({ length: 14 }, (_, i) => ({
   id: i + 1, name: `Player ${String(i + 1).padStart(2, '0')}`,
   positions: i < 2 ? ['Setter', 'Opposite'] : ['Outside Hitter'],
@@ -60,12 +77,99 @@ test('Create Match keeps Date, Players and Teams as distinct stages', () => {
   assert.match(createMatchSource, /className="pool-selection" hidden=\{!stepVisibility\.players\} data-testid="step-player-selection"/);
   assert.match(createMatchSource, /className="team-step" hidden=\{!stepVisibility\.teams\} data-testid="step-team-assignment"/);
   assert.match(createMatchSource, /className="match-builder-layout" hidden=\{stepVisibility\.date\}/);
+  assert.match(createMatchSource, /const \[mode, setMode\] = useState<'auto' \| 'manual' \| null>\(null\)/);
+  assert.match(createMatchSource, /const \[showTeamModeSelection, setShowTeamModeSelection\] = useState\(true\)/);
+  const chooserStart = createMatchSource.indexOf('{showTeamModeSelection ? <section className="team-mode-selection"');
+  const builderStart = createMatchSource.indexOf(': <>', chooserStart);
+  const chooser = createMatchSource.slice(chooserStart, builderStart);
+  assert.match(chooser, /data-testid="button-mode-choice-auto"[\s\S]*Auto Balance[\s\S]*Automatically generate balanced teams\./);
+  assert.match(chooser, /data-testid="button-mode-choice-manual"[\s\S]*Manual Selection[\s\S]*Build and assign teams yourself\./);
+  assert.doesNotMatch(chooser, /Team A|Team B|button-auto-balance|button-fill/);
   assert.match(createMatchSource, /data-testid="button-auto-balance"/);
   assert.match(createMatchSource, /data-testid="button-fill"/);
+  assert.match(createMatchSource, /{stepVisibility\.teams && !showTeamModeSelection && mode === 'auto' && <div className="pool-actions">/);
+  assert.match(createMatchSource, /{stepVisibility\.teams && !showTeamModeSelection && mode === 'manual' && <>/);
+  assert.match(createMatchSource, /{mode !== null && <div className="team-columns">/);
   assert.match(createMatchSource, /balanceMatchTeams\(selectedPlayers\)/);
   assert.match(balanceButton, /onClick=\{autoBalance\}/);
   assert.match(balanceButton, /Generate Balanced Teams/);
   assert.doesNotMatch(createMatchSource, /button-elo-balance|function eloBalance/);
+});
+
+function teamModeFixture(overrides = {}) {
+  const state = {
+    teamA: [1, 2], teamB: [3, 4], locks: [{ playerId: 1, team: 'A', position: 'Setter' }],
+    balanceResult: { teamAIds: [1, 2], teamBIds: [3, 4] }, balancedProfiles: 'profiles',
+    swapSelectionId: 1, createError: 'previous error', savedRolesInvalidated: false,
+    mode: 'auto', showTeamModeSelection: false, pendingMode: null,
+    selectedPlayerIds: Array.from({ length: 12 }, (_, index) => index + 1), matchDate: '2026-10-08',
+    ...overrides,
+  };
+  const setters = Object.fromEntries([
+    'TeamA', 'TeamB', 'Locks', 'BalanceResult', 'BalancedProfiles', 'SwapSelectionId',
+    'CreateError', 'SavedRolesInvalidated', 'Mode', 'ShowTeamModeSelection', 'PendingMode',
+  ].map((name) => {
+    const key = name[0].toLowerCase() + name.slice(1);
+    return [`set${name}`, (value) => { state[key] = value; }];
+  }));
+  return { state, actions: () => makeModeTransitions({ ...state, ...setters }) };
+}
+
+test('mode selection starts without team controls; choosing either mode opens only that mode’s builder', () => {
+  const manual = teamModeFixture({ mode: null, showTeamModeSelection: true, teamA: [], teamB: [], locks: [] });
+  manual.actions().changeMode('manual');
+  assert.equal(manual.state.mode, 'manual');
+  assert.equal(manual.state.showTeamModeSelection, false);
+  assert.deepEqual(manual.state.selectedPlayerIds, Array.from({ length: 12 }, (_, index) => index + 1));
+  assert.equal(manual.state.matchDate, '2026-10-08');
+
+  const automatic = teamModeFixture({ mode: null, showTeamModeSelection: true, teamA: [], teamB: [], locks: [] });
+  automatic.actions().changeMode('auto');
+  assert.equal(automatic.state.mode, 'auto');
+  assert.equal(automatic.state.showTeamModeSelection, false);
+});
+
+test('back preserves assignments and switching mode requires confirmation before clearing them', () => {
+  const f = teamModeFixture();
+  const previous = structuredClone(f.state);
+  f.actions().backToTeamSelection();
+  assert.equal(f.state.showTeamModeSelection, true);
+  assert.equal(f.state.mode, 'auto');
+  for (const key of ['teamA', 'teamB', 'locks', 'selectedPlayerIds']) assert.deepEqual(f.state[key], previous[key]);
+  assert.equal(f.state.matchDate, previous.matchDate);
+
+  f.actions().changeMode('auto');
+  assert.equal(f.state.showTeamModeSelection, false);
+  assert.deepEqual(f.state.teamA, previous.teamA);
+  f.actions().backToTeamSelection();
+  f.actions().changeMode('manual');
+  assert.equal(f.state.pendingMode, 'manual');
+  assert.deepEqual(f.state.teamA, previous.teamA);
+  assert.deepEqual(f.state.teamB, previous.teamB);
+  assert.deepEqual(f.state.locks, previous.locks);
+  assert.match(createMatchSource, /pendingMode !== null && <ConfirmDialog[^>]+title="Switch team mode\?"/);
+  assert.match(createMatchSource, /Switching modes will discard your current team assignments and role locks\. Continue\?/);
+
+  f.actions().cancelModeSwitch();
+  assert.equal(f.state.pendingMode, null);
+  assert.deepEqual(f.state.teamA, previous.teamA);
+  f.actions().changeMode('manual');
+  f.actions().confirmModeSwitch();
+  assert.equal(f.state.mode, 'manual');
+  assert.equal(f.state.showTeamModeSelection, false);
+  assert.deepEqual(f.state.teamA, []);
+  assert.deepEqual(f.state.teamB, []);
+  assert.deepEqual(f.state.locks, []);
+  assert.equal(f.state.balanceResult, null);
+  assert.deepEqual(f.state.selectedPlayerIds, previous.selectedPlayerIds);
+  assert.equal(f.state.matchDate, previous.matchDate);
+});
+
+test('team mode choices stack at phone widths and keep 44-pixel tap targets', () => {
+  assert.match(createMatchStyles, /\.team-mode-choice-grid\{display:grid;grid-template-columns:repeat\(auto-fit,minmax\(min\(100%,230px\),1fr\)\)/);
+  assert.match(createMatchStyles, /@media\(max-width:600px\)\{[\s\S]*?\.team-mode-choice-grid\{grid-template-columns:1fr\}/);
+  assert.match(createMatchStyles, /\.team-mode-card\{[^}]*min-height:96px/);
+  assert.match(createMatchStyles, /\.team-mode-icon\{width:44px;height:44px/);
 });
 
 test('Players Clear Selection and Teams Clear Selection have separate effects', () => {
@@ -82,8 +186,8 @@ test('Players Clear Selection and Teams Clear Selection have separate effects', 
   assert.match(playerClear, /clearTeamAssignments\(\)/);
   assert.match(createMatchSource, /onClick=\{clearPlayerSelection\}[^>]*data-testid="button-clear-pool"/);
   assert.equal((createMatchSource.match(/onClick=\{clearTeamAssignments\}[^>]*data-testid="button-clear-teams"/g) ?? []).length, 2);
-  assert.match(createMatchSource, /stepVisibility\.teams && mode === 'auto'/);
-  assert.match(createMatchSource, /stepVisibility\.teams && mode === 'manual'/);
+  assert.match(createMatchSource, /stepVisibility\.teams && !showTeamModeSelection && mode === 'auto'/);
+  assert.match(createMatchSource, /stepVisibility\.teams && !showTeamModeSelection && mode === 'manual'/);
 });
 
 test('Lock Position menu renders each player’s saved preferences through the ordered filter', () => {

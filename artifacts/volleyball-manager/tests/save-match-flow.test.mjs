@@ -14,7 +14,8 @@ const compiled = await transformWithEsbuild(`
     const { queryClient, getGetMatchQueryKey, getListMatchesQueryKey,
       setTargetId, setCreatedMatchId, setTeamA, setTeamB, setLocks,
       setBalanceResult, setBalancedProfiles, setSwapSelectionId,
-      setCreateError, setSavedRolesInvalidated, setDraft, saveInFlight,
+      setCreateError, setSavedRolesInvalidated, setDraft, setMode,
+      setShowTeamModeSelection, saveInFlight,
       messageFor, isRosterValid, roleAssignments, canContinue, draft,
       busy, apiPositionByRole, teamA, teamB, updateDraft, createMatch } = env;
     ${clearTeams}
@@ -36,9 +37,11 @@ function fixture(count = 12, editingMatchId = null) {
     balanceResult: { teamAAssignments: assignments.slice(0, 6), teamBAssignments: assignments.slice(6) },
     balancedProfiles: 'profile-fingerprint', swapSelectionId: 1,
     savedRolesInvalidated: false, createdMatchId: null, targetId: null, createError: '',
+    mode: 'auto', showTeamModeSelection: false,
   };
   const setters = Object.fromEntries(['TeamA', 'TeamB', 'Locks', 'BalanceResult', 'BalancedProfiles',
-    'SwapSelectionId', 'CreateError', 'SavedRolesInvalidated', 'CreatedMatchId', 'TargetId', 'Draft'].map((name) => {
+    'SwapSelectionId', 'CreateError', 'SavedRolesInvalidated', 'CreatedMatchId', 'TargetId', 'Draft',
+    'Mode', 'ShowTeamModeSelection'].map((name) => {
     const key = name[0].toLowerCase() + name.slice(1);
     return [`set${name}`, (value) => { state[key] = typeof value === 'function' ? value(state[key]) : value; }];
   }));
@@ -89,6 +92,8 @@ for (const count of [12, 13, 14]) {
     f.actions().dismissMatchCreated();
     assert.equal(f.state.createdMatchId, null);
     assert.equal(f.state.draft.step, 'teams');
+    assert.equal(f.state.showTeamModeSelection, true);
+    assert.equal(f.state.mode, null);
     assert.equal(f.state.draft.matchDate, before.draft.matchDate);
     assert.equal(f.state.draft.generation, before.draft.generation);
     assert.deepEqual(f.state.draft.selectedPlayerIds, before.draft.selectedPlayerIds);
@@ -137,6 +142,9 @@ test('saving an edited roster updates once then detaches the edit target for the
   assert.equal(f.state.draft.editingMatchId, null);
   assert.equal(f.state.draft.savedRoster, null);
   assert.equal(f.state.draft.selectedPlayerIds.length, 14);
+  assert.equal(f.state.draft.step, 'teams');
+  assert.equal(f.state.showTeamModeSelection, true);
+  assert.equal(f.state.mode, null);
 });
 
 test('Start Over remains the explicit full session reset and never runs on save success', async () => {

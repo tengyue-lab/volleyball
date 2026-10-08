@@ -996,7 +996,10 @@ function AdminMatchesPage() {
   }
 
   function changeMode(next: 'auto' | 'manual') {
-    if (next === mode) return;
+    if (next === mode) {
+      setShowTeamModeSelection(false);
+      return;
+    }
     const hasTeamAssignments = teamA.length > 0 || teamB.length > 0 || locks.length > 0;
     if (mode !== null && hasTeamAssignments) {
       setPendingMode(next);
