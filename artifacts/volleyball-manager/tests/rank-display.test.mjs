@@ -93,15 +93,46 @@ test('shared competitive-rank dialog uses server ranges and profile metrics have
   const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
   assert.ok(app.includes('button-rank-info-leaderboard'));
   assert.ok(app.includes('button-rank-info-profile'));
-  assert.ok(app.includes('profile-rank-elo'));
+  assert.ok(app.includes('profile-stat-grid'));
   assert.ok(app.includes('data-testid="text-my-elo"'));
   assert.ok(app.includes('Matches Played'));
   assert.ok(app.includes('card-leaderboard-visibility'));
 
   const css = await readFile(new URL('../src/index.css', import.meta.url), 'utf8');
-  assert.ok(css.includes('.profile-rank-elo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))'));
-  assert.ok(css.includes('.profile-metric{min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:8px}'));
+  assert.ok(css.includes('.profile-stat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))'));
+  assert.ok(css.includes('.profile-stat-value{min-width:0;margin:0;color:hsl(var(--foreground));font-family:inherit;font-size:22px;font-weight:700'));
   assert.ok(css.includes('.rank-info-dialog>button{right:8px;top:8px;min-width:44px;min-height:44px'));
+});
+
+test('Profile puts information, visibility and preferences in one continuous card', async () => {
+  const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  assert.ok(app.includes('<section className="panel profile-card" data-testid="card-my-profile">'));
+  assert.ok(app.includes('className="profile-section profile-overview-section"'));
+  assert.ok(app.includes('className="profile-section profile-visibility-section"'));
+  assert.ok(app.includes('className="profile-section profile-preferences-section"'));
+  assert.ok(!app.includes('className="panel leaderboard-visibility-panel"'));
+  assert.ok(!app.includes('className="panel preferred-position-panel"'));
+  assert.ok(app.includes('<PreferredPositionsSection key={player.id} player={player} />'));
+  assert.ok(!app.includes('{!access.isAdmin && <PreferredPositionsSection'));
+  assert.ok(app.includes('Select your preferred positions in ranked order. You may occasionally need to play an unselected position to balance the teams.'));
+  assert.ok(app.includes('<span className="eyebrow profile-stat-label">ELO</span>'));
+  assert.ok(app.includes('id="button-rank-info-profile"') || app.includes('testId="button-rank-info-profile"'));
+  assert.ok(app.includes('data-testid="text-my-matches"'));
+  assert.ok(app.includes('function PreferredPositionsSection'));
+  assert.ok(app.includes('useUpdateOwnPreferences()'));
+  assert.ok(app.includes('updatePreferences.mutate({ data: { positions: selectedPositions } }'));
+
+  const css = await readFile(new URL('../src/index.css', import.meta.url), 'utf8');
+  assert.ok(css.includes('.profile-card>.profile-section+.profile-section{border-top:1px solid hsl(var(--border))}'));
+  assert.ok(css.includes('.profile-stat-label.eyebrow{margin:0;color:hsl(var(--muted-foreground));font-size:13px'));
+  assert.ok(css.includes('.profile-stat-label.eyebrow{font-size:12px;letter-spacing:.07em}'));
+  assert.ok(css.includes('.profile-player-name{margin:0;color:hsl(var(--foreground));font-size:22px'));
+  assert.ok(css.includes('.profile-player-name{font-size:20px}'));
+  assert.ok(css.includes('.profile-stat-value{font-size:20px}'));
+  assert.ok(css.includes('.profile-stat-value .rank-label-and-rating{white-space:normal}'));
+  assert.ok(css.includes('.profile-page .button,.profile-page .leaderboard-visibility-switch{font-size:14px}'));
+  assert.ok(css.includes('.profile-preferences-body .rpi-item{font-size:15px}'));
+  assert.ok(css.includes('.profile-preferences-body .rpi-item{font-size:14px}'));
 });
 
 test('Profile uses an auto-saving accessible leaderboard visibility switch without the old popup', async () => {
@@ -129,7 +160,7 @@ test('Profile uses an auto-saving accessible leaderboard visibility switch witho
   assert.ok(css.includes('.leaderboard-visibility-switch:focus-visible'));
   assert.ok(css.includes('.leaderboard-visibility-saving'));
   assert.ok(css.includes('.leaderboard-visibility-error'));
-  assert.ok(css.includes('.leaderboard-visibility-row{align-items:flex-start;gap:12px;padding:16px 14px}'));
+  assert.ok(css.includes('.leaderboard-visibility-row{align-items:flex-start;gap:12px}'));
 });
 
 test('ranked position input supports minimum selection, ordered labels, and mobile-friendly reordering', async () => {
@@ -156,16 +187,16 @@ test('ranked position input supports minimum selection, ordered labels, and mobi
 
   const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
   assert.ok(app.includes('function PreferredPositionsSection'));
-  assert.ok(app.includes("Select your preferred positions in order, from most to least preferred. You may occasionally be assigned a position you haven't selected if needed to balance the teams."));
-  assert.ok(app.includes('updatePlayer.mutate({ playerId: player.id, data: { positions: selectedPositions } }'));
+  assert.ok(app.includes('Select your preferred positions in ranked order. You may occasionally need to play an unselected position to balance the teams.'));
+  assert.ok(app.includes('updatePreferences.mutate({ data: { positions: selectedPositions } }'));
   assert.ok(app.includes('queryClient.invalidateQueries({ queryKey: getListPlayersQueryKey() })'));
-  assert.ok(app.includes('{!access.isAdmin && <PreferredPositionsSection'));
+  assert.ok(app.includes('<PreferredPositionsSection key={player.id} player={player} />'));
   assert.ok(app.includes('Choose at least three preferred positions before saving.'));
   assert.ok(app.includes('title="Linking needed"'));
 
   const css = await readFile(new URL('../src/index.css', import.meta.url), 'utf8');
   assert.ok(css.includes('.preferred-position-description'));
-  assert.ok(css.includes('.preferred-position-body'));
+  assert.ok(css.includes('.profile-preferences-body'));
   assert.ok(css.includes('.preferred-position-actions>.button{width:100%}'));
 });
 

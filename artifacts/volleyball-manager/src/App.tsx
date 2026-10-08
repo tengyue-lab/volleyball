@@ -16,6 +16,7 @@ import {
   useListAdminAccounts,
   useRevokeAdminAccess,
   useUpdateAccountLink,
+  useUpdateOwnPreferences,
   useCreatePlayer,
   useDeletePlayer,
   useGetLeaderboard,
@@ -1335,7 +1336,7 @@ function HomeRoute() {
 
 function PreferredPositionsSection({ player }: { player: Player }) {
   const queryClient = useQueryClient();
-  const updatePlayer = useUpdatePlayer();
+  const updatePreferences = useUpdateOwnPreferences();
   const [selectedPositions, setSelectedPositions] = useState<PositionType[]>(player.positions);
   const [formError, setFormError] = useState('');
   const [saved, setSaved] = useState(false);
@@ -1351,7 +1352,7 @@ function PreferredPositionsSection({ player }: { player: Player }) {
       setFormError('Choose at least three unique preferred positions.');
       return;
     }
-    updatePlayer.mutate({ playerId: player.id, data: { positions: selectedPositions } }, {
+    updatePreferences.mutate({ data: { positions: selectedPositions } }, {
       onSuccess: async (updated) => {
         queryClient.setQueryData(getGetPlayerQueryKey(player.id), updated);
         setSelectedPositions(updated.positions);
@@ -1363,14 +1364,12 @@ function PreferredPositionsSection({ player }: { player: Player }) {
   }
 
   return (
-    <section className="panel preferred-position-panel" data-testid="card-preferred-positions">
-      <div className="panel-head">
-        <div>
-          <h2 className="panel-title">Preferred Positions</h2>
-          <p className="preferred-position-description">Select your preferred positions in order, from most to least preferred. You may occasionally be assigned a position you haven't selected if needed to balance the teams.</p>
-        </div>
+    <section className="profile-section profile-preferences-section" aria-labelledby="preferred-positions-title" data-testid="card-preferred-positions">
+      <div className="profile-section-heading">
+        <h2 className="profile-section-title" id="preferred-positions-title">Preferred Positions</h2>
+        <p className="preferred-position-description">Select your preferred positions in ranked order. You may occasionally need to play an unselected position to balance the teams.</p>
       </div>
-      <form className="preferred-position-body" onSubmit={submit}>
+      <form className="profile-preferences-body" onSubmit={submit}>
         {!player.preferencesConfirmed && <p className="field-hint" data-testid="text-legacy-preferences">Review the order of these existing positions, then save to confirm your ranked preferences.</p>}
         <RankedPositionInput
           value={selectedPositions}
@@ -1383,8 +1382,8 @@ function PreferredPositionsSection({ player }: { player: Player }) {
         {formError && <p className="form-error" role="alert" data-testid="error-preferences">{formError}</p>}
         {saved && <p className="preferred-position-success" role="status" data-testid="status-preferences-saved">Preferences saved.</p>}
         <div className="preferred-position-actions">
-          <button className="button button-primary" type="submit" disabled={updatePlayer.isPending || !valid} data-testid="button-save-preferences">
-            {updatePlayer.isPending ? 'Saving…' : 'Save Preferences'}
+          <button className="button button-primary" type="submit" disabled={updatePreferences.isPending || !valid} data-testid="button-save-preferences">
+            {updatePreferences.isPending ? 'Saving…' : 'Save Preferences'}
           </button>
         </div>
       </form>
@@ -1422,10 +1421,10 @@ function LeaderboardVisibilitySetting({ player }: { player: Player }) {
   }
 
   return (
-    <section className="panel leaderboard-visibility-panel" aria-labelledby="leaderboard-visibility-title" data-testid="card-leaderboard-visibility">
+    <section className="profile-section profile-visibility-section" aria-labelledby="leaderboard-visibility-title" data-testid="card-leaderboard-visibility">
       <div className="leaderboard-visibility-row">
         <div className="leaderboard-visibility-copy">
-          <h2 className="leaderboard-visibility-title" id="leaderboard-visibility-title">Leaderboard Visibility</h2>
+          <h2 className="profile-section-title" id="leaderboard-visibility-title">Leaderboard Visibility</h2>
           <p className="leaderboard-visibility-description">Allow your name to appear on the public Top 5 leaderboard.</p>
         </div>
         <button
@@ -1455,34 +1454,40 @@ function UserPortalPage() {
   const viewerQuery = useGetAuthViewer();
   const playerQuery = useGetPlayer(access.playerId ?? 0, { query: { queryKey: getGetPlayerQueryKey(access.playerId ?? 0), enabled: access.playerId !== null } });
   const player = playerQuery.data;
-  return <Shell><main className="content">
+  return <Shell><main className="content profile-page">
     <PageHeader eyebrow="Account / my profile" title="My profile" description={access.email ? `Signed in as ${access.email}.` : 'Your Wyndham Wombats VC account.'}>
       <button type="button" className="button button-secondary" onClick={() => void signOut({ redirectUrl: basePath || '/' })} data-testid="button-sign-out"><LogOut size={15} /> Sign out</button>
     </PageHeader>
     {access.status === 'error' ? <section className="panel"><ErrorState error={new Error('We could not verify your account.')} retry={access.retry} /></section> :
       access.playerId === null ? <section className="panel"><EmptyState title="Linking needed" copy="Your account is not linked to a club player yet. Ask a club admin to link it to your roster profile." action={<button className="button button-secondary" onClick={() => void viewerQuery.refetch()} data-testid="button-check-link">Check again</button>} /></section> :
         playerQuery.isLoading ? <LoadingState /> : playerQuery.isError || !player ? <section className="panel"><ErrorState error={playerQuery.error} retry={() => void playerQuery.refetch()} /></section> :
-          <>
-            <section className="panel profile-card" data-testid="card-my-profile">
-              <div className="panel-head"><div><h2 className="panel-title" data-testid="text-my-name">{player.name}</h2><div className="panel-note">PLAYER / {String(player.id).padStart(3, '0')}</div></div></div>
-              <div className="profile-rank-elo">
-                <div className="profile-highlight-card" data-testid="card-my-rank">
-                  <div className="profile-stat-heading"><span className="eyebrow profile-stat-label">Rank</span><CompetitiveRanksDialog testId="button-rank-info-profile" /></div>
-                  {player.elo === null ? <strong>Private</strong> : <RankBadge rank={player.rank} provisional={player.provisional} testId="badge-my-rank" />}
-                </div>
-                <div className="profile-highlight-card" data-testid="card-my-elo">
-                  <span className="eyebrow profile-stat-label">ELO</span>
-                  <strong className="profile-elo" data-testid="text-my-elo">{player.elo === null ? 'Private' : player.elo.toLocaleString()}</strong>
-                </div>
-              </div>
-              <div className="profile-grid profile-details-grid">
-                <div className="profile-metric"><span className="eyebrow profile-stat-label">Matches Played</span><strong data-testid="text-my-matches">{player.matchesPlayed}</strong>{player.provisional && <div className="field-hint" data-testid="text-my-placement">Placement: {player.matchesPlayed} / 10 matches.</div>}</div>
-                {access.isAdmin && <div className="profile-metric"><span className="eyebrow profile-stat-label">Positions</span><div className="tag-list">{player.positions.map((position, index) => <span className="tag" key={position}>{player.preferencesConfirmed ? `${index + 1}. ` : ''}{position}</span>)}</div></div>}
-              </div>
-            </section>
+           <section className="panel profile-card" data-testid="card-my-profile">
+             <section className="profile-section profile-overview-section" aria-label="Player information">
+               <div className="profile-identity">
+                 <h2 className="profile-player-name" data-testid="text-my-name">{player.name}</h2>
+                 <div className="panel-note">PLAYER / {String(player.id).padStart(3, '0')}</div>
+               </div>
+               <div className="profile-stat-grid">
+                 <div className="profile-stat" data-testid="card-my-elo">
+                   <span className="eyebrow profile-stat-label">ELO</span>
+                   <strong className="profile-stat-value" data-testid="text-my-elo">{player.elo === null ? 'Private' : player.elo.toLocaleString()}</strong>
+                 </div>
+                 <div className="profile-stat" data-testid="card-my-rank">
+                   <div className="profile-stat-label-row"><span className="eyebrow profile-stat-label">Rank</span><CompetitiveRanksDialog testId="button-rank-info-profile" /></div>
+                   <strong className="profile-stat-value" data-testid="badge-my-rank">
+                     {player.elo === null ? 'Private' : <RankBadge rank={player.rank} provisional={player.provisional} />}
+                   </strong>
+                 </div>
+                 <div className="profile-stat">
+                   <span className="eyebrow profile-stat-label">Matches Played</span>
+                   <strong className="profile-stat-value" data-testid="text-my-matches">{player.matchesPlayed}</strong>
+                   {player.provisional && <div className="profile-placement" data-testid="text-my-placement">Placement: {player.matchesPlayed} / 10 matches.</div>}
+                 </div>
+               </div>
+             </section>
             <LeaderboardVisibilitySetting key={player.id} player={player} />
-            {!access.isAdmin && <PreferredPositionsSection key={player.id} player={player} />}
-          </>}
+             <PreferredPositionsSection key={player.id} player={player} />
+           </section>}
   </main></Shell>;
 }
 

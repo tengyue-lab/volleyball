@@ -200,6 +200,74 @@ class PrivacyTests(unittest.TestCase):
             ).fetchone()
         self.assertEqual(snapshot_after, snapshot_before)
 
+    def test_profile_preferences_endpoint_is_linked_owner_only_even_for_admins(self):
+        admin_viewer = self.client.get("/api/auth/me").get_json()
+        admin_target, other_target = self.player_ids[:2]
+        original_other_positions = self.profile(other_target)["positions"]
+
+        # Admin status cannot bypass the profile endpoint's linked-player check.
+        self.assertEqual(
+            self.client.patch(
+                "/api/profile/preferences",
+                json={"positions": ["Setter", "Outside Hitter", "Libero"]},
+            ).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.anonymous().patch(
+                "/api/profile/preferences",
+                json={"positions": ["Setter", "Outside Hitter", "Libero"]},
+            ).status_code,
+            401,
+        )
+
+        linked_admin = self.client.patch(
+            f"/api/admin/accounts/{admin_viewer['userId']}",
+            json={"playerId": admin_target},
+        )
+        self.assertEqual(linked_admin.status_code, 200)
+        admin_preferences = ["Middle Blocker", "Setter", "Outside Hitter"]
+        saved_admin = self.client.patch(
+            "/api/profile/preferences", json={"positions": admin_preferences}
+        )
+        self.assertEqual(saved_admin.status_code, 200)
+        self.assertEqual(saved_admin.get_json()["positions"], admin_preferences)
+        self.assertEqual(
+            self.client.patch(
+                "/api/profile/preferences", json={"positions": ["Setter", "Libero"]}
+            ).status_code,
+            400,
+        )
+        self.assertEqual(
+            self.client.get(f"/api/players/{admin_target}").get_json()["positions"],
+            admin_preferences,
+        )
+        self.assertEqual(self.profile(other_target)["positions"], original_other_positions)
+        self.assertEqual(
+            self.client.patch(
+                "/api/profile/preferences",
+                json={"positions": ["Setter", "Outside Hitter", "Libero"], "playerId": other_target},
+            ).status_code,
+            400,
+        )
+
+        owner = self.owner(other_target)
+        owner_preferences = ["Libero", "Setter", "Opposite"]
+        saved_owner = owner.patch(
+            "/api/profile/preferences", json={"positions": owner_preferences}
+        )
+        self.assertEqual(saved_owner.status_code, 200)
+        self.assertEqual(saved_owner.get_json()["positions"], owner_preferences)
+
+        # The general admin player editor still supports existing Players-tab work.
+        self.assertEqual(
+            self.client.patch(
+                f"/api/players/{admin_target}",
+                json={"positions": ["Setter", "Outside Hitter", "Opposite"]},
+            ).status_code,
+            200,
+        )
+
     def test_linked_player_preferences_require_three_to_five_unique_supported_positions(self):
         target = self.player_ids[0]
         owner = self.owner(target)

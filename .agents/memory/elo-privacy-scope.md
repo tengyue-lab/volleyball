@@ -26,3 +26,9 @@ The public social leaderboard should show rank tier only (not numbered places), 
 **Why:** The user explicitly requested these public-display restrictions, clarified that leaderboard rank means tier only, specified that exact ELO belongs only on the linked player's own Profile or an admin view, and required players to remain private until they opt in.
 
 **How to apply:** Preserve leaderboard ranking calculations and the user's own current Profile access. Keep opt-in as leaderboard eligibility, set new players to private unless they explicitly opt in, and mask other players' exact ELO and division rank server-side. Restrict public display/data responses without changing stored ratings, authentication architecture, or result/deletion/reversal behavior.
+
+Any signed-in account linked to a player may update preferred positions for its own linked player, including admin accounts. Profile preference updates must derive the target player from verified account linking; admin player-management edits remain a separate capability.
+
+**Why:** The user explicitly requested self-service preference editing for linked admins while preserving admin management in the Players tab and preventing a profile editor from targeting another player's record.
+
+**How to apply:** Keep a Profile-specific preference update bound to the verified account's linked player ID. Do not use admin status to select a different target; keep the existing admin Players editor on its admin-authorized path.
