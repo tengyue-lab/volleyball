@@ -89,7 +89,7 @@ test('Create Match keeps Date, Players and Teams as distinct stages', () => {
   assert.match(createMatchSource, /data-testid="button-fill"/);
   assert.match(createMatchSource, /{stepVisibility\.teams && !showTeamModeSelection && mode === 'auto' && <div className="pool-actions">/);
   assert.match(createMatchSource, /{stepVisibility\.teams && !showTeamModeSelection && mode === 'manual' && <>/);
-  assert.match(createMatchSource, /{mode !== null && <div className="team-columns">/);
+  assert.match(createMatchSource, /{mode !== null && !modeChoiceVisible && <div className="team-columns">/);
   assert.match(createMatchSource, /balanceMatchTeams\(selectedPlayers\)/);
   assert.match(balanceButton, /onClick=\{autoBalance\}/);
   assert.match(balanceButton, /Generate Balanced Teams/);
@@ -129,11 +129,22 @@ test('mode selection starts without team controls; choosing either mode opens on
   assert.equal(automatic.state.showTeamModeSelection, false);
 });
 
+test('mode chooser hides roster/session summaries and residual team details without clearing saved work', () => {
+  assert.match(createMatchSource, /const modeChoiceVisible = stepVisibility\.teams && showTeamModeSelection/);
+  assert.match(createMatchSource, /\{!modeChoiceVisible && <div className="summary-strip match-session-summary">/);
+  assert.match(createMatchSource, /\{!modeChoiceVisible && <SavedRosterSummary/);
+  assert.match(createMatchSource, /\{!modeChoiceVisible && draft\.editingMatchId !== null && <div[^>]+data-testid="status-editing-target"/);
+  assert.match(createMatchSource, /\{!modeChoiceVisible && <div className="panel-head">/);
+  assert.match(createMatchSource, /\{mode !== null && !modeChoiceVisible && <div className="team-columns">/);
+  assert.match(createMatchSource, /\{mode === 'manual' && !modeChoiceVisible && <div className="available-list">/);
+  assert.match(createMatchSource, /\{!modeChoiceVisible && <div className="builder-footer">/);
+});
+
 test('back preserves assignments and switching mode requires confirmation before clearing them', () => {
   const chooserStart = createMatchSource.indexOf('{showTeamModeSelection ? <section className="team-mode-selection"');
   const builderStart = createMatchSource.indexOf(': <>', chooserStart);
   const backButtonIndex = createMatchSource.indexOf('data-testid="button-back-team-selection"', builderStart);
-  const teamColumnsIndex = createMatchSource.indexOf('{mode !== null && <div className="team-columns">', builderStart);
+  const teamColumnsIndex = createMatchSource.indexOf('{mode !== null && !modeChoiceVisible && <div className="team-columns">', builderStart);
   assert.ok(builderStart < backButtonIndex && backButtonIndex < teamColumnsIndex);
   assert.match(createMatchSource.slice(builderStart, teamColumnsIndex), /className="button button-secondary touch-44"[^>]*data-testid="button-back-team-selection">← Back to Team Selection/);
 
