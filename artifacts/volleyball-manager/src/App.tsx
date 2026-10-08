@@ -209,7 +209,6 @@ function EmptyState({ title, copy, action }: { title: string; copy: string; acti
 function PlayerEditor({ playerId, onClose, notify }: { playerId: number | null; onClose: () => void; notify: (text: string) => void }) {
   const queryClient = useQueryClient();
   const access = useAccess();
-  const ownerOnly = !access.isAdmin;
   const playerQuery = useGetPlayer(playerId ?? 0, {
     query: { queryKey: getGetPlayerQueryKey(playerId ?? 0), enabled: playerId !== null, refetchInterval: false, refetchOnWindowFocus: false, staleTime: Infinity },
   });
@@ -244,14 +243,6 @@ function PlayerEditor({ playerId, onClose, notify }: { playerId: number | null; 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError('');
-    if (playerId !== null && ownerOnly) {
-      const data: PlayerUpdate = { eloPublic };
-      updatePlayer.mutate({ playerId, data }, {
-        onSuccess: async () => { await refreshEverything(queryClient); notify('Your ELO visibility was saved.'); onClose(); },
-        onError: (error) => setFormError(messageFor(error)),
-      });
-      return;
-    }
     if (!access.isAdmin) return;
     const cleanName = name.trim();
     const rating = Number(elo);
@@ -279,17 +270,11 @@ function PlayerEditor({ playerId, onClose, notify }: { playerId: number | null; 
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="modal" role="dialog" aria-modal="true" aria-labelledby="player-dialog-title">
         <div className="modal-head">
-          <div><h2 id="player-dialog-title">{playerId === null ? 'Add a player' : ownerOnly ? 'ELO visibility' : 'Edit player'}</h2><p>{playerId === null ? 'Add someone to the club roster.' : ownerOnly ? 'Choose whether you appear on the public leaderboard.' : 'Update this player’s roster details.'}</p></div>
+          <div><h2 id="player-dialog-title">{playerId === null ? 'Add a player' : 'Edit player'}</h2><p>{playerId === null ? 'Add someone to the club roster.' : 'Update this player’s roster details.'}</p></div>
           <button className="button button-quiet" onClick={onClose} aria-label="Close dialog" data-testid="button-close-player"><X size={17} /></button>
         </div>
         {playerId !== null && playerQuery.isLoading ? <div className="modal-body"><LoadingState lines={2} /></div> :
           playerId !== null && playerQuery.isError ? <div className="modal-body"><ErrorState error={playerQuery.error} retry={() => void playerQuery.refetch()} /></div> :
-            ownerOnly ? <form className="modal-body" onSubmit={submit}>
-              <div className="form-field"><span className="field-label">{name}</span><div className="rating" data-testid="text-own-elo">Your ELO: {playerQuery.data?.elo === null || playerQuery.data?.elo === undefined ? 'Private' : playerQuery.data.elo.toLocaleString()}</div></div>
-              {visibility}
-              {formError && <div className="form-error" role="alert">{formError}</div>}
-              <div className="modal-actions"><button type="button" className="button button-secondary" onClick={onClose} data-testid="button-cancel-player">Cancel</button><button className="button button-primary" type="submit" disabled={saving} data-testid="button-save-player">{saving ? 'Saving…' : 'Save visibility'}</button></div>
-            </form> :
             <form className="modal-body" onSubmit={submit}>
               <div className="form-field"><label htmlFor="player-name">Player name</label><input id="player-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={80} autoFocus placeholder="e.g. Jordan Lee" data-testid="input-player-name" /></div>
               <div className="form-field"><label htmlFor="player-elo">{playerId === null ? 'Starting ELO' : 'ELO'}</label><input id="player-elo" type="number" min="0" step="1" value={elo} onChange={(event) => setElo(event.target.value)} data-testid="input-player-elo" /><div className="field-hint">New players start at 800. Ratings can be adjusted here.</div></div>
@@ -1407,13 +1392,68 @@ function PreferredPositionsSection({ player }: { player: Player }) {
   );
 }
 
+function LeaderboardVisibilitySetting({ player }: { player: Player }) {
+  const queryClient = useQueryClient();
+  const updatePlayer = useUpdatePlayer();
+  const [enabled, setEnabled] = useState(player.eloPublic);
+  const [formError, setFormError] = useState('');
+
+  useEffect(() => {
+    if (!updatePlayer.isPending) setEnabled(player.eloPublic);
+  }, [player.eloPublic, updatePlayer.isPending]);
+
+  function toggleVisibility() {
+    if (updatePlayer.isPending) return;
+    const previousValue = enabled;
+    const nextValue = !previousValue;
+    setEnabled(nextValue);
+    setFormError('');
+    updatePlayer.mutate({ playerId: player.id, data: { eloPublic: nextValue } }, {
+      onSuccess: (updated) => {
+        setEnabled(updated.eloPublic);
+        queryClient.setQueryData(getGetPlayerQueryKey(player.id), updated);
+        void queryClient.invalidateQueries({ queryKey: getListPlayersQueryKey() });
+      },
+      onError: (error) => {
+        setEnabled(previousValue);
+        setFormError(messageFor(error));
+      },
+    });
+  }
+
+  return (
+    <section className="panel leaderboard-visibility-panel" aria-labelledby="leaderboard-visibility-title" data-testid="card-leaderboard-visibility">
+      <div className="leaderboard-visibility-row">
+        <div className="leaderboard-visibility-copy">
+          <h2 className="leaderboard-visibility-title" id="leaderboard-visibility-title">Leaderboard Visibility</h2>
+          <p className="leaderboard-visibility-description">Allow your name to appear on the public Top 5 leaderboard.</p>
+        </div>
+        <button
+          type="button"
+          className="leaderboard-visibility-switch"
+          role="switch"
+          aria-label="Allow your name to appear on the public Top 5 leaderboard"
+          aria-checked={enabled}
+          aria-busy={updatePlayer.isPending}
+          disabled={updatePlayer.isPending}
+          onClick={toggleVisibility}
+          data-testid="switch-leaderboard-visibility"
+        >
+          <span className="leaderboard-visibility-track" aria-hidden="true"><span className="leaderboard-visibility-thumb" /></span>
+          <span className="leaderboard-visibility-state">{enabled ? 'On' : 'Off'}</span>
+        </button>
+      </div>
+      {updatePlayer.isPending && <p className="leaderboard-visibility-saving" role="status">Saving…</p>}
+      {formError && <p className="form-error leaderboard-visibility-error" role="alert">{formError}</p>}
+    </section>
+  );
+}
+
 function UserPortalPage() {
   const access = useAccess();
   const { signOut } = useClerk();
   const viewerQuery = useGetAuthViewer();
   const playerQuery = useGetPlayer(access.playerId ?? 0, { query: { queryKey: getGetPlayerQueryKey(access.playerId ?? 0), enabled: access.playerId !== null } });
-  const [editing, setEditing] = useState(false);
-  const { notice, setNotice } = useNotice();
   const player = playerQuery.data;
   return <Shell><main className="content">
     <PageHeader eyebrow="Account / my profile" title="My profile" description={access.email ? `Signed in as ${access.email}.` : 'Your Wyndham Wombats VC account.'}>
@@ -1424,7 +1464,7 @@ function UserPortalPage() {
         playerQuery.isLoading ? <LoadingState /> : playerQuery.isError || !player ? <section className="panel"><ErrorState error={playerQuery.error} retry={() => void playerQuery.refetch()} /></section> :
           <>
             <section className="panel profile-card" data-testid="card-my-profile">
-              <div className="panel-head"><div><h2 className="panel-title" data-testid="text-my-name">{player.name}</h2><div className="panel-note">PLAYER / {String(player.id).padStart(3, '0')}</div></div><button className="button button-secondary" onClick={() => setEditing(true)} data-testid="button-edit-visibility"><Pencil size={14} /> ELO visibility</button></div>
+              <div className="panel-head"><div><h2 className="panel-title" data-testid="text-my-name">{player.name}</h2><div className="panel-note">PLAYER / {String(player.id).padStart(3, '0')}</div></div></div>
               <div className="profile-rank-elo">
                 <div className="profile-highlight-card" data-testid="card-my-rank">
                   <div className="profile-stat-heading"><span className="eyebrow profile-stat-label">Rank</span><CompetitiveRanksDialog testId="button-rank-info-profile" /></div>
@@ -1437,14 +1477,12 @@ function UserPortalPage() {
               </div>
               <div className="profile-grid profile-details-grid">
                 <div className="profile-metric"><span className="eyebrow profile-stat-label">Matches Played</span><strong data-testid="text-my-matches">{player.matchesPlayed}</strong>{player.provisional && <div className="field-hint" data-testid="text-my-placement">Placement: {player.matchesPlayed} / 10 matches.</div>}</div>
-                <div className="profile-metric"><span className="eyebrow profile-stat-label">Leaderboard</span><strong data-testid="text-my-visibility">{player.eloPublic ? 'Shown publicly' : 'Hidden'}</strong></div>
                 {access.isAdmin && <div className="profile-metric"><span className="eyebrow profile-stat-label">Positions</span><div className="tag-list">{player.positions.map((position, index) => <span className="tag" key={position}>{player.preferencesConfirmed ? `${index + 1}. ` : ''}{position}</span>)}</div></div>}
               </div>
             </section>
+            <LeaderboardVisibilitySetting key={player.id} player={player} />
             {!access.isAdmin && <PreferredPositionsSection key={player.id} player={player} />}
           </>}
-    <Notice text={notice} />
-    {editing && access.playerId !== null && <PlayerEditor playerId={access.playerId} onClose={() => setEditing(false)} notify={setNotice} />}
   </main></Shell>;
 }
 

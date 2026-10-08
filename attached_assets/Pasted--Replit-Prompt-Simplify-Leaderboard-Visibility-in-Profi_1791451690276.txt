@@ -1,0 +1,128 @@
+# Replit Prompt — Simplify Leaderboard Visibility in Profile
+
+Please simplify the existing Leaderboard/ELO visibility setting in the Profile tab.
+
+This is a targeted UI improvement. Reuse the existing leaderboard visibility functionality rather than creating a new preference system.
+
+## 1. Remove the ELO Visibility popup
+
+Currently, the Profile tab has an icon or button labelled **ELO Visibility**.
+
+Clicking it opens a popup containing:
+- Player name
+- ELO rating
+- Option to appear on the public leaderboard
+
+This popup contains redundant information because the player's name and ELO are already displayed in their Profile.
+
+Please remove the ELO Visibility icon/button and its popup from the Profile interface.
+
+Do not remove the underlying leaderboard visibility setting or stored preference.
+
+## 2. Add inline Leaderboard Visibility toggle
+
+In the Profile tab, add a clean settings row titled:
+
+**Leaderboard Visibility**
+
+Under the heading, display:
+
+"Allow your name to appear on the public Top 5 leaderboard."
+
+Place an ON/OFF toggle switch on the right side of the row.
+
+Recommended layout:
+
+Leaderboard Visibility                 [ON/OFF]
+
+Allow your name to appear on the
+public Top 5 leaderboard.
+
+Use the app's existing theme, rounded corners and spacing.
+
+Keep the design simple and mobile-friendly.
+
+## 3. Toggle behavior
+
+The toggle should directly control the player's existing public leaderboard opt-in preference.
+
+- ON: Player can appear on the public Top 5 leaderboard if eligible.
+- OFF: Player is excluded from the public leaderboard.
+- Changing the toggle should automatically save the preference.
+- Do not require a separate Save button.
+- Show a subtle loading state while saving.
+- If saving succeeds, retain the new setting.
+- If saving fails, restore the previous setting and display an error message.
+- The setting must persist after page refresh and login.
+
+Use the existing backend/API and stored visibility preference.
+
+Do not create a second visibility field or duplicate settings.
+
+## 4. Privacy and permissions
+
+Only authenticated users with a linked player profile should be able to change their own leaderboard visibility.
+
+- Do not allow a player to change another player's setting.
+- Preserve backend authorization checks.
+- Players who have not explicitly opted in should remain OFF by default.
+- Turning visibility OFF must remove the player from public leaderboard results.
+- Turning visibility ON does not guarantee Top 5 placement; the player must still meet existing eligibility and ranking requirements.
+
+Do not change ELO values or placement status when visibility changes.
+
+## 5. Remove redundant information
+
+Do not display the player's name or numeric ELO again inside this settings section.
+
+Keep their existing Profile rank and ELO display unchanged.
+
+Remove the old ELO Visibility popup only if it is no longer used elsewhere.
+
+Do not remove the separate Competitive Ranks information popup that explains Iron-to-Masters ELO ranges.
+
+## 6. Design details
+
+- Use a standard accessible toggle switch.
+- Align the toggle neatly to the right of the heading.
+- Keep the heading and description left-aligned.
+- Add comfortable spacing between the heading and description.
+- Ensure the row fits narrow mobile screens.
+- Use a subtle colour change to indicate ON/OFF.
+- Avoid extra buttons, icons, modals or explanatory panels.
+
+## 7. Preserve existing functionality
+
+Do not modify:
+- ELO calculation algorithm
+- Rank tiers or thresholds
+- Public Top 5 leaderboard rules
+- Player rankings
+- Matchmaking
+- Team balancing
+- Match history
+- Match creation or completion
+- Account linking
+- Other Profile settings
+
+## 8. Testing
+
+Verify:
+
+1. ELO Visibility popup is removed from Profile.
+2. Leaderboard Visibility toggle is displayed correctly.
+3. Toggle reflects the player's currently saved preference.
+4. Switching ON saves successfully.
+5. Switching OFF saves successfully.
+6. Preference persists after refreshing.
+7. Switching OFF excludes the player from the public Top 5.
+8. Switching ON allows eligible players to appear in the Top 5.
+9. One player cannot change another player's setting.
+10. Saving failures restore the previous toggle state.
+11. Existing Profile rank and ELO remain unchanged.
+12. Mobile layout is responsive.
+13. Frontend build passes.
+
+Make the smallest targeted changes necessary.
+
+Do not deploy.

@@ -96,12 +96,40 @@ test('shared competitive-rank dialog uses server ranges and profile metrics have
   assert.ok(app.includes('profile-rank-elo'));
   assert.ok(app.includes('data-testid="text-my-elo"'));
   assert.ok(app.includes('Matches Played'));
-  assert.ok(app.includes('text-my-visibility'));
+  assert.ok(app.includes('card-leaderboard-visibility'));
 
   const css = await readFile(new URL('../src/index.css', import.meta.url), 'utf8');
   assert.ok(css.includes('.profile-rank-elo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))'));
   assert.ok(css.includes('.profile-metric{min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:8px}'));
   assert.ok(css.includes('.rank-info-dialog>button{right:8px;top:8px;min-width:44px;min-height:44px'));
+});
+
+test('Profile uses an auto-saving accessible leaderboard visibility switch without the old popup', async () => {
+  const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  assert.ok(app.includes('function LeaderboardVisibilitySetting'));
+  assert.ok(app.includes('Leaderboard Visibility'));
+  assert.ok(app.includes('Allow your name to appear on the public Top 5 leaderboard.'));
+  assert.ok(app.includes('role="switch"'));
+  assert.ok(app.includes('aria-checked={enabled}'));
+  assert.ok(app.includes('aria-busy={updatePlayer.isPending}'));
+  assert.ok(app.includes('data: { eloPublic: nextValue }'));
+  assert.ok(app.includes('setEnabled(previousValue)'));
+  assert.ok(app.includes('queryClient.setQueryData(getGetPlayerQueryKey(player.id), updated)'));
+  assert.ok(app.includes('queryClient.invalidateQueries({ queryKey: getListPlayersQueryKey() })'));
+  assert.ok(app.includes('card-leaderboard-visibility'));
+  assert.ok(!app.includes('button-edit-visibility'));
+  assert.ok(!app.includes('ELO visibility'));
+  assert.ok(!app.includes('text-my-visibility'));
+  assert.ok(app.includes('button-rank-info-profile'));
+  assert.ok(app.includes('button-save-player'));
+
+  const css = await readFile(new URL('../src/index.css', import.meta.url), 'utf8');
+  assert.ok(css.includes('.leaderboard-visibility-row'));
+  assert.ok(css.includes('.leaderboard-visibility-switch[aria-checked="true"]'));
+  assert.ok(css.includes('.leaderboard-visibility-switch:focus-visible'));
+  assert.ok(css.includes('.leaderboard-visibility-saving'));
+  assert.ok(css.includes('.leaderboard-visibility-error'));
+  assert.ok(css.includes('.leaderboard-visibility-row{align-items:flex-start;gap:12px;padding:16px 14px}'));
 });
 
 test('ranked position input supports minimum selection, ordered labels, and mobile-friendly reordering', async () => {
