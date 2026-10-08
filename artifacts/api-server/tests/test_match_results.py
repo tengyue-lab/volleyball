@@ -244,6 +244,25 @@ class MatchResultTests(unittest.TestCase):
                 )
                 self.assertEqual(response.status_code, 400)
 
+    def record_completed_roster(self, player_roles):
+        """Insert a legacy completed snapshot without changing ratings or audits."""
+        players = [
+            {"id": player_id, "assignedPosition": position}
+            for player_id, position in player_roles.items()
+        ]
+        team_a, team_b = players[:6], players[6:]
+        created_at = "2026-10-08T00:00:00+00:00"
+        with sqlite3.connect(self.app.config["DATABASE_PATH"]) as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO matches (
+                    team_a_json, team_b_json, score_a, score_b, status, created_at
+                ) VALUES (?, ?, 1, 0, 'completed', ?)
+                """,
+                (json.dumps(team_a), json.dumps(team_b), created_at),
+            )
+            return cursor.lastrowid
+
     def complete(self, match):
         response = self.client.post(f"/api/matches/{match['id']}/result", json={"scoreA": 3, "scoreB": 1})
         self.assertEqual(response.status_code, 200, response.get_json())

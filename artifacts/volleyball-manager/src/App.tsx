@@ -364,11 +364,11 @@ function LeaderboardPage() {
   const query = useGetLeaderboard();
   const ranked = query.data ?? [];
   return <Shell><main className="content">
-    <PageHeader eyebrow="Standings / public top ten" title="Leaderboard" description="Saturday social leaderboard" />
+    <PageHeader eyebrow="Standings" title="Leaderboard" description="Saturday social leaderboard" />
     <section className="panel" aria-label="Player rankings">
-      <div className="panel-head"><div><h2 className="panel-title">Player rankings</h2><div className="panel-note">Public top ten</div></div><span className="panel-note">{ranked.length} {ranked.length === 1 ? 'player' : 'players'}</span></div>
+      <div className="panel-head"><div><h2 className="panel-title">Top 5</h2><div className="panel-note">Established players who opted in</div></div></div>
       {query.isLoading ? <LoadingState /> : query.isError ? <ErrorState error={query.error} retry={() => void query.refetch()} /> : ranked.length === 0 ?
-        <EmptyState title="No public players yet." copy="Players can choose to appear here from their profile." /> :
+        <EmptyState title="No eligible public players yet." copy="Players must opt in and complete 10 matches to appear." /> :
           <LeaderboardTable players={ranked} />}
     </section>
   </main></Shell>;

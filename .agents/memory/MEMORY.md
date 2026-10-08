@@ -5,3 +5,4 @@
 - [Volleyball product context](volleyball-product-context.md) — 3–4 matches weekly, phone-first use, and all upcoming rosters count as Current Match.
 - [Browser-test fixtures](browser-test-cleanup.md) — close contexts before cleanup to prevent QA account recreation; use accepted Clerk test email domains.
 - [Match continuation](match-continuation.md) — mode choice and confirmed switches preserve roster/date; completed saves remain on Teams or Current Match as specified.
+- [Placement counts](placement-counts.md) — derive displayed provisional status from completed match snapshots without changing the stored ELO progression counter.

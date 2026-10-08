@@ -230,10 +230,10 @@ paths:
     get:
       operationId: getLeaderboard
       tags: [players]
-      summary: List public leaderboard tiers in rating order
+      summary: List the public top five established players in rating order
       responses:
         "200":
-          description: Public top ten in existing rating order, without numeric ratings or preferences
+          description: Public top five established players in existing rating order, without numeric ratings or preferences
           content:
             application/json:
               schema:
@@ -398,16 +398,24 @@ components:
     LeaderboardEntry:
       type: object
       additionalProperties: false
-      required: [id, name, rank, provisional]
+      required: [id, placement, name, mostPlayedPosition, tier]
       properties:
         id:
           type: integer
+        placement:
+          type: integer
+          minimum: 1
+          maximum: 5
         name:
           type: string
-        rank:
-          $ref: "#/components/schemas/RankLabel"
-        provisional:
-          type: boolean
+        mostPlayedPosition:
+          type: ["string", "null"]
+          enum: [Setter, Outside Hitter, Middle Blocker, Opposite, Libero, null]
+        tier:
+          $ref: "#/components/schemas/CompetitiveTier"
+    CompetitiveTier:
+      type: string
+      enum: [Iron, Bronze, Silver, Gold, Platinum, Diamond, Masters]
     HealthStatus:
       type: object
       properties:

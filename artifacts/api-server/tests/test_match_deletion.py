@@ -10,6 +10,7 @@ class MatchDeletionTests(unittest.TestCase):
     tearDown = results.MatchResultTests.tearDown
     create_match = results.MatchResultTests.create_match
     complete = results.MatchResultTests.complete
+    record_completed_roster = results.MatchResultTests.record_completed_roster
 
     def snapshot(self):
         with sqlite3.connect(self.app.config["DATABASE_PATH"]) as db:
@@ -28,6 +29,13 @@ class MatchDeletionTests(unittest.TestCase):
                 ).fetchone()[0], 0)
 
     def test_completed_deletion_restores_profiles_ranks_provisional_private_and_leaderboard(self):
+        for appearance in range(10):
+            assignments = {
+                player_id: results.ROLE_FORMATION[index % len(results.ROLE_FORMATION)]
+                for index, player_id in enumerate(self.player_ids)
+                if appearance < (9 if index < 6 else 10)
+            }
+            self.record_completed_roster(assignments)
         with sqlite3.connect(self.app.config["DATABASE_PATH"]) as db:
             db.execute("UPDATE players SET elo=899, matches_played=9 WHERE id IN (%s)" %
                        ",".join("?" for _ in self.player_ids[:6]), self.player_ids[:6])

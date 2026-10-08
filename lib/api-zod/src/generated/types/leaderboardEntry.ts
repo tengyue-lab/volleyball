@@ -5,11 +5,18 @@
  * Volleyball player and match management API
  * OpenAPI spec version: 0.1.0
  */
-import type { RankLabel } from './rankLabel';
+import type { CompetitiveTier } from './competitiveTier';
+import type { LeaderboardEntryMostPlayedPosition } from './leaderboardEntryMostPlayedPosition';
 
 export interface LeaderboardEntry {
   id: number;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  placement: number;
   name: string;
-  rank: RankLabel | null;
-  provisional: boolean;
+  /** @nullable */
+  mostPlayedPosition: LeaderboardEntryMostPlayedPosition;
+  tier: CompetitiveTier;
 }

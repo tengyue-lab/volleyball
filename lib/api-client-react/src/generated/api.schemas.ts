@@ -6,6 +6,61 @@
  * OpenAPI spec version: 0.1.0
  */
 /**
+ * @nullable
+ */
+export type LeaderboardEntryMostPlayedPosition = typeof LeaderboardEntryMostPlayedPosition[keyof typeof LeaderboardEntryMostPlayedPosition] | null;
+
+
+export const LeaderboardEntryMostPlayedPosition = {
+  Setter: 'Setter',
+  Outside_Hitter: 'Outside Hitter',
+  Middle_Blocker: 'Middle Blocker',
+  Opposite: 'Opposite',
+  Libero: 'Libero',
+} as const;
+
+export type CompetitiveTier = typeof CompetitiveTier[keyof typeof CompetitiveTier];
+
+
+export const CompetitiveTier = {
+  Iron: 'Iron',
+  Bronze: 'Bronze',
+  Silver: 'Silver',
+  Gold: 'Gold',
+  Platinum: 'Platinum',
+  Diamond: 'Diamond',
+  Masters: 'Masters',
+} as const;
+
+export interface LeaderboardEntry {
+  id: number;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  placement: number;
+  name: string;
+  /** @nullable */
+  mostPlayedPosition: LeaderboardEntryMostPlayedPosition;
+  tier: CompetitiveTier;
+}
+
+export interface HealthStatus {
+  status: string;
+}
+
+export type Position = typeof Position[keyof typeof Position];
+
+
+export const Position = {
+  Setter: 'Setter',
+  Outside_Hitter: 'Outside Hitter',
+  Middle_Blocker: 'Middle Blocker',
+  Opposite: 'Opposite',
+  Libero: 'Libero',
+} as const;
+
+/**
  * Derived from ELO, null when hidden or not recorded in legacy history.
  * @nullable
  */
@@ -32,28 +87,6 @@ export const RankLabel = {
   Diamond_2: 'Diamond 2',
   Diamond_1: 'Diamond 1',
   Masters: 'Masters',
-} as const;
-
-export interface LeaderboardEntry {
-  id: number;
-  name: string;
-  rank: RankLabel | null;
-  provisional: boolean;
-}
-
-export interface HealthStatus {
-  status: string;
-}
-
-export type Position = typeof Position[keyof typeof Position];
-
-
-export const Position = {
-  Setter: 'Setter',
-  Outside_Hitter: 'Outside Hitter',
-  Middle_Blocker: 'Middle Blocker',
-  Opposite: 'Opposite',
-  Libero: 'Libero',
 } as const;
 
 export interface Player {

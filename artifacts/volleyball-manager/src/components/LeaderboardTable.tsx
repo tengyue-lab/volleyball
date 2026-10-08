@@ -1,14 +1,37 @@
 import type { LeaderboardEntry } from '@workspace/api-client-react';
-import { RankBadge } from './RankBadge';
 
-/** The API supplies rating order; public rows never need numeric ratings. */
+function PlayerDetails({ player }: { player: LeaderboardEntry }) {
+  return <div className="podium-player-details">
+    <strong className="podium-player-name">{player.name}</strong>
+    <span className="podium-player-position" title={player.mostPlayedPosition ? undefined : 'Position history unavailable'}>
+      {player.mostPlayedPosition ?? '—'}
+    </span>
+    <span className="leaderboard-tier">{player.tier}</span>
+  </div>;
+}
+
 export default function LeaderboardTable({ players }: { players: LeaderboardEntry[] }) {
-  return <div className="table-wrap"><table className="data-table leaderboard-table" role="table" aria-label="Public player rankings">
-    <thead role="rowgroup"><tr role="row"><th role="columnheader" scope="col">Rank</th><th role="columnheader" scope="col">Player</th><th role="columnheader" scope="col">Provisional status</th></tr></thead>
-    <tbody role="rowgroup">{players.map((player) => <tr role="row" key={player.id} data-testid={`row-ranking-${player.id}`}>
-      <td role="cell" data-label="Rank"><RankBadge rank={player.rank} testId={`badge-rank-${player.id}`} /></td>
-      <td role="cell" data-label="Player"><div className="player-name">{player.name}</div></td>
-      <td role="cell" data-label="Provisional status">{player.provisional && <span className="rank-badge rank-provisional">Provisional</span>}</td>
-    </tr>)}</tbody>
-  </table></div>;
+  const podiumPlaces = [2, 1, 3];
+  const lowerPlaces = players.filter((player) => player.placement > 3)
+    .sort((a, b) => a.placement - b.placement);
+
+  return <div className="community-leaderboard" aria-label="Public top five leaderboard" data-testid="leaderboard-top-five">
+    <ol className="leaderboard-podium" aria-label="Top three podium">
+      {podiumPlaces.map((place) => {
+        const player = players.find((candidate) => candidate.placement === place);
+        return player ? <li className={`podium-player podium-place-${place}`} key={player.id} data-testid={`leaderboard-place-${place}`}>
+          <PlayerDetails player={player} />
+          <div className="podium-block" aria-label={`Place number ${place}`}>
+            <span className="podium-place-number">#{place}</span>
+          </div>
+        </li> : <li className="podium-player podium-player-empty" key={`empty-${place}`} aria-hidden="true" />;
+      })}
+    </ol>
+    {lowerPlaces.length > 0 && <ol className="leaderboard-lower-places" aria-label="Fourth and fifth place">
+      {lowerPlaces.map((player) => <li className="leaderboard-lower-row" key={player.id} data-testid={`leaderboard-place-${player.placement}`}>
+        <span className="leaderboard-lower-number">#{player.placement}</span>
+        <PlayerDetails player={player} />
+      </li>)}
+    </ol>}
+  </div>;
 }

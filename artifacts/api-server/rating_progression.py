@@ -21,6 +21,11 @@ def rank_for_elo(elo: int) -> str:
     raise ValueError("ELO must be nonnegative.")
 
 
+def tier_for_elo(elo: int) -> str:
+    """Return the existing rank tier without its division, where applicable."""
+    return rank_for_elo(elo).split(" ", 1)[0]
+
+
 def k_for_matches(matches_played: int) -> int:
     """Count BEFORE this result: the tenth placement match still uses K=60."""
     if matches_played < 0:

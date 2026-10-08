@@ -250,13 +250,18 @@ export const GetPlayerEloHistoryResponse = zod.array(GetPlayerEloHistoryResponse
 
 
 /**
- * @summary List public leaderboard tiers in rating order
+ * @summary List the public top five established players in rating order
  */
+export const getLeaderboardResponsePlacementMax = 5;
+
+
+
 export const GetLeaderboardResponseItem = zod.object({
   "id": zod.number().int(),
+  "placement": zod.number().int().min(1).max(getLeaderboardResponsePlacementMax),
   "name": zod.string(),
-  "rank": zod.union([zod.literal('Iron 3'),zod.literal('Iron 2'),zod.literal('Iron 1'),zod.literal('Bronze 3'),zod.literal('Bronze 2'),zod.literal('Bronze 1'),zod.literal('Silver 3'),zod.literal('Silver 2'),zod.literal('Silver 1'),zod.literal('Gold 3'),zod.literal('Gold 2'),zod.literal('Gold 1'),zod.literal('Platinum 3'),zod.literal('Platinum 2'),zod.literal('Platinum 1'),zod.literal('Diamond 3'),zod.literal('Diamond 2'),zod.literal('Diamond 1'),zod.literal('Masters'),zod.literal(null)]).nullable().describe('Derived from ELO, null when hidden or not recorded in legacy history.'),
-  "provisional": zod.boolean()
+  "mostPlayedPosition": zod.union([zod.literal('Setter'),zod.literal('Outside Hitter'),zod.literal('Middle Blocker'),zod.literal('Opposite'),zod.literal('Libero'),zod.literal(null)]).nullable(),
+  "tier": zod.enum(['Iron', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Masters'])
 })
 export const GetLeaderboardResponse = zod.array(GetLeaderboardResponseItem)
 

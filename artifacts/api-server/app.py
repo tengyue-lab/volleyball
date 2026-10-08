@@ -4,7 +4,7 @@ The SQLite database is stored alongside this service so the app has no
 external database requirement.
 """
 
-from collections import Counter
+from collections import Counter, defaultdict
 from contextlib import contextmanager
 from datetime import date, datetime, timezone
 import json
@@ -16,7 +16,7 @@ from typing import Any, Iterator
 
 from flask import Flask, current_app, jsonify, request
 from privacy_auth import initialize_auth_schema, install_privacy
-from rating_progression import STARTING_ELO, is_provisional, k_for_matches, rank_for_elo, rank_movement
+from rating_progression import PLACEMENT_MATCHES, STARTING_ELO, is_provisional, k_for_matches, rank_for_elo, rank_movement, tier_for_elo
 
 
 POSITIONS = (
@@ -213,15 +213,55 @@ def replay_priority(connection: sqlite3.Connection, player_ids: list[int]) -> No
         connection.execute("UPDATE players SET priority_since = ? WHERE id = ?", (pending_since, player_id))
 
 
-def serialize_player(row: sqlite3.Row) -> dict[str, Any]:
+def completed_match_history(connection: sqlite3.Connection) -> tuple[Counter[int], dict[int, str]]:
+    """Count actual completed appearances and reliable assigned-role history."""
+    match_counts: Counter[int] = Counter()
+    role_counts: dict[int, Counter[str]] = defaultdict(Counter)
+    role_history_reliable: dict[int, bool] = {}
+    rows = connection.execute(
+        "SELECT team_a_json, team_b_json FROM matches WHERE status = 'completed' ORDER BY id"
+    ).fetchall()
+    for row in rows:
+        match_roles: dict[int, list[Any]] = defaultdict(list)
+        for team_json in (row["team_a_json"], row["team_b_json"]):
+            for player in json.loads(team_json):
+                match_roles[player["id"]].append(player.get("assignedPosition"))
+        for player_id, assigned_positions in match_roles.items():
+            match_counts[player_id] += 1
+            is_valid_assignment = (
+                len(assigned_positions) == 1 and assigned_positions[0] in POSITIONS
+            )
+            role_history_reliable.setdefault(player_id, True)
+            if not is_valid_assignment:
+                role_history_reliable[player_id] = False
+            else:
+                role_counts[player_id][assigned_positions[0]] += 1
+
+    most_played: dict[int, str] = {}
+    for player_id, counts in role_counts.items():
+        if counts and role_history_reliable.get(player_id, False):
+            # POSITIONS order is the deterministic tie-break order.
+            most_played[player_id] = max(
+                POSITIONS,
+                key=lambda position: (counts[position], -POSITIONS.index(position)),
+            )
+    return match_counts, most_played
+
+
+def serialize_player(
+    row: sqlite3.Row, completed_matches: int | None = None
+) -> dict[str, Any]:
+    displayed_matches = (
+        row["matches_played"] if completed_matches is None else completed_matches
+    )
     return {
         "id": row["id"],
         "name": row["name"],
         "positions": json.loads(row["positions_json"]),
         "elo": row["elo"],
         "rank": rank_for_elo(row["elo"]),
-        "matchesPlayed": row["matches_played"],
-        "provisional": is_provisional(row["matches_played"]),
+        "matchesPlayed": displayed_matches,
+        "provisional": is_provisional(displayed_matches),
         "eloPublic": bool(row["elo_public"]),
         "createdAt": row["created_at"],
         "preferencesConfirmed": bool(row["preferences_confirmed"]),
@@ -553,7 +593,10 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             rows = connection.execute(
                 "SELECT * FROM players ORDER BY name COLLATE NOCASE, id"
             ).fetchall()
-        return jsonify([serialize_player(row) for row in rows])
+            completed_counts, _ = completed_match_history(connection)
+        return jsonify([
+            serialize_player(row, completed_counts.get(row["id"], 0)) for row in rows
+        ])
 
     @app.post("/api/players")
     def create_player():
@@ -582,7 +625,7 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             row = connection.execute(
                 "SELECT * FROM players WHERE id = ?", (cursor.lastrowid,)
             ).fetchone()
-        return jsonify(serialize_player(row)), 201
+        return jsonify(serialize_player(row, completed_matches=0)), 201
 
     @app.get("/api/players/<int:player_id>")
     def get_player(player_id: int):
@@ -590,9 +633,10 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             row = connection.execute(
                 "SELECT * FROM players WHERE id = ?", (player_id,)
             ).fetchone()
+            completed_counts, _ = completed_match_history(connection)
         if row is None:
             return jsonify({"error": "Player not found."}), 404
-        return jsonify(serialize_player(row))
+        return jsonify(serialize_player(row, completed_counts.get(player_id, 0)))
 
     @app.patch("/api/players/<int:player_id>")
     def update_player(player_id: int):
@@ -626,7 +670,8 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             updated = connection.execute(
                 "SELECT * FROM players WHERE id = ?", (player_id,)
             ).fetchone()
-        return jsonify(serialize_player(updated))
+            completed_counts, _ = completed_match_history(connection)
+        return jsonify(serialize_player(updated, completed_counts.get(player_id, 0)))
 
     @app.delete("/api/players/<int:player_id>")
     def delete_player(player_id: int):
@@ -647,14 +692,23 @@ def create_app(database_path: str | Path | None = None) -> Flask:
     @app.get("/api/leaderboard")
     def get_leaderboard():
         with database() as connection:
+            completed_counts, most_played_positions = completed_match_history(connection)
             rows = connection.execute(
-                "SELECT * FROM players WHERE elo_public=1 ORDER BY elo DESC, name COLLATE NOCASE, id LIMIT 10"
+                "SELECT * FROM players WHERE elo_public=1 ORDER BY elo DESC, name COLLATE NOCASE, id"
             ).fetchall()
+        established = [
+            row for row in rows
+            if completed_counts.get(row["id"], 0) >= PLACEMENT_MATCHES
+        ][:5]
         return jsonify([
-            {"id": row["id"], "name": row["name"],
-             "rank": rank_for_elo(row["elo"]),
-             "provisional": is_provisional(row["matches_played"])}
-            for row in rows
+            {
+                "id": row["id"],
+                "placement": index,
+                "name": row["name"],
+                "mostPlayedPosition": most_played_positions.get(row["id"]),
+                "tier": tier_for_elo(row["elo"]),
+            }
+            for index, row in enumerate(established, start=1)
         ])
 
     @app.get("/api/players/<int:player_id>/elo-history")
@@ -755,7 +809,11 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             rows = connection.execute(
                 f"SELECT * FROM players WHERE id IN ({placeholders})", all_ids
             ).fetchall()
-            players_by_id = {row["id"]: serialize_player(row) for row in rows}
+            completed_counts, _ = completed_match_history(connection)
+            players_by_id = {
+                row["id"]: serialize_player(row, completed_counts.get(row["id"], 0))
+                for row in rows
+            }
             missing_ids = [player_id for player_id in all_ids if player_id not in players_by_id]
             if missing_ids:
                 return jsonify(
@@ -910,7 +968,14 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             rows = connection.execute(
                 f"SELECT * FROM players WHERE id IN ({placeholders})", all_ids
             ).fetchall()
-            players_by_id = {row["id"]: serialize_player(row) for row in rows}
+            completed_counts, _ = completed_match_history(connection)
+            progression_counts = {
+                row["id"]: row["matches_played"] for row in rows
+            }
+            players_by_id = {
+                row["id"]: serialize_player(row, completed_counts.get(row["id"], 0))
+                for row in rows
+            }
             if any(player_id not in players_by_id for player_id in all_ids):
                 return jsonify(
                     {"error": "A roster player no longer exists, so ELO cannot be updated."}
@@ -918,7 +983,17 @@ def create_app(database_path: str | Path | None = None) -> Flask:
 
             team_a_players = [players_by_id[player_id] for player_id in team_a_ids]
             team_b_players = [players_by_id[player_id] for player_id in team_b_ids]
-            elo_updates = calculate_elo_updates(team_a_players, team_b_players, winner)
+            rating_team_a_players = [
+                {**player, "matchesPlayed": progression_counts[player["id"]]}
+                for player in team_a_players
+            ]
+            rating_team_b_players = [
+                {**player, "matchesPlayed": progression_counts[player["id"]]}
+                for player in team_b_players
+            ]
+            elo_updates = calculate_elo_updates(
+                rating_team_a_players, rating_team_b_players, winner
+            )
             completed_at = utc_now()
             completion_order = connection.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM elo_history").fetchone()[0]
             for update in elo_updates:

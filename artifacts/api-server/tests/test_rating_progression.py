@@ -9,7 +9,7 @@ from pathlib import Path
 import test_match_results as results
 from app import calculate_elo_updates, create_app, initialize_database
 from auth_client import SignedClient
-from rating_progression import k_for_matches, rank_for_elo, rank_movement
+from rating_progression import k_for_matches, rank_for_elo, rank_movement, tier_for_elo
 
 
 class RatingRulesTests(unittest.TestCase):
@@ -80,6 +80,7 @@ class ProgressionIntegrationTests(unittest.TestCase):
     create_match = results.MatchResultTests.create_match
     complete = results.MatchResultTests.complete
     profile = results.MatchResultTests.profile
+    record_completed_roster = results.MatchResultTests.record_completed_roster
 
     def set_state(self, ids, elo, count):
         with sqlite3.connect(self.app.config["DATABASE_PATH"]) as connection:
@@ -132,6 +133,13 @@ class ProgressionIntegrationTests(unittest.TestCase):
         self.assertEqual(initial["matchesPlayed"], 0)
 
     def test_promotions_demotions_exact_private_reversal_and_audit(self):
+        for appearance in range(10):
+            assignments = {
+                player_id: results.ROLE_FORMATION[index % len(results.ROLE_FORMATION)]
+                for index, player_id in enumerate(self.player_ids)
+                if appearance < (9 if index < 6 else 10)
+            }
+            self.record_completed_roster(assignments)
         self.set_state(self.player_ids[:6], 899, 9)
         self.set_state(self.player_ids[6:], 900, 10)
         target = self.player_ids[0]
@@ -195,26 +203,31 @@ class ProgressionIntegrationTests(unittest.TestCase):
         self.assertEqual(self.client.post(f"/api/matches/{first['id']}/reopen").status_code, 200)
         self.assertEqual(self.profile(self.player_ids[0])["matchesPlayed"], 0)
 
-    def test_public_provisional_masters_private_filter_and_top_ten(self):
-        self.set_state(self.player_ids, 800, 0)
-        self.set_state([self.player_ids[0]], 2300, 9)
-        self.set_state([self.player_ids[1]], 2400, 61)
-        self.set_state([self.player_ids[2]], 2500, 0)
-        for target in self.player_ids[1:3]:
-            self.client.patch(f"/api/players/{target}", json={"eloPublic": False})
-        leaderboard = self.anonymous().get("/api/leaderboard").get_json()
-        self.assertEqual(len(leaderboard), 10)
-        self.assertEqual(leaderboard[0]["id"], self.player_ids[0])
-        self.assertEqual(leaderboard[0]["rank"], "Masters")
-        self.assertTrue(leaderboard[0]["provisional"])
-        self.assertTrue(all(p["provisional"] for p in leaderboard))
-        self.assertFalse({p["id"] for p in leaderboard} & set(self.player_ids[1:3]))
-        # Restore one private high rank; cap still applies, without excluding placements.
-        self.client.patch(f"/api/players/{self.player_ids[1]}", json={"eloPublic": True})
-        updated = self.anonymous().get("/api/leaderboard").get_json()
-        self.assertEqual(len(updated), 10)
-        self.assertFalse(updated[0]["provisional"])
-        self.assertEqual(updated[1]["id"], self.player_ids[0])
+    def test_public_tier_labels_group_existing_rank_divisions(self):
+        expected_tiers = {
+            0: "Iron",
+            599: "Iron",
+            799: "Iron",
+            800: "Bronze",
+            1099: "Bronze",
+            1100: "Silver",
+            1399: "Silver",
+            1400: "Gold",
+            1699: "Gold",
+            1700: "Platinum",
+            1999: "Platinum",
+            2000: "Diamond",
+            2299: "Diamond",
+            2300: "Masters",
+            100000: "Masters",
+        }
+        for elo, expected in expected_tiers.items():
+            with self.subTest(elo=elo):
+                self.assertEqual(tier_for_elo(elo), expected)
+        with self.assertRaises(ValueError):
+            tier_for_elo(-1)
+        self.assertEqual(rank_for_elo(800), "Bronze 3")
+        self.assertEqual(rank_for_elo(2300), "Masters")
 
     def test_private_rank_redaction_owner_admin_other_snapshots_and_deleted_history(self):
         target = self.player_ids[0]
@@ -317,7 +330,7 @@ class ProgressionMigrationTests(unittest.TestCase):
                 self.assertIsNone(history[field])
             self.assertEqual((history["eloBefore"], history["eloAfter"], history["changeAmount"]), (1000, 1016, 16))
             self.assertEqual(client.get("/api/matches/1").get_json()["teamA"], roster)
-            self.assertEqual(client.get("/api/players/1").get_json()["matchesPlayed"], 0)
+            self.assertEqual(client.get("/api/players/1").get_json()["matchesPlayed"], 1)
             self.assertEqual(client.post("/api/matches/1/reopen").status_code, 200)
             self.assertEqual(client.get("/api/players/1").get_json()["elo"], 1000)
             self.assertEqual(client.get("/api/players/1").get_json()["matchesPlayed"], 0)

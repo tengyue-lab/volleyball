@@ -41,22 +41,35 @@ test('admin/profile badge retains optional numeric rating without duplicate labe
   assert.ok(!render(RankBadge, { rank: null, rating: 1620 }).includes('1,620'));
 });
 
-test('public leaderboard renders only tiers, names and provisional status in server order', async () => {
+test('public leaderboard uses the 2–1–3 podium and compact fourth/fifth rows', async () => {
   const tableSource = await readFile(new URL('../src/components/LeaderboardTable.tsx', import.meta.url), 'utf8');
   const transformedTable = await transformWithEsbuild(tableSource, 'LeaderboardTable.tsx', { loader: 'tsx', jsx: 'automatic', format: 'esm' });
-  const tableCode = transformedTable.code
-    .replaceAll('"react/jsx-runtime"', JSON.stringify(import.meta.resolve('react/jsx-runtime')))
-    .replace('"./RankBadge"', JSON.stringify(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`));
+  const tableCode = transformedTable.code.replaceAll(
+    '"react/jsx-runtime"',
+    JSON.stringify(import.meta.resolve('react/jsx-runtime')),
+  );
   const { default: Table } = await import(`data:text/javascript;base64,${Buffer.from(tableCode).toString('base64')}`);
   const markup = render(Table, { players: [
-    { id: 2, name: 'Zed', rank: 'Masters', provisional: false },
-    { id: 1, name: 'Amy', rank: 'Bronze 3', provisional: true },
+    { id: 1, placement: 1, name: 'Amy', mostPlayedPosition: 'Outside Hitter', tier: 'Masters' },
+    { id: 2, placement: 2, name: 'Zed', mostPlayedPosition: 'Setter', tier: 'Diamond' },
+    { id: 3, placement: 3, name: 'Mina', mostPlayedPosition: 'Libero', tier: 'Platinum' },
+    { id: 4, placement: 4, name: 'Theo', mostPlayedPosition: 'Middle Blocker', tier: 'Gold' },
+    { id: 5, placement: 5, name: 'John', mostPlayedPosition: null, tier: 'Silver' },
   ] });
-  assert.ok(markup.includes('Masters') && markup.includes('Bronze 3'));
-  assert.equal((markup.match(/>Provisional</g) ?? []).length, 1);
-  assert.ok(markup.indexOf('Zed') < markup.indexOf('Amy'));
-  assert.equal((markup.match(/role="columnheader"/g) ?? []).length, 3);
-  assert.ok(!/ELO|rating|elo-meter|Top preference|rank-top|>1<|>2</.test(markup.replaceAll('rank-label-and-rating', '')));
+  assert.ok(markup.indexOf('data-testid="leaderboard-place-2"') < markup.indexOf('data-testid="leaderboard-place-1"'));
+  assert.ok(markup.indexOf('data-testid="leaderboard-place-1"') < markup.indexOf('data-testid="leaderboard-place-3"'));
+  assert.ok(markup.includes('data-testid="leaderboard-place-4"'));
+  assert.ok(markup.includes('data-testid="leaderboard-place-5"'));
+  assert.ok(markup.includes('Outside Hitter') && markup.includes('Masters'));
+  assert.ok(markup.includes('Middle Blocker') && markup.includes('Gold'));
+  assert.ok(markup.includes('>—</span>'));
+  assert.equal((markup.match(/podium-place-number/g) ?? []).length, 3);
+  assert.ok(!/ELO|rating|elo-meter|preference|Provisional|avatar|medal|crown|win rate/i.test(markup));
+
+  const css = await readFile(new URL('../src/index.css', import.meta.url), 'utf8');
+  assert.ok(css.includes('.leaderboard-podium{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))'));
+  assert.ok(css.includes('@media(max-width:420px)'));
+  assert.ok(css.includes('.podium-player-name{max-width:100%'));
 });
 
 test('result promotions and demotions expose transition text and distinct styling', () => {

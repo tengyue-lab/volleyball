@@ -1079,7 +1079,7 @@ export const getGetLeaderboardUrl = () => {
 }
 
 /**
- * @summary List public leaderboard tiers in rating order
+ * @summary List the public top five established players in rating order
  */
 export const getLeaderboard = async ( options?: Parameters<typeof customFetch>[1]): Promise<LeaderboardEntry[]> => {
 
@@ -1126,7 +1126,7 @@ export type GetLeaderboardQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List public leaderboard tiers in rating order
+ * @summary List the public top five established players in rating order
  */
 
 export function useGetLeaderboard<TData = Awaited<ReturnType<typeof getLeaderboard>>, TError = ErrorType<unknown>>(

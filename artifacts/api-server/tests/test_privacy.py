@@ -15,6 +15,7 @@ class PrivacyTests(unittest.TestCase):
     create_match = results.MatchResultTests.create_match
     complete = results.MatchResultTests.complete
     profile = results.MatchResultTests.profile
+    record_completed_roster = results.MatchResultTests.record_completed_roster
 
     def anonymous(self):
         return SignedClient(self.app, None, None)
@@ -28,24 +29,34 @@ class PrivacyTests(unittest.TestCase):
 
     def test_default_public_cap_and_filter_before_limit(self):
         self.assertTrue(all(p["eloPublic"] for p in self.client.get("/api/players").get_json()))
+        for _ in range(10):
+            self.record_completed_roster({
+                player_id: results.ROLE_FORMATION[index % len(results.ROLE_FORMATION)]
+                for index, player_id in enumerate(self.player_ids)
+            })
         expected_ids = [p["id"] for p in sorted(
             self.client.get("/api/players").get_json(),
             key=lambda p: (-p["elo"], p["name"].casefold(), p["id"])
         )]
         before = self.anonymous().get("/api/leaderboard").get_json()
-        self.assertEqual(len(before), 10)
-        self.assertEqual([p["id"] for p in before], expected_ids[:10])
+        self.assertEqual(len(before), 5)
+        self.assertEqual([p["id"] for p in before], expected_ids[:5])
         hidden = self.player_ids[0]
         self.client.patch(f"/api/players/{hidden}", json={"eloPublic": False})
         after = self.anonymous().get("/api/leaderboard").get_json()
-        self.assertEqual(len(after), 10)
+        self.assertEqual(len(after), 5)
         self.assertNotIn(hidden, [p["id"] for p in after])
-        self.assertIn(expected_ids[10], [p["id"] for p in after])
+        self.assertEqual([p["id"] for p in after], [player_id for player_id in expected_ids if player_id != hidden][:5])
         self.assertEqual(self.client.get("/api/leaderboard").get_json(), after)
         self.client.patch(f"/api/players/{hidden}", json={"eloPublic": True})
         self.assertEqual(self.anonymous().get("/api/leaderboard").get_json(), before)
 
     def test_fewer_and_no_public_players(self):
+        for _ in range(10):
+            self.record_completed_roster({
+                player_id: results.ROLE_FORMATION[index % len(results.ROLE_FORMATION)]
+                for index, player_id in enumerate(self.player_ids)
+            })
         for player_id in self.player_ids[2:]:
             self.client.patch(f"/api/players/{player_id}", json={"eloPublic": False})
         self.assertEqual(len(self.anonymous().get("/api/leaderboard").get_json()), 2)
@@ -133,16 +144,106 @@ class PrivacyTests(unittest.TestCase):
         self.assertFalse(self.profile(target)["eloPublic"])
 
     def test_leaderboard_minimal_contract_for_anonymous_owner_other_and_admin(self):
+        for _ in range(10):
+            self.record_completed_roster({
+                player_id: results.ROLE_FORMATION[index % len(results.ROLE_FORMATION)]
+                for index, player_id in enumerate(self.player_ids)
+            })
         owner = self.owner(self.player_ids[0])
         other = SignedClient(self.app, "user_test_social", "social@example.test")
         for viewer in (self.anonymous(), owner, other, self.client):
             response = viewer.get("/api/leaderboard")
             self.assertEqual(response.status_code, 200)
-            self.assertEqual(len(response.get_json()), 10)
+            self.assertEqual(len(response.get_json()), 5)
+            self.assertEqual(
+                [row["placement"] for row in response.get_json()], [1, 2, 3, 4, 5]
+            )
             for row in response.get_json():
-                self.assertEqual(set(row), {"id", "name", "rank", "provisional"})
-                self.assertTrue(row["rank"])
-                self.assertTrue(row["provisional"])
+                self.assertEqual(
+                    set(row),
+                    {"id", "placement", "name", "mostPlayedPosition", "tier"},
+                )
+                self.assertTrue(row["tier"])
+                self.assertNotIn("elo", row)
+
+    def test_public_top_five_uses_completed_history_tiers_and_assigned_roles(self):
+        counts = {player_id: 10 for player_id in self.player_ids}
+        provisional_id = self.player_ids[0]
+        counts[provisional_id] = 9
+        role_sequences = {
+            self.player_ids[1]: ["Outside Hitter"] * 6 + ["Setter"] * 4,
+            self.player_ids[3]: ["Outside Hitter"] * 5 + ["Setter"] * 5,
+            self.player_ids[5]: ["Setter"] * 9 + [None],
+        }
+        for appearance in range(10):
+            assignments = {}
+            for index, player_id in enumerate(self.player_ids):
+                if appearance >= counts[player_id]:
+                    continue
+                sequence = role_sequences.get(player_id)
+                assignments[player_id] = (
+                    sequence[appearance] if sequence is not None
+                    else results.ROLE_FORMATION[index % len(results.ROLE_FORMATION)]
+                )
+            self.record_completed_roster(assignments)
+
+        ratings = {
+            self.player_ids[0]: 3000,  # Highest rating, but only nine completed matches.
+            self.player_ids[1]: 2300,  # Masters
+            self.player_ids[2]: 2500,  # Higher than the public leaders, but private.
+            self.player_ids[3]: 2000,  # Diamond
+            self.player_ids[4]: 1700,  # Platinum
+            self.player_ids[5]: 1400,  # Gold; one incomplete role history.
+            self.player_ids[6]: 1100,  # Silver
+        }
+        with sqlite3.connect(self.app.config["DATABASE_PATH"]) as connection:
+            for player_id, elo in ratings.items():
+                connection.execute(
+                    "UPDATE players SET elo = ? WHERE id = ?", (elo, player_id)
+                )
+        private_id = self.player_ids[2]
+        self.client.patch(f"/api/players/{private_id}", json={"eloPublic": False})
+
+        provisional_profile = self.client.get(
+            f"/api/players/{provisional_id}"
+        ).get_json()
+        established_profile = self.client.get(
+            f"/api/players/{self.player_ids[1]}"
+        ).get_json()
+        self.assertEqual(
+            (provisional_profile["matchesPlayed"], provisional_profile["provisional"]),
+            (9, True),
+        )
+        self.assertEqual(
+            (established_profile["matchesPlayed"], established_profile["provisional"]),
+            (10, False),
+        )
+
+        leaderboard = self.anonymous().get("/api/leaderboard").get_json()
+        expected_ids = [
+            self.player_ids[1],
+            self.player_ids[3],
+            self.player_ids[4],
+            self.player_ids[5],
+            self.player_ids[6],
+        ]
+        self.assertEqual([entry["id"] for entry in leaderboard], expected_ids)
+        self.assertEqual([entry["placement"] for entry in leaderboard], [1, 2, 3, 4, 5])
+        self.assertEqual(
+            [entry["tier"] for entry in leaderboard],
+            ["Masters", "Diamond", "Platinum", "Gold", "Silver"],
+        )
+        self.assertEqual(leaderboard[0]["mostPlayedPosition"], "Outside Hitter")
+        self.assertEqual(leaderboard[1]["mostPlayedPosition"], "Setter")
+        self.assertIsNone(leaderboard[3]["mostPlayedPosition"])
+        self.assertNotIn(provisional_id, [entry["id"] for entry in leaderboard])
+        self.assertNotIn(private_id, [entry["id"] for entry in leaderboard])
+        self.assertTrue(all(
+            set(entry) == {
+                "id", "placement", "name", "mostPlayedPosition", "tier"
+            }
+            for entry in leaderboard
+        ))
 
     def test_match_rating_information_admin_only_even_for_public_players_and_owner(self):
         target = self.player_ids[0]
