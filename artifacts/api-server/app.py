@@ -18,6 +18,7 @@ from flask import Flask, current_app, g, jsonify, request
 from privacy_auth import initialize_auth_schema, install_privacy
 from rating_progression import PLACEMENT_MATCHES, STARTING_ELO, is_provisional, k_for_matches, rank_for_elo, rank_movement, tier_elo_ranges, tier_for_elo
 from rating_accounting import AccountingConflict, completed_counts, initialize_accounting, require_aligned_counts, record_adjustment, reversal_rating
+from position_rotation import initialize_rotation_schema, position_rotation_history
 
 
 POSITIONS = (
@@ -101,6 +102,7 @@ def initialize_database(database_path: str) -> None:
             connection.execute("ALTER TABLE matches ADD COLUMN completed_at TEXT")
         if "match_date" not in match_columns:
             connection.execute("ALTER TABLE matches ADD COLUMN match_date TEXT")
+        initialize_rotation_schema(connection)
         player_columns = {row[1] for row in connection.execute("PRAGMA table_info(players)")}
         if "matches_played" not in player_columns:
             connection.execute(
@@ -310,6 +312,8 @@ def serialize_match(
         "createdAt": row["created_at"],
         "eloChanges": elo_changes or [],
         "matchDate": row["match_date"],
+        "playDisposition": row["play_disposition"],
+        "firstPlayedAt": row["first_played_at"],
     }
 
 
@@ -317,6 +321,7 @@ def draft_can_edit(connection: sqlite3.Connection, row: sqlite3.Row) -> bool:
     """Check authoritative history inside the mutation's immediate transaction."""
     return (
         row["status"] == "upcoming"
+        and row["play_disposition"] != "voided"
         and row["score_a"] is None and row["score_b"] is None
         and row["completed_at"] is None and row["winner"] is None
         and connection.execute(
@@ -602,6 +607,12 @@ def create_app(database_path: str | Path | None = None) -> Flask:
     def health_check():
         return jsonify({"status": "ok"})
 
+    @app.get("/api/admin/position-rotation-history")
+    def get_position_rotation_history():
+        with database() as connection:
+            history = position_rotation_history(connection, POSITIONS)
+        return jsonify(history)
+
     @app.get("/api/players")
     def list_players():
         with database() as connection:
@@ -805,7 +816,7 @@ def create_app(database_path: str | Path | None = None) -> Flask:
     def list_matches():
         with database() as connection:
             rows = connection.execute(
-                "SELECT * FROM matches ORDER BY id DESC"
+                "SELECT * FROM matches WHERE play_disposition IS NULL OR play_disposition != 'voided' ORDER BY id DESC"
             ).fetchall()
             matches = [serialize_match(row, draft_editable=draft_can_edit(connection, row)) for row in rows]
         return jsonify(matches)
@@ -1030,6 +1041,8 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             ).fetchone()
             if match is None:
                 return jsonify({"error": "Match not found."}), 404
+            if match["play_disposition"] == "voided":
+                return jsonify({"error": "This match was marked never played. Create a new match to record a game."}), 409
             if match["status"] != "upcoming":
                 return jsonify(
                     {"error": "This match is already completed. Reopen it before changing the result."}
@@ -1062,10 +1075,20 @@ def create_app(database_path: str | Path | None = None) -> Flask:
 
             team_a_players = [players_by_id[player_id] for player_id in team_a_ids]
             team_b_players = [players_by_id[player_id] for player_id in team_b_ids]
+            # A legacy correction cannot establish when (or whether) the game
+            # actually happened. Preserve unknown appearance metadata.
+            legacy_correction = match["play_disposition"] is None and connection.execute(
+                "SELECT 1 FROM elo_history WHERE match_id = ? AND action = 'result' LIMIT 1",
+                (match_id,),
+            ).fetchone() is not None
+            play_disposition = None if legacy_correction else "played"
+            first_played_at = match["first_played_at"]
             elo_updates = calculate_elo_updates(
                 team_a_players, team_b_players, winner
             )
             completed_at = utc_now()
+            if not legacy_correction and first_played_at is None:
+                first_played_at = completed_at
             completion_order = connection.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM elo_history").fetchone()[0]
             for update in elo_updates:
                 connection.execute(
@@ -1102,10 +1125,12 @@ def create_app(database_path: str | Path | None = None) -> Flask:
                 """
                 UPDATE matches
                 SET score_a = ?, score_b = ?, winner = ?,
-                    completed_at = ?, status = 'completed'
+                    completed_at = ?, status = 'completed',
+                    play_disposition = ?,
+                    first_played_at = ?
                 WHERE id = ?
                 """,
-                (score_a, score_b, winner, completed_at, match_id),
+                (score_a, score_b, winner, completed_at, play_disposition, first_played_at, match_id),
             )
             updated_match = connection.execute(
                 "SELECT * FROM matches WHERE id = ?", (match_id,)
@@ -1121,6 +1146,32 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             if error:
                 return jsonify({"error": error}), status
         return jsonify(serialize_match(reopened_match))
+
+    @app.post("/api/matches/<int:match_id>/void")
+    def void_match(match_id: int):
+        """Explicit never-played designation; retain snapshots and reversal audits."""
+        with database() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            match = connection.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+            if match is None:
+                return jsonify({"error": "Match not found."}), 404
+            if match["status"] == "completed":
+                match, error, status = reverse_match_result(connection, match_id)
+                if error:
+                    return jsonify({"error": error}), status
+            elif (
+                active_match_elo_changes(connection, match_id)
+                or any(match[field] is not None for field in ("score_a", "score_b", "winner", "completed_at"))
+                or connection.execute(
+                    "SELECT 1 FROM priority_events WHERE match_id = ? AND active = 1", (match_id,)
+                ).fetchone()
+            ):
+                return jsonify({"error": "The match has inconsistent active result state. Review it before voiding."}), 409
+            connection.execute(
+                "UPDATE matches SET play_disposition = 'voided' WHERE id = ?", (match_id,)
+            )
+            updated = connection.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
+        return jsonify(serialize_match(updated))
 
     @app.errorhandler(404)
     def json_not_found(_error):

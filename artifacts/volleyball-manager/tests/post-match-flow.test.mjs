@@ -97,7 +97,10 @@ test('Create Match keeps Date, Players and Teams as distinct stages', () => {
   assert.match(createMatchSource, /{stepVisibility\.teams && !showTeamModeSelection && mode === 'auto' && <div className="pool-actions">/);
   assert.match(createMatchSource, /{stepVisibility\.teams && !showTeamModeSelection && mode === 'manual' && <>/);
   assert.match(createMatchSource, /{mode !== null && !modeChoiceVisible && <div className="team-columns">/);
-  assert.match(createMatchSource, /balanceMatchTeams\(selectedPlayers\)/);
+  assert.match(createMatchSource, /balanceMatchTeams\(selectedPlayers, new Map/);
+  assert.match(createMatchSource, /await getPositionRotationHistory\(\)/);
+  assert.match(createMatchSource, /if \(generation !== balanceGeneration\.current\) return/);
+  assert.match(balanceButton, /disabled=\{balancing \|\|/);
   assert.match(balanceButton, /onClick=\{autoBalance\}/);
   assert.match(balanceButton, /Generate Balanced Teams/);
   assert.doesNotMatch(createMatchSource, /button-elo-balance|function eloBalance/);

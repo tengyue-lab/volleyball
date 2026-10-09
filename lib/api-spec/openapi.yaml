@@ -454,8 +454,61 @@ paths:
           description: Match not found
         "409":
           description: Result cannot be reversed because a later match depends on it
+  /admin/position-rotation-history:
+    get:
+      operationId: getPositionRotationHistory
+      tags: [admin]
+      summary: Last three actually played appearances per player, newest first
+      responses:
+        "200":
+          description: Administrator-only immutable preference-rank history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RotationHistoryEntry"
+        "401":
+          description: Sign in required
+        "403":
+          description: Administrator access required
+  /matches/{matchId}/void:
+    parameters:
+      - name: matchId
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      operationId: voidMatch
+      tags: [matches]
+      summary: Mark a match never played, reversing any active result first
+      responses:
+        "200":
+          description: Voided match with snapshots and reversal audits preserved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Match"
+        "404":
+          description: Match not found
+        "409":
+          description: Result reversal blocked or inconsistent match state
 components:
   schemas:
+    RotationHistoryEntry:
+      type: object
+      required: [playerId, recentPreferenceRanks]
+      properties:
+        playerId:
+          type: integer
+        recentPreferenceRanks:
+          type: array
+          maxItems: 3
+          items:
+            type: ["integer", "null"]
+            minimum: 1
+            maximum: 5
     LeaderboardEntry:
       type: object
       additionalProperties: false
@@ -609,6 +662,14 @@ components:
       type: object
       required: [id, teamA, teamB, scoreA, scoreB, status, winner, completedAt, createdAt, eloChanges]
       properties:
+        playDisposition:
+          type: ["string", "null"]
+          enum: ["played", "voided", null]
+          description: Actual-play history independent of reversible result status; null for unknown legacy data.
+        firstPlayedAt:
+          type: ["string", "null"]
+          format: date-time
+          description: First successful completion timestamp, preserved through corrections.
         draftEditable:
           type: boolean
           description: Upcoming roster has never had a result or completion event.

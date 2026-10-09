@@ -60,6 +60,7 @@ interface TeamPlan {
   rankCost: number;
   specialistCost: number;
   priorityScore: number;
+  rotationCost: number;
 }
 
 interface PlanSuffix {
@@ -69,12 +70,14 @@ interface PlanSuffix {
   rankCost: number;
   specialistCost: number;
   priorityScore: number;
+  rotationCost: number;
 }
 
 interface BalanceCandidate extends MatchBalanceResult {
   filledPlayerElo: number;
   underdogRuleViolation: number;
   underdogCoreGap: number;
+  strengthGap: number;
 }
 
 const SIX_PLAYER_COUNTS: Record<MatchPosition, number> = {
@@ -92,6 +95,21 @@ const SEVEN_PLAYER_COUNTS: Record<MatchPosition, number> = {
 
 function totalElo(players: readonly MatchBalancePlayer[]) {
   return players.reduce((sum, player) => sum + player.elo, 0);
+}
+
+/** Same-sized teams retain total-ELO comparisons; 6/7 uses result-model means. */
+function strengthGap(a: readonly MatchBalancePlayer[], b: readonly MatchBalancePlayer[]) {
+  return a.length === b.length
+    ? Math.abs(totalElo(a) - totalElo(b))
+    : Math.abs(totalElo(a) / a.length - totalElo(b) / b.length);
+}
+
+/** Newest appearance first. Unknown ranks occupy their slot, never invented. */
+export function rotationPressure(history: readonly (number | null)[]): number {
+  return history.slice(0, 3).reduce<number>((sum, rank, index) => (
+    sum + (Number.isInteger(rank) && rank !== null && rank >= 1 && rank <= 5
+      ? (3 - index) * Math.max(0, rank - 2) : 0)
+  ), 0) / 6;
 }
 
 function compareRoleIndexes(a: readonly number[], b: readonly number[]) {
@@ -112,6 +130,7 @@ function assignTeamRoles(
   requiredCounts: Record<MatchPosition, number>,
   priorityWeights: ReadonlyMap<number, number>,
   lockedRoles: ReadonlyMap<number, MatchPosition> = new Map(),
+  rotationWeights: ReadonlyMap<number, number> = new Map(),
 ): TeamPlan {
   const orderedPlayers = [...players].sort((a, b) => a.id - b.id);
   const initialCounts = MATCH_POSITIONS.map((position) => requiredCounts[position]);
@@ -123,7 +142,7 @@ function assignTeamRoles(
     }
     if (index === orderedPlayers.length) {
       return remaining.every((count) => count === 0)
-        ? { preferredCount: 0, filledPlayerElo: 0, roleIndexes: [], rankCost: 0, specialistCost: 0, priorityScore: 0 }
+        ? { preferredCount: 0, filledPlayerElo: 0, roleIndexes: [], rankCost: 0, specialistCost: 0, priorityScore: 0, rotationCost: 0 }
         : null;
     }
 
@@ -155,6 +174,8 @@ function assignTeamRoles(
         rankCost: suffix.rankCost + displacement,
         specialistCost: suffix.specialistCost + (preferred ? rank * (6 - viableCount) : 0),
         priorityScore: suffix.priorityScore + (preferred && rank === 0 ? priorityWeights.get(player.id) ?? 0 : 0),
+        rotationCost: suffix.rotationCost + (preferred
+          ? (rotationWeights.get(player.id) ?? 0) * Math.max(0, rank - 1) : 0),
       };
       if (
         !best ||
@@ -167,8 +188,11 @@ function assignTeamRoles(
               candidate.specialistCost < best.specialistCost ||
               (candidate.specialistCost === best.specialistCost && (
                 candidate.filledPlayerElo > best.filledPlayerElo ||
-                (candidate.filledPlayerElo === best.filledPlayerElo &&
-                  compareRoleIndexes(candidate.roleIndexes, best.roleIndexes) < 0)
+                (candidate.filledPlayerElo === best.filledPlayerElo && (
+                  candidate.rotationCost < best.rotationCost ||
+                  (candidate.rotationCost === best.rotationCost &&
+                    compareRoleIndexes(candidate.roleIndexes, best.roleIndexes) < 0)
+                ))
               ))
             ))
           ))
@@ -203,6 +227,7 @@ function assignTeamRoles(
     rankCost: plan.rankCost,
     specialistCost: plan.specialistCost,
     priorityScore: plan.priorityScore,
+    rotationCost: plan.rotationCost,
   };
 }
 
@@ -261,6 +286,7 @@ function makeRoleAssignments(
   teamBPlayers: readonly MatchBalancePlayer[],
   playerCount: number,
   lockedRoles: ReadonlyMap<number, MatchPosition> = new Map(),
+  rotationWeights: ReadonlyMap<number, number> = new Map(),
 ): MatchRoleAssignments & { filledPlayerElo: number } {
   const pending = [...teamAPlayers, ...teamBPlayers].filter((player) => player.preferredRolePriority)
     .sort((a, b) => b.elo - a.elo || (a.prioritySince ?? '').localeCompare(b.prioritySince ?? '') || a.id - b.id);
@@ -272,12 +298,14 @@ function makeRoleAssignments(
     teamAPlayers.length === 7 ? SEVEN_PLAYER_COUNTS : SIX_PLAYER_COUNTS,
     priorityWeights,
     lockedRoles,
+    rotationWeights,
   );
   const teamBPlan = assignTeamRoles(
     teamBPlayers,
     teamBPlayers.length === 7 ? SEVEN_PLAYER_COUNTS : SIX_PLAYER_COUNTS,
     priorityWeights,
     lockedRoles,
+    rotationWeights,
   );
   const roleById = new Map(
     [...teamAPlan.assignments, ...teamBPlan.assignments]
@@ -377,7 +405,7 @@ function compareBalancedCandidates(a: BalanceCandidate, b: BalanceCandidate) {
   return (
     a.underdogRuleViolation - b.underdogRuleViolation ||
     a.underdogCoreGap - b.underdogCoreGap ||
-    a.totalEloGap - b.totalEloGap ||
+    a.strengthGap - b.strengthGap ||
     compareIdLists(a.teamAIds, b.teamAIds)
   );
 }
@@ -401,14 +429,44 @@ function compareUnderdogToSeed(candidate: BalanceCandidate, seed: BalanceCandida
  *    Preferred assignments first; use the highest-ELO remaining players for
  *    any Filled slots and report the shortage by role.
  * 2. Keep those role assignments fixed, then search every reachable exchange
- *    of players assigned the same role. Choose the smallest team-total ELO gap.
+ *    of players assigned the same role. Compare averages for unequal rosters.
  * 3. For a 13-player pool, keep the assigned Libero with the lower-ELO
  *    six-player core whenever that is possible.
  */
 export function balanceMatchTeams(
   players: readonly MatchBalancePlayer[],
+  history: ReadonlyMap<number, readonly (number | null)[]> = new Map(),
 ): MatchBalanceResult {
-  return buildMatchTeams(players, []);
+  const roster = buildMatchTeams(players, []);
+  const weights = new Map(players.map((player) => [
+    player.id, Math.round(rotationPressure(history.get(player.id) ?? []) * 6),
+  ]));
+  if (![...weights.values()].some((weight) => weight > 0)) return roster;
+
+  // Fairness runs AFTER strength balancing, without moving team membership.
+  // Freeze the 13-player Libero so its core/underdog safeguard cannot change.
+  const lockedRoles = new Map<number, MatchPosition>();
+  if (players.length === 13) {
+    for (const assignment of [...roster.teamAAssignments, ...roster.teamBAssignments]) {
+      if (assignment.assignedPosition === 'Libero') lockedRoles.set(assignment.playerId, 'Libero');
+    }
+  }
+  const rotated = makeRoleAssignments(
+    players.filter((p) => roster.teamAIds.includes(p.id)),
+    players.filter((p) => roster.teamBIds.includes(p.id)),
+    players.length, lockedRoles, weights,
+  );
+  // Never buy rotation fairness by worsening any existing assignment objective.
+  const filledElo = [...roster.teamAAssignments, ...roster.teamBAssignments]
+    .filter((a) => a.assignmentStatus === 'filled')
+    .reduce((sum, a) => sum + players.find((p) => p.id === a.playerId)!.elo, 0);
+  if (rotated.preferredCount !== roster.preferredCount ||
+      rotated.rankCost !== roster.rankCost ||
+      rotated.priorityScore !== roster.priorityScore ||
+      rotated.specialistCost !== roster.specialistCost ||
+      rotated.filledPlayerElo !== filledElo) return roster;
+  const { filledPlayerElo: _filledElo, ...roles } = rotated;
+  return { ...roster, ...roles };
 }
 
 /** Manual Fill: only locks constrain team membership and played roles. */
@@ -507,6 +565,7 @@ function buildMatchTeams(
         teamBIds: teamB.map((player) => player.id),
         underdogRuleViolation: underdog.violation,
         underdogCoreGap: underdog.gap,
+        strengthGap: strengthGap(teamA, teamB),
       };
       if (!seed || compareSeedCandidates(candidate, seed) < 0) seed = candidate;
     }
@@ -561,6 +620,10 @@ export function balanceAssignedTeams(
     filledPlayerElo: allRosterAssignments.filter((a) => a.assignmentStatus === 'filled').reduce((sum, a) => sum + playerById.get(a.playerId)!.elo, 0),
     underdogRuleViolation: initialUnderdog.violation,
     underdogCoreGap: initialUnderdog.gap,
+    strengthGap: strengthGap(
+      players.filter((p) => roster.teamAIds.includes(p.id)),
+      players.filter((p) => roster.teamBIds.includes(p.id)),
+    ),
   };
   // STEP 2 — Same-role exchanges only. Role labels and Preferred/Filled status
   // travel with each player while the two teams' exact formations stay intact.
@@ -613,6 +676,7 @@ export function balanceAssignedTeams(
       underdogCoreGetsLibero: underdog.satisfied,
       underdogRuleViolation: underdog.violation,
       underdogCoreGap: underdog.gap,
+      strengthGap: strengthGap(teamAPlayers, teamBPlayers),
       filledPlayerElo: allAssignments
         .filter((assignment) => assignment.assignmentStatus === 'filled')
         .reduce((sum, assignment) => sum + (playerById.get(assignment.playerId)?.elo ?? 0), 0),

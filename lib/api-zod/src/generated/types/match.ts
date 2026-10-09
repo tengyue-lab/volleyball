@@ -6,11 +6,22 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EloHistoryEntry } from './eloHistoryEntry';
+import type { MatchPlayDisposition } from './matchPlayDisposition';
 import type { MatchPlayerSnapshot } from './matchPlayerSnapshot';
 import type { MatchStatus } from './matchStatus';
 import type { MatchWinner } from './matchWinner';
 
 export interface Match {
+  /**
+     * Actual-play history independent of reversible result status; null for unknown legacy data.
+     * @nullable
+     */
+  playDisposition?: MatchPlayDisposition;
+  /**
+     * First successful completion timestamp, preserved through corrections.
+     * @nullable
+     */
+  firstPlayedAt?: Date | null;
   /** Upcoming roster has never had a result or completion event. */
   draftEditable?: boolean;
   /**

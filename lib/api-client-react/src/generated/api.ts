@@ -37,7 +37,8 @@ import type {
   PlayerPreferencesUpdate,
   PlayerUpdate,
   RankTierRange,
-  RatingAdminAudit
+  RatingAdminAudit,
+  RotationHistoryEntry
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -1969,5 +1970,156 @@ export const useReopenMatchResult = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getReopenMatchResultMutationOptions(options));
+    }
+
+export const getGetPositionRotationHistoryUrl = () => {
+
+
+
+
+  return `/api/admin/position-rotation-history`
+}
+
+/**
+ * @summary Last three actually played appearances per player, newest first
+ */
+export const getPositionRotationHistory = async ( options?: Parameters<typeof customFetch>[1]): Promise<RotationHistoryEntry[]> => {
+
+  return customFetch<RotationHistoryEntry[]>(getGetPositionRotationHistoryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPositionRotationHistoryQueryKey = () => {
+    return [
+    `/api/admin/position-rotation-history`
+    ] as const;
+    }
+
+
+export const getGetPositionRotationHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getPositionRotationHistory>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPositionRotationHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPositionRotationHistoryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPositionRotationHistory>>> = ({ signal }) => getPositionRotationHistory({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPositionRotationHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPositionRotationHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getPositionRotationHistory>>>
+export type GetPositionRotationHistoryQueryError = ErrorType<void>
+
+
+/**
+ * @summary Last three actually played appearances per player, newest first
+ */
+
+export function useGetPositionRotationHistory<TData = Awaited<ReturnType<typeof getPositionRotationHistory>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPositionRotationHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPositionRotationHistoryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getVoidMatchUrl = (matchId: number,) => {
+
+
+
+
+  return `/api/matches/${matchId}/void`
+}
+
+/**
+ * @summary Mark a match never played, reversing any active result first
+ */
+export const voidMatch = async (matchId: number, options?: Parameters<typeof customFetch>[1]): Promise<Match> => {
+
+  return customFetch<Match>(getVoidMatchUrl(matchId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getVoidMatchMutationKey = () => ['voidMatch'] as const;
+
+export const getVoidMatchMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof voidMatch>>, TError,VoidMatchMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof voidMatch>>, TError,VoidMatchMutationVariables, TContext> => {
+
+const mutationKey = getVoidMatchMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof voidMatch>>, VoidMatchMutationVariables> = (props) => {
+          const {matchId} = props ?? {};
+
+          return  voidMatch(matchId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type VoidMatchMutationResult = NonNullable<Awaited<ReturnType<typeof voidMatch>>>
+
+    export type VoidMatchMutationError = ErrorType<void>
+    export type VoidMatchMutationVariables = {matchId: number}
+
+    /**
+ * @summary Mark a match never played, reversing any active result first
+ */
+export const useVoidMatch = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof voidMatch>>, TError,VoidMatchMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof voidMatch>>,
+        TError,
+        VoidMatchMutationVariables,
+        TContext
+      > => {
+      return useMutation(getVoidMatchMutationOptions(options));
     }
 

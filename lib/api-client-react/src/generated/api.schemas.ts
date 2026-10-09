@@ -5,6 +5,16 @@
  * Volleyball player and match management API
  * OpenAPI spec version: 0.1.0
  */
+export interface RotationHistoryEntry {
+  playerId: number;
+  /**
+     * @maxItems 3
+     * @items.minimum 1
+     * @items.maximum 5
+     */
+  recentPreferenceRanks: (number | null)[];
+}
+
 /**
  * @nullable
  */
@@ -179,6 +189,18 @@ export const MatchStatus = {
 } as const;
 
 /**
+ * Actual-play history independent of reversible result status; null for unknown legacy data.
+ * @nullable
+ */
+export type MatchPlayDisposition = typeof MatchPlayDisposition[keyof typeof MatchPlayDisposition] | null;
+
+
+export const MatchPlayDisposition = {
+  played: 'played',
+  voided: 'voided',
+} as const;
+
+/**
  * @nullable
  */
 export type MatchWinner = typeof MatchWinner[keyof typeof MatchWinner] | null;
@@ -297,6 +319,16 @@ export interface EloHistoryEntry {
 }
 
 export interface Match {
+  /**
+     * Actual-play history independent of reversible result status; null for unknown legacy data.
+     * @nullable
+     */
+  playDisposition?: MatchPlayDisposition;
+  /**
+     * First successful completion timestamp, preserved through corrections.
+     * @nullable
+     */
+  firstPlayedAt?: string | null;
   /** Upcoming roster has never had a result or completion event. */
   draftEditable?: boolean;
   /**

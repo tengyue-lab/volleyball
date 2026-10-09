@@ -9,3 +9,4 @@
 - [Analysis-only verification](analysis-only-verification.md) — isolate application bootstrap as well as test fixtures; verify live-source and data fingerprints.
 - [Rating adjustments](rating-adjustment-policy.md) — reversals preserve recorded adjustment amounts; unknown legacy changes or negative restoration require review.
 - [Workflow restart ordering](workflow-restart-order.md) — finish heavy verification before sequential managed-service restarts to avoid rebuild/startup timeouts.
+- [Position rotation policy](position-rotation-fairness.md) — last three actual appearances survive absences and score corrections; fairness stays below formation, specialists and ELO.

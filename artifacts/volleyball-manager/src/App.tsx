@@ -23,6 +23,7 @@ import {
   useGetMatch,
   useGetPlayer,
   useGetAdminRatingAudit,
+  getPositionRotationHistory,
   useListMatches,
   useListPlayers,
   useReopenMatchResult,
@@ -65,6 +66,7 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import MatchDeleteConfirmation from '@/components/MatchDeleteConfirmation';
 import MatchHistoryDetails from '@/components/MatchHistoryDetails';
 import MatchHistoryDateGroups from '@/components/MatchHistoryDateGroups';
+import VoidMatchButton from '@/components/VoidMatchButton';
 import LeaderboardTable from '@/components/LeaderboardTable';
 import CompetitiveRanksDialog from '@/components/CompetitiveRanksDialog';
 import { MatchSessionProvider, useMatchSession } from '@/match-session-context';
@@ -477,6 +479,9 @@ function MatchDetail({ matchId, onMatchCompleted }: { matchId: number; onMatchCo
   if (query.isLoading) return <div className="state-card">Loading saved roster…</div>;
   if (query.isError || !query.data) return <div className="state-card" role="alert">Roster details could not be loaded. <button className="text-button" onClick={() => void query.refetch()}>Try again</button></div>;
   const match = query.data;
+  if (match.playDisposition === 'voided') {
+    return <p className="field-hint">This match was marked never played. Its saved roster and audit history are retained.</p>;
+  }
   const onMatchUpdated = (updated: Match) => refreshAfterMatchUpdate(queryClient, matchId, updated);
   function saveResult(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -645,7 +650,7 @@ function MatchCard({ match, expanded, onToggle, beforeDelete, onMatchCompleted }
     <div className="versus-row"><div className="versus-team">Team A<span>{match.teamA.length} players</span>{completed && <strong>{match.scoreA}</strong>}</div><span className="versus-word">{completed ? '–' : 'VS'}</span><div className="versus-team">Team B<span>{match.teamB.length} players</span>{completed && <strong>{match.scoreB}</strong>}</div></div>
     <div className="match-card-foot"><span>{completed ? `${match.winner} won` : 'Match roster saved'}</span>{!completed && <button className="text-button" onClick={onToggle} aria-expanded={expanded} data-testid={`button-view-match-${match.id}`}>{expanded ? 'Hide details' : completed ? 'View results' : isAdmin ? 'Enter score' : 'View roster'} <ChevronDown size={12} style={{ verticalAlign: 'middle', transform: expanded ? 'rotate(180deg)' : undefined }} /></button>}</div>
     {completed && <HistoryDetails match={match} />}
-    {isAdmin && <div className="history-actions">{completed && <EditResultButton matchId={match.id} />}<DeleteMatchButton match={match} beforeDelete={beforeDelete} /></div>}
+    {isAdmin && <div className="history-actions">{completed && <EditResultButton matchId={match.id} />}<DeleteMatchButton match={match} beforeDelete={beforeDelete} /><VoidMatchButton match={match} beforeVoid={beforeDelete} /></div>}
     {!completed && expanded && <MatchDetail matchId={match.id} onMatchCompleted={onMatchCompleted} />}
   </article>;
 }
@@ -679,6 +684,9 @@ function AdminMatchesPage() {
   const [createError, setCreateError] = useState('');
   const [createdMatchId, setCreatedMatchId] = useState<number | null>(null);
   const saveInFlight = useRef(false);
+  const balanceInFlight = useRef(false);
+  const balanceGeneration = useRef(0);
+  const [balancing, setBalancing] = useState(false);
   const players: RatedPlayer[] = (playersQuery.data ?? []).filter(isRatedPlayer);
   const carried = reconcileSession(draft, playersQuery.data ?? []);
   const savedPreferencesUnchanged = draft.sourcePlayers.every((previous) => {
@@ -701,6 +709,7 @@ function AdminMatchesPage() {
   const selectedIds = new Set(selectedPlayerIds);
   const selectedPlayers = players.filter((player) => selectedIds.has(player.id));
   const profilesFingerprint = JSON.stringify(selectedPlayers.map((p) => [p.id,p.positions,p.elo,p.preferencesConfirmed,p.preferredRolePriority,p.prioritySince]));
+  useEffect(() => () => { balanceGeneration.current += 1; }, [profilesFingerprint, mode, showTeamModeSelection]);
   const assigned = new Set([...teamA, ...teamB]);
   const unassignedSelected = selectedPlayers.filter((player) => !assigned.has(player.id));
   const teamAPlayers = selectedPlayers.filter((player) => teamA.includes(player.id));
@@ -929,18 +938,33 @@ function AdminMatchesPage() {
     if (Number.isInteger(draggedId)) swapPlayers(draggedId, targetId);
   }
 
-  function autoBalance() {
+  async function autoBalance() {
+    if (balanceInFlight.current) return;
     if (poolCount < 12 || poolCount > 14) return;
     if (locks.length) { setCreateError('Clear Roles before switching to automatic balancing.'); return; }
+    const generation = ++balanceGeneration.current;
+    balanceInFlight.current = true;
+    setBalancing(true);
     try {
-    const result = balanceMatchTeams(selectedPlayers);
+    // Fetch fresh appearances on every generation, including newly completed
+    // games from other sessions. Failure must not silently use stale history.
+    const history = await getPositionRotationHistory();
+    if (generation !== balanceGeneration.current) return;
+    const result = balanceMatchTeams(selectedPlayers, new Map(
+      history.map((entry) => [entry.playerId, entry.recentPreferenceRanks]),
+    ));
     setTeamA(result.teamAIds);
     setTeamB(result.teamBIds);
     setBalanceResult(result);
     setBalancedProfiles(profilesFingerprint);
     setSwapSelectionId(null);
     setCreateError('');
-    } catch (error) { setCreateError(messageFor(error)); }
+    } catch (error) {
+      if (generation === balanceGeneration.current) setCreateError(messageFor(error));
+    } finally {
+      balanceInFlight.current = false;
+      setBalancing(false);
+    }
   }
 
   function lockPlayer(playerId: number, position: MatchPosition): boolean {
@@ -1180,7 +1204,7 @@ function AdminMatchesPage() {
               </div>
             </section> : <>
             {stepVisibility.teams && !showTeamModeSelection && mode === 'auto' && <div className="pool-actions">
-              <button className="button button-primary touch-44" onClick={autoBalance} disabled={poolCount < 12 || poolCount > 14} data-testid="button-auto-balance"><WandSparkles size={14} />Generate Balanced Teams</button>
+              <button className="button button-primary touch-44" onClick={autoBalance} disabled={balancing || poolCount < 12 || poolCount > 14} data-testid="button-auto-balance"><WandSparkles size={14} />{balancing ? 'Generating…' : 'Generate Balanced Teams'}</button>
               <button className="button button-quiet touch-44" onClick={clearTeamAssignments} disabled={teamA.length === 0 && teamB.length === 0 && locks.length === 0} data-testid="button-clear-teams">Clear Selection</button>
             </div>}
             {stepVisibility.teams && !showTeamModeSelection && mode === 'manual' && <>

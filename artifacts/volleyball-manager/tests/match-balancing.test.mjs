@@ -7,6 +7,7 @@ import {
   fillMatchTeams,
   MATCH_POSITIONS,
   validateMatchLocks,
+  rotationPressure,
 } from '../src/match-balancing.ts';
 import { preferredLockPositions } from '../src/match-lock-options.ts';
 import { getManualSwapCandidates, getSameRoleSwapCandidates, preserveSwappedRoles, swapManualTeamMembers } from '../src/match-swap.ts';
@@ -449,4 +450,110 @@ test('priority cannot turn an unselected role into Preferred and does not mutate
     assert.equal(a.assignmentStatus, p.positions.includes(a.assignedPosition) ? 'preferred' : 'filled');
     assert.equal(a.preferenceRank, a.assignmentStatus === 'filled' ? null : p.positions.indexOf(a.assignedPosition)+1);
   }
+});
+
+test('rotation pressure is bounded, newest-weighted and forgets after three good appearances', () => {
+  assert.equal(rotationPressure([]), 0);
+  assert.equal(rotationPressure([5, 5, 5, 5]), 3);
+  assert.equal(rotationPressure([1, 2, null]), 0);
+  assert.equal(rotationPressure([3]), 0.5);
+  assert.ok(rotationPressure([5, 2, 2]) > rotationPressure([2, 2, 5]));
+  assert.equal(rotationPressure([null, 0, 6]), 0);
+  assert.equal(rotationPressure([NaN, 3.5, -1]), 0);
+  let window = [5, 4, 3];
+  let previous = rotationPressure(window);
+  for (const rank of [2, 1, 2]) {
+    window = [rank, ...window].slice(0, 3);
+    assert.ok(rotationPressure(window) < previous);
+    previous = rotationPressure(window);
+  }
+  assert.equal(previous, 0);
+});
+
+const FLEXIBLE_POOL = Array.from({ length: 12 }, (_, i) => ({
+  id: i + 1, elo: 800, preferencesConfirmed: true,
+  positions: ['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite'],
+}));
+
+test('three games rotate lower-ranked work without changing teams, quality, or ELO', () => {
+  const pool = structuredClone(FLEXIBLE_POOL);
+  const before = structuredClone(pool);
+  const baseline = balanceMatchTeams(pool);
+  const target = [...assignmentsById(baseline).values()].find((a) => a.preferenceRank === 4);
+  const history = new Map([[target.playerId, [4, 4, 4]]]);
+  const oldPressure = rotationPressure(history.get(target.playerId));
+  for (let game = 0; game < 3; game += 1) {
+    const result = balanceMatchTeams(pool, history);
+    assert.deepEqual(result.teamAIds, baseline.teamAIds);
+    assert.deepEqual(result.teamBIds, baseline.teamBIds);
+    for (const metric of ['preferredCount', 'rankCost', 'specialistCost', 'priorityScore', 'totalEloGap']) {
+      assert.equal(result[metric], baseline[metric]);
+    }
+    assertFormation(result.teamAAssignments, 6);
+    assertFormation(result.teamBAssignments, 6);
+    if (game === 0) assert.ok(assignmentsById(result).get(target.playerId).preferenceRank <= 2);
+    assert.deepEqual(balanceMatchTeams([...pool].reverse(), history), result);
+    for (const a of assignmentsById(result).values()) {
+      history.set(a.playerId, [a.preferenceRank, ...(history.get(a.playerId) ?? [])].slice(0, 3));
+    }
+  }
+  assert.ok(rotationPressure(history.get(target.playerId)) < oldPressure);
+  assert.deepEqual(pool, before);
+});
+
+test('unknown/new-player history is neutral and manual roles and Fill ignore rotation', () => {
+  const baseline = balanceMatchTeams(FLEXIBLE_POOL);
+  assert.deepEqual(balanceMatchTeams(FLEXIBLE_POOL, new Map([[6, [null, 99, 0]]])), baseline);
+  const withUnusedHistory = FLEXIBLE_POOL.map((p) => ({ ...p, recentPreferenceRanks: [5, 5, 5] }));
+  assert.deepEqual(fillMatchTeams(withUnusedHistory, []), fillMatchTeams(FLEXIBLE_POOL, []));
+  assert.deepEqual(
+    assignMatchRoles(withUnusedHistory, baseline.teamAIds, baseline.teamBIds),
+    assignMatchRoles(FLEXIBLE_POOL, baseline.teamAIds, baseline.teamBIds),
+  );
+});
+
+test('rotation preserves 1–5 preference validation, specialists, formations and Filled fallback', () => {
+  for (const count of [1, 2, 3, 4, 5]) {
+    const pool = SINGLE_ROLE_POOL.map((p) => ({
+      ...p, positions: [...p.positions, ...MATCH_POSITIONS.filter((r) => !p.positions.includes(r))].slice(0, count),
+    }));
+    const baseline = balanceMatchTeams(pool);
+    const fair = balanceMatchTeams(pool, new Map(pool.map((p) => [p.id, [5, 4, 3]])));
+    for (const metric of ['preferredCount', 'rankCost', 'specialistCost', 'priorityScore', 'totalEloGap']) {
+      assert.equal(fair[metric], baseline[metric]);
+    }
+    assertFormation(fair.teamAAssignments, 6);
+    assertFormation(fair.teamBAssignments, 6);
+  }
+  for (const count of [12, 13, 14]) {
+    const pool = [...ROLE_POOL,
+      { id: 13, elo: 1600, positions: ['Outside Hitter'], preferencesConfirmed: true },
+      { id: 14, elo: 800, positions: ['Outside Hitter'], preferencesConfirmed: true }].slice(0, count);
+    const baseline = balanceMatchTeams(pool);
+    const result = balanceMatchTeams(pool, new Map(pool.map((p) => [p.id, [5, 5, 5]])));
+    assertFormation(result.teamAAssignments, result.teamAIds.length);
+    assertFormation(result.teamBAssignments, result.teamBIds.length);
+    assert.deepEqual(result.positionShortages, baseline.positionShortages);
+    assert.equal(result.totalEloGap, baseline.totalEloGap);
+    assert.equal(result.specialistCost, baseline.specialistCost);
+    assert.equal(result.underdogCoreGetsLibero, baseline.underdogCoreGetsLibero);
+    if (count === 13) {
+      const libero = [...assignmentsById(baseline).values()].find((a) => a.assignedPosition === 'Libero');
+      assert.deepEqual(assignmentsById(result).get(libero.playerId), libero);
+    }
+  }
+});
+
+test('6/7 fixed-role balancing minimizes average ELO rather than an equal-total mismatch', () => {
+  const pool = SINGLE_ROLE_POOL.map((p) => ({ ...p, elo: p.id % 2 ? 800 : 1200 }));
+  pool.push({ id: 13, positions: ['Libero'], elo: 1600, preferencesConfirmed: true });
+  const a = [2, 4, 6, 8, 10, 12], b = [1, 3, 5, 7, 9, 11, 13];
+  const roster = { ...assignMatchRoles(pool, a, b), teamAIds: a, teamBIds: b };
+  const result = balanceAssignedTeams(pool, roster);
+  const sum = (ids) => ids.reduce((s, id) => s + pool.find((p) => p.id === id).elo, 0);
+  const averageGap = Math.abs(sum(result.teamAIds) / 6 - sum(result.teamBIds) / 7);
+  assert.ok(averageGap < 40);
+  assert.equal(result.totalEloGap, 800);
+  assert.equal(result.underdogCoreGetsLibero, true);
+  assert.deepEqual(assignmentsById(result), assignmentsById(roster));
 });
