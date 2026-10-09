@@ -7,7 +7,7 @@ Ranked matchmaking must retain Filled assignments for ordinary positional shorta
 
 **Why:** The user corrected the initial task draft to explicitly retain Filled fallback rather than reject shortage pools.
 
-**How to apply:** Distinguish intentional Filled roles from Preferred roles in matchmaking, saved assignments, API validation, warnings, and tests. Do not reintroduce a blanket selected-roles-only restriction.
+**How to apply:** Distinguish intentional Filled roles from Preferred roles in matchmaking, saved assignments, API validation, warnings, and tests. Do not reintroduce a blanket selected-roles-only restriction. The user reaffirmed that both Auto Balance and manual Fill retain this fallback when position-rotation fairness is added.
 
 Preferred-role priority is granted after a completed Filled assignment and cleared after a later completed Preferred assignment. Saving an upcoming roster neither grants nor consumes priority. Reopening a result must reverse its priority effects safely.
 
