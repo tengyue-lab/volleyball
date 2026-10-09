@@ -777,9 +777,9 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             rows = connection.execute(
                 "SELECT * FROM players WHERE elo_public=1 ORDER BY elo DESC, name COLLATE NOCASE, id"
             ).fetchall()
-        established = [
+        eligible_players = [
             row for row in rows
-            if completed_counts.get(row["id"], 0) >= PLACEMENT_MATCHES
+            if completed_counts.get(row["id"], 0) > 0
         ][:5]
         return jsonify([
             {
@@ -788,8 +788,9 @@ def create_app(database_path: str | Path | None = None) -> Flask:
                 "name": row["name"],
                 "mostPlayedPosition": most_played_positions.get(row["id"]),
                 "tier": tier_for_elo(row["elo"]),
+                "provisional": is_provisional(completed_counts[row["id"]]),
             }
-            for index, row in enumerate(established, start=1)
+            for index, row in enumerate(eligible_players, start=1)
         ])
 
     @app.get("/api/players/<int:player_id>/elo-history")

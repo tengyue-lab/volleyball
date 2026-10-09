@@ -53,6 +53,7 @@ export interface LeaderboardEntry {
   /** @nullable */
   mostPlayedPosition: LeaderboardEntryMostPlayedPosition;
   tier: CompetitiveTier;
+  provisional: boolean;
 }
 
 export interface RankTierRange {

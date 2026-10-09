@@ -47,15 +47,15 @@ test('public leaderboard renders up to five uniform rows in placement order', as
   const tableCode = transformedTable.code.replaceAll(
     '"react/jsx-runtime"',
     JSON.stringify(import.meta.resolve('react/jsx-runtime')),
-  );
+  ).replaceAll('"lucide-react"', JSON.stringify(import.meta.resolve('lucide-react')));
   const { default: Table } = await import(`data:text/javascript;base64,${Buffer.from(tableCode).toString('base64')}`);
   const markup = render(Table, { players: [
-    { id: 5, placement: 5, name: 'John', mostPlayedPosition: null, tier: 'Silver' },
-    { id: 2, placement: 2, name: 'Zed', mostPlayedPosition: 'Setter', tier: 'Diamond' },
-    { id: 1, placement: 1, name: 'Amy', mostPlayedPosition: 'Outside Hitter', tier: 'Masters' },
-    { id: 3, placement: 3, name: 'Mina', mostPlayedPosition: 'Libero', tier: 'Platinum' },
-    { id: 4, placement: 4, name: 'Theo', mostPlayedPosition: 'Middle Blocker', tier: 'Gold' },
-    { id: 6, placement: 6, name: 'Outside Top Five', mostPlayedPosition: 'Opposite', tier: 'Bronze' },
+    { id: 5, placement: 5, name: 'John', mostPlayedPosition: null, tier: 'Silver', provisional: true },
+    { id: 2, placement: 2, name: 'Zed', mostPlayedPosition: 'Setter', tier: 'Diamond', provisional: false },
+    { id: 1, placement: 1, name: 'Amy', mostPlayedPosition: 'Outside Hitter', tier: 'Masters', provisional: false },
+    { id: 3, placement: 3, name: 'Mina', mostPlayedPosition: 'Libero', tier: 'Platinum', provisional: false },
+    { id: 4, placement: 4, name: 'Theo', mostPlayedPosition: 'Middle Blocker', tier: 'Gold', provisional: false },
+    { id: 6, placement: 6, name: 'Outside Top Five', mostPlayedPosition: 'Opposite', tier: 'Bronze', provisional: true },
   ] });
   for (let place = 1; place < 5; place++) {
     assert.ok(markup.indexOf(`data-testid="leaderboard-place-${place}"`) < markup.indexOf(`data-testid="leaderboard-place-${place + 1}"`));
@@ -68,15 +68,19 @@ test('public leaderboard renders up to five uniform rows in placement order', as
   assert.ok(markup.includes('leaderboard-tier-masters'));
   assert.ok(markup.includes('leaderboard-tier-silver'));
   assert.ok(!markup.includes('Outside Top Five'));
-  assert.ok(!/ELO|rating|elo-meter|preference|Provisional|avatar|medal|crown|win rate|podium/i.test(markup));
+  assert.equal((markup.match(/Provisional/g) ?? []).length, 1);
+  assert.ok(markup.includes('data-testid="leaderboard-provisional-5"'));
+  assert.ok(markup.indexOf('leaderboard-player-name-line') < markup.indexOf('leaderboard-provisional'));
+  assert.ok(!/ELO|rating|elo-meter|preference|avatar|medal|crown|win rate|podium/i.test(markup));
 
   const css = await readFile(new URL('../src/index.css', import.meta.url), 'utf8');
   assert.ok(css.includes('.leaderboard-list{display:grid;gap:12px'));
   assert.ok(css.includes('@media(max-width:420px)'));
-  assert.ok(css.includes('.leaderboard-player-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'));
+  assert.ok(css.includes('.leaderboard-player-name{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'));
   assert.ok(css.includes('.leaderboard-place-1{background:#fcf8e9'));
   assert.ok(css.includes('.leaderboard-place-2{background:#f6f7f7'));
   assert.ok(css.includes('.leaderboard-place-3{background:#fbf2ed'));
+  assert.ok(css.includes('.leaderboard-provisional{flex:none;display:inline-flex'));
 });
 
 test('shared competitive-rank dialog uses server ranges and profile metrics have spacing', async () => {

@@ -321,7 +321,8 @@ export const GetLeaderboardResponseItem = zod.object({
   "placement": zod.number().int().min(1).max(getLeaderboardResponsePlacementMax),
   "name": zod.string(),
   "mostPlayedPosition": zod.union([zod.literal('Setter'),zod.literal('Outside Hitter'),zod.literal('Middle Blocker'),zod.literal('Opposite'),zod.literal('Libero'),zod.literal(null)]).nullable(),
-  "tier": zod.enum(['Iron', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Masters'])
+  "tier": zod.enum(['Iron', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Masters']),
+  "provisional": zod.boolean()
 })
 export const GetLeaderboardResponse = zod.array(GetLeaderboardResponseItem)
 

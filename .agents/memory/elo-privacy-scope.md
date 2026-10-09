@@ -27,6 +27,12 @@ The public social leaderboard should show rank tier only (not numbered places), 
 
 **How to apply:** Preserve leaderboard ranking calculations and the user's own current Profile access. Keep opt-in as leaderboard eligibility, set new players to private unless they explicitly opt in, and mask other players' exact ELO and division rank server-side. Restrict public display/data responses without changing stored ratings, authentication architecture, or result/deletion/reversal behavior.
 
+An opted-in player becomes public-leaderboard eligible after at least one completed match. Players with 1–9 completed matches rank normally among established players and show as Provisional; players with zero completed matches remain excluded.
+
+**Why:** The user approved displaying provisional players in the same ELO order but explicitly chose to keep unplayed accounts hidden until their first completed match.
+
+**How to apply:** Filter out zero-appearance players before assigning top-five placements, then sort all remaining public players with the existing ELO tie-breaks and derive provisional status from the existing ten-match threshold.
+
 Any signed-in account linked to a player may update preferred positions for its own linked player, including admin accounts. Profile preference updates must derive the target player from verified account linking; admin player-management edits remain a separate capability.
 
 **Why:** The user explicitly requested self-service preference editing for linked admins while preserving admin management in the Players tab and preventing a profile editor from targeting another player's record.

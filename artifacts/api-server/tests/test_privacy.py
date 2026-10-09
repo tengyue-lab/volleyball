@@ -363,15 +363,51 @@ class PrivacyTests(unittest.TestCase):
             for row in response.get_json():
                 self.assertEqual(
                     set(row),
-                    {"id", "placement", "name", "mostPlayedPosition", "tier"},
+                    {"id", "placement", "name", "mostPlayedPosition", "tier", "provisional"},
                 )
                 self.assertTrue(row["tier"])
                 self.assertNotIn("elo", row)
+                self.assertNotIn("matchesPlayed", row)
+                self.assertFalse(row["provisional"])
+
+    def test_unplayed_public_player_stays_hidden_then_appears_as_provisional(self):
+        target = self.player_ids[0]
+        self.client.patch(f"/api/players/{target}", json={"eloPublic": True})
+        with sqlite3.connect(self.app.config["DATABASE_PATH"]) as connection:
+            connection.execute("UPDATE players SET elo=5000 WHERE id=?", (target,))
+        self.assertNotIn(
+            target,
+            [row["id"] for row in self.anonymous().get("/api/leaderboard").get_json()],
+        )
+
+        roster = {
+            player_id: results.ROLE_FORMATION[index % len(results.ROLE_FORMATION)]
+            for index, player_id in enumerate(self.player_ids[:12])
+        }
+        self.record_completed_roster(roster)
+        first_appearance = next(
+            row for row in self.anonymous().get("/api/leaderboard").get_json()
+            if row["id"] == target
+        )
+        self.assertEqual(first_appearance["placement"], 1)
+        self.assertTrue(first_appearance["provisional"])
+        self.assertNotIn("elo", first_appearance)
+        self.assertNotIn("matchesPlayed", first_appearance)
+
+        for _ in range(9):
+            self.record_completed_roster(roster)
+        tenth_appearance = next(
+            row for row in self.anonymous().get("/api/leaderboard").get_json()
+            if row["id"] == target
+        )
+        self.assertFalse(tenth_appearance["provisional"])
 
     def test_public_top_five_uses_completed_history_tiers_and_assigned_roles(self):
         counts = {player_id: 10 for player_id in self.player_ids}
         provisional_id = self.player_ids[0]
+        private_id = self.player_ids[2]
         counts[provisional_id] = 9
+        counts[private_id] = 9
         role_sequences = {
             self.player_ids[1]: ["Outside Hitter"] * 6 + ["Setter"] * 4,
             self.player_ids[3]: ["Outside Hitter"] * 5 + ["Setter"] * 5,
@@ -403,7 +439,6 @@ class PrivacyTests(unittest.TestCase):
                 connection.execute(
                     "UPDATE players SET elo = ? WHERE id = ?", (elo, player_id)
                 )
-        private_id = self.player_ids[2]
         self.client.patch(f"/api/players/{private_id}", json={"eloPublic": False})
 
         provisional_profile = self.client.get(
@@ -423,26 +458,31 @@ class PrivacyTests(unittest.TestCase):
 
         leaderboard = self.anonymous().get("/api/leaderboard").get_json()
         expected_ids = [
+            provisional_id,
             self.player_ids[1],
             self.player_ids[3],
             self.player_ids[4],
             self.player_ids[5],
-            self.player_ids[6],
         ]
         self.assertEqual([entry["id"] for entry in leaderboard], expected_ids)
         self.assertEqual([entry["placement"] for entry in leaderboard], [1, 2, 3, 4, 5])
         self.assertEqual(
             [entry["tier"] for entry in leaderboard],
-            ["Masters", "Diamond", "Platinum", "Gold", "Silver"],
+            ["Masters", "Masters", "Diamond", "Platinum", "Gold"],
         )
-        self.assertEqual(leaderboard[0]["mostPlayedPosition"], "Outside Hitter")
-        self.assertEqual(leaderboard[1]["mostPlayedPosition"], "Setter")
-        self.assertIsNone(leaderboard[3]["mostPlayedPosition"])
-        self.assertNotIn(provisional_id, [entry["id"] for entry in leaderboard])
+        self.assertEqual(
+            [entry["provisional"] for entry in leaderboard],
+            [True, False, False, False, False],
+        )
+        by_id = {entry["id"]: entry for entry in leaderboard}
+        self.assertEqual(by_id[self.player_ids[1]]["mostPlayedPosition"], "Outside Hitter")
+        self.assertEqual(by_id[self.player_ids[3]]["mostPlayedPosition"], "Setter")
+        self.assertIsNone(by_id[self.player_ids[5]]["mostPlayedPosition"])
+        self.assertIn(provisional_id, by_id)
         self.assertNotIn(private_id, [entry["id"] for entry in leaderboard])
         self.assertTrue(all(
             set(entry) == {
-                "id", "placement", "name", "mostPlayedPosition", "tier"
+                "id", "placement", "name", "mostPlayedPosition", "tier", "provisional"
             }
             for entry in leaderboard
         ))
