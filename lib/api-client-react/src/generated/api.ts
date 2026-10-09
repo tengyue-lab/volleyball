@@ -30,6 +30,7 @@ import type {
   HealthStatus,
   LeaderboardEntry,
   Match,
+  MatchDateUpdate,
   MatchInput,
   MatchResultInput,
   Player,
@@ -1807,6 +1808,96 @@ export const useDeleteMatchDraft = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getDeleteMatchDraftMutationOptions(options));
+    }
+
+export const getUpdateCompletedMatchDateUrl = (matchId: number,) => {
+
+
+
+
+  return `/api/matches/${matchId}/date`
+}
+
+/**
+ * Updates only the match date. Does not modify scores, rosters, results, ELO, counters, audits, or recorded play order.
+ * @summary Correct the scheduled date of a completed match (admin only)
+ */
+export const updateCompletedMatchDate = async (matchId: number,
+    matchDateUpdate: MatchDateUpdate, options?: Parameters<typeof customFetch>[1]): Promise<Match> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<Match>(getUpdateCompletedMatchDateUrl(matchId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(matchDateUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateCompletedMatchDateMutationKey = () => ['updateCompletedMatchDate'] as const;
+
+export const getUpdateCompletedMatchDateMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCompletedMatchDate>>, TError,UpdateCompletedMatchDateMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCompletedMatchDate>>, TError,UpdateCompletedMatchDateMutationVariables, TContext> => {
+
+const mutationKey = getUpdateCompletedMatchDateMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCompletedMatchDate>>, UpdateCompletedMatchDateMutationVariables> = (props) => {
+          const {matchId,data} = props ?? {};
+
+          return  updateCompletedMatchDate(matchId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCompletedMatchDateMutationResult = NonNullable<Awaited<ReturnType<typeof updateCompletedMatchDate>>>
+    export type UpdateCompletedMatchDateMutationBody = BodyType<MatchDateUpdate>
+    export type UpdateCompletedMatchDateMutationError = ErrorType<void>
+    export type UpdateCompletedMatchDateMutationVariables = {matchId: number;data: BodyType<MatchDateUpdate>}
+
+    /**
+ * @summary Correct the scheduled date of a completed match (admin only)
+ */
+export const useUpdateCompletedMatchDate = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCompletedMatchDate>>, TError,UpdateCompletedMatchDateMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCompletedMatchDate>>,
+        TError,
+        UpdateCompletedMatchDateMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateCompletedMatchDateMutationOptions(options));
     }
 
 export const getSubmitMatchResultUrl = (matchId: number,) => {

@@ -6,7 +6,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { getManualSwapCandidates, preserveSwappedRoles, swapManualTeamMembers } from '../src/match-swap.ts';
 import { fillMatchTeams, validateMatchLocks } from '../src/match-balancing.ts';
-import { formatGameDateLabel, groupCompletedMatchesByGameDate, toggleExpandedDateGroup } from '../src/match-history.ts';
+import { formatGameDateLabel, formatMatchCardDate, groupCompletedMatchesByGameDate, toggleExpandedDateGroup } from '../src/match-history.ts';
 import {
   freshSession, clearDeletedMatchSession, restoreFailedDeletionSession, localToday, nextSession, nextGameSession, editSession, latestCompletedMatch, reconcileSession,
   resultActionsReady, selectionCanContinue, updateMatchSessionStep, validMatchDate, visiblePool,
@@ -751,6 +751,41 @@ test('completed matches group by game date newest first and retain their existin
     ['2026-09-26', [1, 3, 5]],
   ]);
   assert.deepEqual(groups.map((group) => group.matches.length), [3, 3]);
+});
+
+test('a corrected match date moves the history group and card date without changing other match fields', () => {
+  const original = historyMatch(1, 'completed', '2026-09-26');
+  const originalGroups = groupCompletedMatchesByGameDate([
+    original,
+    historyMatch(2, 'completed', '2026-10-03'),
+  ]);
+  assert.deepEqual(originalGroups.map((group) => group.matchDate), ['2026-10-03', '2026-09-26']);
+
+  const corrected = { ...original, matchDate: '2026-10-17' };
+  const correctedGroups = groupCompletedMatchesByGameDate([
+    corrected,
+    historyMatch(2, 'completed', '2026-10-03'),
+  ]);
+  assert.deepEqual(correctedGroups.map((group) => group.matchDate), ['2026-10-17', '2026-10-03']);
+  assert.equal(formatMatchCardDate(corrected.matchDate, '2026-10-03T00:00:00.000Z'),
+    new Date(2026, 9, 17, 12).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }));
+  assert.equal(corrected.status, original.status);
+});
+
+test('completed Match History offers an admin-only date editor and uses the date-only mutation', () => {
+  const historyStart = createMatchSource.indexOf('function HistoryDetails({ match }');
+  const historyEnd = createMatchSource.indexOf('\nfunction useMatchDeletion()', historyStart);
+  const historyDetails = createMatchSource.slice(historyStart, historyEnd);
+  assert.ok(historyDetails.includes('useUpdateCompletedMatchDate()'));
+  assert.ok(historyDetails.includes('isAdmin && !editingDate'));
+  assert.ok(historyDetails.includes('formatGameDateLabel(match.matchDate ?? null)'));
+  assert.ok(historyDetails.includes('type="date" required'));
+  assert.ok(historyDetails.includes('data-testid={`button-save-match-date-${match.id}`}'));
+  assert.ok(historyDetails.includes('data-testid={`button-cancel-match-date-${match.id}`}'));
+  assert.ok(historyDetails.includes('setDateError(messageFor(error))'));
+  assert.ok(historyDetails.includes('dateSaveInFlight.current'));
+  assert.ok(historyDetails.includes('getListMatchesQueryKey()'));
+  assert.ok(createMatchSource.includes('formatMatchCardDate(completed ? (match.matchDate ?? null) : null, match.createdAt)'));
 });
 
 test('legacy and invalid game dates share a final Date not recorded group', () => {

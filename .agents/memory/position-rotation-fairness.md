@@ -14,3 +14,9 @@ Rotation is a final conservative tie-break, not permission to weaken formation, 
 **Why:** The approved priority order places all those requirements ahead of fairness. Some rosters cannot offer a better position without violating a higher-priority objective.
 
 **How to apply:** Keep the existing Filled-role shortage exception and manual assignment behavior. Do not widen fairness to stronger trade-offs without approval.
+
+Correcting a completed match's scheduled date is a display/history-grouping edit only; it must not change the recorded play order used by ELO or position-rotation history.
+
+**Why:** The club requires date corrections to leave all rating and fairness effects unchanged.
+
+**How to apply:** Update only the scheduled date field. Preserve first-played/completion ordering and every result, rating, preference-rank, and audit record.

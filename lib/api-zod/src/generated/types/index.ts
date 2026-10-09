@@ -22,6 +22,7 @@ export * from './healthStatus';
 export * from './leaderboardEntry';
 export * from './leaderboardEntryMostPlayedPosition';
 export * from './match';
+export * from './matchDateUpdate';
 export * from './matchInput';
 export * from './matchInputManualMode';
 export * from './matchManualMode';

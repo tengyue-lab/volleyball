@@ -402,6 +402,41 @@ paths:
           description: Match not found
         "409":
           description: A later result depends on this match, or its result history cannot be safely reversed
+  /matches/{matchId}/date:
+    parameters:
+      - name: matchId
+        in: path
+        required: true
+        schema:
+          type: integer
+    patch:
+      operationId: updateCompletedMatchDate
+      tags: [matches]
+      summary: Correct the scheduled date of a completed match (admin only)
+      description: Updates only the match date. Does not modify scores, rosters, results, ELO, counters, audits, or recorded play order.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MatchDateUpdate"
+      responses:
+        "200":
+          description: Updated completed match
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Match"
+        "400":
+          description: Invalid date payload
+        "401":
+          description: Sign in as an administrator
+        "403":
+          description: Administrator access required
+        "404":
+          description: Match not found
+        "409":
+          description: Match is not completed or has been voided
   /matches/{matchId}/result:
     parameters:
       - name: matchId
@@ -795,6 +830,14 @@ components:
           maxItems: 7
           items:
             $ref: "#/components/schemas/MatchPlayerAssignment"
+    MatchDateUpdate:
+      type: object
+      additionalProperties: false
+      required: [matchDate]
+      properties:
+        matchDate:
+          type: string
+          format: date
     MatchPlayerAssignment:
       type: object
       required: [playerId, assignedPosition]

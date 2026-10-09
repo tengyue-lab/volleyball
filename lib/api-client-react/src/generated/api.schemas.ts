@@ -429,6 +429,10 @@ export interface MatchInput {
   teamBAssignments: MatchPlayerAssignment[];
 }
 
+export interface MatchDateUpdate {
+  matchDate: string;
+}
+
 export interface MatchResultInput {
   /** @minimum 0 */
   scoreA: number;

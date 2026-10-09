@@ -855,6 +855,13 @@ button:focus-visible,input:focus-visible{outline:3px solid hsl(var(--accent)/.55
 .touch-44{min-height:44px}
 .button-warn{background:#f6e3d3;color:#8d491c;border-color:#e2bd9d}.button-warn:hover:not(:disabled){background:#f1d3b9}
 .history-details{display:grid;gap:8px;margin-top:12px;border-top:1px solid hsl(var(--border));padding-top:12px}
+.history-match-date{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:0 0 10px;border-bottom:1px solid hsl(var(--border))}
+.history-match-date-copy{display:grid;gap:4px;min-width:0}
+.history-match-date-copy>span{color:hsl(var(--muted-foreground));font-size:11px}
+.history-match-date-copy>strong{font-size:13px;overflow-wrap:anywhere}
+.history-match-date-form{display:grid;gap:10px;width:100%;max-width:360px}
+.history-match-date-actions{display:flex;flex-wrap:wrap;gap:8px}
+.history-match-date-actions .button{min-width:88px}
 .history-disclosure-trigger{width:100%;min-height:44px;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:0 12px;background:hsl(var(--background));border:1px solid hsl(var(--border));border-radius:8px;font-weight:800;font-size:12px;color:hsl(var(--foreground))}
 .history-chevron{font-family:var(--app-font-mono);transition:transform .16s}
 .history-disclosure-panel{padding:12px 4px 4px;min-width:0}

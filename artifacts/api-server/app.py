@@ -1028,6 +1028,36 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             return jsonify({"error": "Match not found."}), 404
         return jsonify(serialize_match(row, elo_changes, editable))
 
+    @app.patch("/api/matches/<int:match_id>/date")
+    def update_completed_match_date(match_id: int):
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict) or set(body) != {"matchDate"}:
+            return jsonify({"error": "Submit only the corrected match date."}), 400
+        match_date = body["matchDate"]
+        try:
+            if not isinstance(match_date, str) or date.fromisoformat(match_date).isoformat() != match_date:
+                raise ValueError
+        except (TypeError, ValueError):
+            return jsonify({"error": "Match date must be a valid YYYY-MM-DD date."}), 400
+
+        with database() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            match = connection.execute(
+                "SELECT * FROM matches WHERE id = ?", (match_id,)
+            ).fetchone()
+            if match is None:
+                return jsonify({"error": "Match not found."}), 404
+            if match["status"] != "completed" or match["play_disposition"] == "voided":
+                return jsonify({"error": "Only completed, played matches can have their date corrected."}), 409
+            connection.execute(
+                "UPDATE matches SET match_date = ? WHERE id = ?",
+                (match_date, match_id),
+            )
+            updated = connection.execute(
+                "SELECT * FROM matches WHERE id = ?", (match_id,)
+            ).fetchone()
+        return jsonify(serialize_match(updated))
+
     @app.post("/api/matches/<int:match_id>/result")
     def submit_match_result(match_id: int):
         body = request.get_json(silent=True)

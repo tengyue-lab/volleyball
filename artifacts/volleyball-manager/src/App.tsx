@@ -30,6 +30,7 @@ import {
   useReopenMatchResult,
   useSubmitMatchResult,
   useUpdatePlayer,
+  useUpdateCompletedMatchDate,
   getGetLeaderboardQueryKey,
   getGetMatchQueryKey,
   getGetPlayerQueryKey,
@@ -72,7 +73,7 @@ import LeaderboardTable from '@/components/LeaderboardTable';
 import CompetitiveRanksDialog from '@/components/CompetitiveRanksDialog';
 import { MatchSessionProvider, useMatchSession } from '@/match-session-context';
 import { clearDeletedMatchSession, restoreFailedDeletionSession, nextGameSession, reconcileSession, selectionCanContinue, rosterCanContinue, editSession, updateMatchSessionStep, validMatchDate, visiblePool } from '@/match-session';
-import { groupCompletedMatchesByGameDate } from '@/match-history';
+import { formatGameDateLabel, formatMatchCardDate, groupCompletedMatchesByGameDate } from '@/match-history';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchInterval: 5000, staleTime: 0, refetchIntervalInBackground: false, retry: 1 } } });
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -592,9 +593,60 @@ function MatchDetail({ matchId, onMatchCompleted }: { matchId: number; onMatchCo
 function HistoryDetails({ match }: { match: Match }) {
   const { isAdmin } = useAccess();
   const [opened, setOpened] = useState(false);
+  const [editingDate, setEditingDate] = useState(false);
+  const [editedDate, setEditedDate] = useState(match.matchDate ?? '');
+  const [dateError, setDateError] = useState('');
+  const dateSaveInFlight = useRef(false);
+  const updateDate = useUpdateCompletedMatchDate();
+  const queryClient = useQueryClient();
   const detail = useGetMatch(match.id, { query: { queryKey: getGetMatchQueryKey(match.id), enabled: isAdmin && opened } });
   const eloState = detail.isError ? 'error' : detail.data ? 'ready' : 'loading';
-  return <MatchHistoryDetails showElo={isAdmin} match={{ ...match, eloChanges: detail.data?.eloChanges ?? [] }} eloState={opened ? eloState : 'ready'} onEloOpen={() => setOpened(true)} onEloRetry={() => void detail.refetch()} />;
+  async function saveDate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!isAdmin || updateDate.isPending || dateSaveInFlight.current || !editedDate) return;
+    dateSaveInFlight.current = true;
+    setDateError('');
+    try {
+      const updated = await updateDate.mutateAsync({ matchId: match.id, data: { matchDate: editedDate } });
+      queryClient.setQueryData<Match[]>(getListMatchesQueryKey(), (current) => current?.map((row) =>
+        row.id === match.id ? { ...row, matchDate: updated.matchDate } : row));
+      queryClient.setQueryData<Match>(getGetMatchQueryKey(match.id), (current) =>
+        current ? { ...current, matchDate: updated.matchDate } : undefined);
+      await queryClient.invalidateQueries({ queryKey: getListMatchesQueryKey() });
+      setEditingDate(false);
+      toast({ title: 'Match date updated', description: 'Match History now uses the corrected date.' });
+    } catch (error) {
+      setDateError(messageFor(error));
+    } finally {
+      dateSaveInFlight.current = false;
+    }
+  }
+  return <>
+    <div className="history-match-date" data-testid={`match-date-${match.id}`}>
+      <div className="history-match-date-copy"><span>Match date</span><strong>{formatGameDateLabel(match.matchDate ?? null)}</strong></div>
+      {isAdmin && !editingDate && <button className="button button-secondary touch-44" type="button"
+        data-testid={`button-edit-match-date-${match.id}`}
+        onClick={() => { setEditedDate(match.matchDate ?? ''); setDateError(''); setEditingDate(true); }}>
+        Edit Date
+      </button>}
+      {isAdmin && editingDate && <form className="history-match-date-form" onSubmit={(event) => void saveDate(event)}>
+        <div className="form-field">
+          <label htmlFor={`input-edit-match-date-${match.id}`}>Match date</label>
+          <input id={`input-edit-match-date-${match.id}`} type="date" required value={editedDate}
+            onChange={(event) => setEditedDate(event.target.value)} data-testid={`input-edit-match-date-${match.id}`} />
+        </div>
+        <div className="history-match-date-actions">
+          <button className="button button-primary touch-44" type="submit" disabled={updateDate.isPending || !editedDate}
+            data-testid={`button-save-match-date-${match.id}`}>{updateDate.isPending ? 'Saving…' : 'Save'}</button>
+          <button className="button button-secondary touch-44" type="button" disabled={updateDate.isPending}
+            onClick={() => { setEditingDate(false); setEditedDate(match.matchDate ?? ''); setDateError(''); }}
+            data-testid={`button-cancel-match-date-${match.id}`}>Cancel</button>
+        </div>
+        {dateError && <p className="form-error" role="alert">{dateError}</p>}
+      </form>}
+    </div>
+    <MatchHistoryDetails showElo={isAdmin} match={{ ...match, eloChanges: detail.data?.eloChanges ?? [] }} eloState={opened ? eloState : 'ready'} onEloOpen={() => setOpened(true)} onEloRetry={() => void detail.refetch()} />
+  </>;
 }
 
 function useMatchDeletion() {
@@ -649,8 +701,9 @@ function MatchCard({ match, expanded, onToggle, beforeDelete, onMatchCompleted }
   const { replaceSession } = useMatchSession();
   const [, navigate] = useLocation();
   const completed = match.status === 'completed';
+  const displayDate = formatMatchCardDate(completed ? (match.matchDate ?? null) : null, match.createdAt);
   return <article className="panel match-card" data-testid={`card-match-${match.id}`}>
-    <div className="match-card-head"><span className="match-label">Roster / {String(match.id).padStart(3, '0')} · {new Date(match.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span><span className={`match-badge ${completed ? 'completed' : ''}`}>{completed ? 'Completed' : 'Upcoming'}</span></div>
+    <div className="match-card-head"><span className="match-label">Roster / {String(match.id).padStart(3, '0')} · {displayDate}</span><span className={`match-badge ${completed ? 'completed' : ''}`}>{completed ? 'Completed' : 'Upcoming'}</span></div>
     <div className="versus-row"><div className="versus-team">Team A<span>{match.teamA.length} players</span>{completed && <strong>{match.scoreA}</strong>}</div><span className="versus-word">{completed ? '–' : 'VS'}</span><div className="versus-team">Team B<span>{match.teamB.length} players</span>{completed && <strong>{match.scoreB}</strong>}</div></div>
     <div className="match-card-foot"><span>{completed ? `${match.winner} won` : 'Match roster saved'}</span>{!completed && <button className="text-button" onClick={onToggle} aria-expanded={expanded} data-testid={`button-view-match-${match.id}`}>{expanded ? 'Hide details' : completed ? 'View results' : isAdmin ? 'Enter score' : 'View roster'} <ChevronDown size={12} style={{ verticalAlign: 'middle', transform: expanded ? 'rotate(180deg)' : undefined }} /></button>}</div>
     {completed && <HistoryDetails match={match} />}

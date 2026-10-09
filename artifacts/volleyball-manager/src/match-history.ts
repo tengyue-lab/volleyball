@@ -59,6 +59,11 @@ export function formatGameDateLabel(matchDate: string | null): string {
   return `${weekday}, ${calendarDate}`;
 }
 
+export function formatMatchCardDate(matchDate: string | null, createdAt: string): string {
+  const date = localDateFromKey(matchDate ?? '') ?? new Date(createdAt);
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 export function toggleExpandedDateGroup(current: ReadonlySet<string>, key: string): Set<string> {
   const next = new Set(current);
   if (next.has(key)) next.delete(key);
