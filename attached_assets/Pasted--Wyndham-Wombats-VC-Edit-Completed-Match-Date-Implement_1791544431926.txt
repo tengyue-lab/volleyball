@@ -1,0 +1,90 @@
+# Wyndham Wombats VC — Edit Completed Match Date
+
+Implement a small, focused feature allowing admins to correct the scheduled match date of an already completed game through Match History.
+
+## 1. Match History interface
+
+- In Match History, when an admin opens a completed match's details, add an **Edit Date** button near the existing match date.
+- Clicking Edit Date opens a date picker showing the match's currently saved date.
+- Allow the admin to choose a new date.
+- Provide **Save** and **Cancel** buttons.
+- After saving, immediately display the updated date in Match History and match details.
+- Preserve the existing date display format and mobile-friendly styling.
+- Do not expose the Edit Date button to regular/public users.
+
+## 2. Backend and permissions
+
+- Only authenticated admins may change the date of a completed match.
+- Enforce admin authorization on the backend, not just by hiding the button.
+- Validate the supplied date and match ID.
+- Only update the intended match's date field.
+- Do not change match status, scores, teams, players, positions, or result data.
+- Reuse the existing match-update API if safely possible; otherwise create a narrowly scoped admin-only date-update endpoint.
+- Do not allow ordinary completed-match editing as a side effect.
+
+## 3. Preserve ELO and match statistics
+
+**Changing a completed match's date must not recalculate or modify any ELO ratings.**
+
+Specifically:
+
+- Do not replay ELO calculations.
+- Do not change K-factor progression counters.
+- Do not alter ELO history entries, rating audits, result reversals, or manual adjustments.
+- Do not change match scores, winners, or completed-match counts.
+- Do not change saved position assignments or historical preference ranks.
+- Preserve all existing match and player records.
+
+This feature is intended to correct the displayed match date only, not to change the outcome of the match.
+
+## 4. Match ordering and position rotation
+
+- Match History should use the corrected date for its normal chronological display, where applicable.
+- However, **do not let a date correction silently change the historical order used for ELO progression or position-rotation fairness**.
+- Preserve the original recorded play/completion order used by those algorithms.
+- If the current position-rotation algorithm derives its last-three-appearance order from the editable match date, identify this dependency before implementation and explain the safest minimal solution. Do not silently change fairness history.
+- Do not reconstruct historical ELO or position-priority events.
+
+## 5. Validation and user experience
+
+- Show a confirmation or success message after saving.
+- Handle invalid dates, failed saves and permission errors gracefully.
+- Keep the date picker open with the selected value if saving fails.
+- Allow Cancel without making any changes.
+- Do not permit duplicate submissions while saving.
+
+## 6. Testing
+
+Add focused regression tests verifying:
+
+1. Admins can edit a completed match date.
+2. Non-admin users cannot edit it, including through direct API requests.
+3. Match History and match details display the updated date.
+4. Match History ordering updates correctly.
+5. Scores, team rosters, winners and match status remain unchanged.
+6. ELO ratings, K-factor counters, rating audits and match totals remain unchanged.
+7. Position-rotation history and compensation priority are not unintentionally affected.
+8. Invalid dates and failed requests do not modify the match.
+
+## 7. Scope and safety
+
+- Keep the implementation minimal.
+- Prefer updating the existing match date field; do not introduce a new database column unless genuinely necessary.
+- Do not change the team-balancing algorithm or ELO formula.
+- Do not delete, reset or backfill any records.
+- Do not modify unrelated Create Match functionality.
+- Do not deploy or publish automatically.
+- If a schema migration is required, explain it and request approval before applying it.
+
+## 8. Completion report
+
+After implementation, briefly report:
+
+- Files changed
+- Where the Edit Date button appears
+- How admin permissions are enforced
+- Confirmation that ELO and position-rotation calculations remain unchanged
+- Tests run and results
+- Any remaining limitations
+
+Implement this as a focused admin-only date correction feature, preserving all existing match and rating data.
