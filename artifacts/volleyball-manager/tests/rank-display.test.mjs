@@ -67,6 +67,7 @@ test('public leaderboard renders up to five uniform rows in placement order', as
   assert.ok(markup.includes('>—</span>'));
   assert.ok(markup.includes('leaderboard-tier-masters'));
   assert.ok(markup.includes('leaderboard-tier-silver'));
+  assert.equal((markup.match(/class="[^"]*leaderboard-tier-icon/g) ?? []).length, 5);
   assert.ok(!markup.includes('Outside Top Five'));
   assert.equal((markup.match(/Provisional/g) ?? []).length, 1);
   assert.ok(markup.includes('data-testid="leaderboard-provisional-5"'));
@@ -74,12 +75,14 @@ test('public leaderboard renders up to five uniform rows in placement order', as
   assert.ok(!/ELO|rating|elo-meter|preference|avatar|medal|crown|win rate|podium/i.test(markup));
 
   const css = await readFile(new URL('../src/index.css', import.meta.url), 'utf8');
-  assert.ok(css.includes('.leaderboard-list{display:grid;gap:12px'));
+  assert.ok(css.includes('.community-leaderboard{width:100%;max-width:640px;margin:0 auto}'));
+  assert.ok(css.includes('.leaderboard-list{display:grid;gap:8px'));
+  assert.ok(css.includes('.leaderboard-row{min-width:0;min-height:68px'));
   assert.ok(css.includes('@media(max-width:420px)'));
   assert.ok(css.includes('.leaderboard-player-name{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'));
-  assert.ok(css.includes('.leaderboard-place-1{background:#fcf8e9'));
-  assert.ok(css.includes('.leaderboard-place-2{background:#f6f7f7'));
-  assert.ok(css.includes('.leaderboard-place-3{background:#fbf2ed'));
+  assert.ok(css.includes('.leaderboard-place-1{border-color:#8c7137'));
+  assert.ok(css.includes('.leaderboard-place-2{border-color:#677b8e'));
+  assert.ok(css.includes('.leaderboard-place-3{border-color:#8a634b'));
   assert.ok(css.includes('.leaderboard-provisional{flex:none;display:inline-flex'));
 });
 
@@ -97,6 +100,7 @@ test('shared competitive-rank dialog uses server ranges and profile metrics have
 
   const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
   assert.ok(app.includes('button-rank-info-leaderboard'));
+  assert.ok(app.includes('title="Leaderboard" description="Saturday Social Leaderboard"'));
   assert.ok(app.includes('button-rank-info-profile'));
   assert.ok(app.includes('profile-stat-grid'));
   assert.ok(app.includes('data-testid="text-my-elo"'));

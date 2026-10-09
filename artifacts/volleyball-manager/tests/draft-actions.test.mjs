@@ -39,7 +39,7 @@ test('Players navigation and route are admin guarded without guarding the normal
 
 test('public leaderboard uses exact text and the minimal DTO without numeric-rating filtering', () => {
   const page = app.slice(app.indexOf('function LeaderboardPage'), app.indexOf('function RoleBadge'));
-  assert.ok(page.includes('title="Leaderboard" description="Saturday social leaderboard"'));
+  assert.ok(page.includes('title="Leaderboard" description="Saturday Social Leaderboard"'));
   assert.ok(page.includes('<LeaderboardTable players={ranked} />'));
   assert.ok(!/\\.elo|positions|isRatedPlayer|Highest rating|Public average|ELO leaderboard/.test(page));
 });

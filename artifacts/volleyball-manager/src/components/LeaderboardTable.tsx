@@ -1,5 +1,5 @@
 import type { LeaderboardEntry } from '@workspace/api-client-react';
-import { Clock } from 'lucide-react';
+import { Clock, Shield } from 'lucide-react';
 
 export default function LeaderboardTable({ players }: { players: LeaderboardEntry[] }) {
   const topFive = [...players]
@@ -23,7 +23,10 @@ export default function LeaderboardTable({ players }: { players: LeaderboardEntr
         </div>
         <span className="leaderboard-player-position">{player.mostPlayedPosition ?? '—'}</span>
       </div>
-      <span className={`leaderboard-tier leaderboard-tier-${player.tier.toLowerCase()}`}>{player.tier}</span>
+      <span className={`leaderboard-tier leaderboard-tier-${player.tier.toLowerCase()}`}>
+        <Shield className="leaderboard-tier-icon" size={13} strokeWidth={1.8} aria-hidden="true" />
+        <span>{player.tier}</span>
+      </span>
     </li>)}
   </ol>;
 }

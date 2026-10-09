@@ -384,7 +384,7 @@ function LeaderboardPage() {
   const query = useGetLeaderboard();
   const ranked = query.data ?? [];
   return <Shell><main className="content">
-    <PageHeader eyebrow="Standings" title="Leaderboard" description="Saturday social leaderboard" titleAccessory={<CompetitiveRanksDialog testId="button-rank-info-leaderboard" />} />
+    <PageHeader eyebrow="Standings" title="Leaderboard" description="Saturday Social Leaderboard" titleAccessory={<CompetitiveRanksDialog testId="button-rank-info-leaderboard" />} />
     <section className="panel" aria-label="Player rankings">
       {query.isLoading ? <LoadingState /> : query.isError ? <ErrorState error={query.error} retry={() => void query.refetch()} /> : ranked.length === 0 ?
         <div className="leaderboard-empty-state" role="status">No eligible public players yet.</div> :
