@@ -26,10 +26,11 @@ const modeTransitionsCompiled = await transformWithEsbuild(`
   export function makeModeTransitions(env) {
     const { teamA, teamB, locks, pendingMode, mode, setTeamA, setTeamB, setLocks,
       setBalanceResult, setBalancedProfiles, setSwapSelectionId, setCreateError,
-      setSavedRolesInvalidated, setMode, setShowTeamModeSelection, setPendingMode } = env;
+      setSavedRolesInvalidated, setMode, setShowTeamModeSelection, setPendingMode,
+      manualMode, pendingManualMode, setManualMode, setShowManualChoice, setPendingManualMode } = env;
     ${clearTeamSource}
     ${modeTransitionSource}
-    return { backToTeamSelection, cancelModeSwitch, confirmModeSwitch, changeMode };
+    return { backToTeamSelection, cancelModeSwitch, confirmModeSwitch, changeMode, chooseManualMode, confirmManualModeSwitch };
   }`, 'team-mode-transitions.ts', { loader: 'ts', format: 'esm' });
 const { makeModeTransitions } = await import(`data:text/javascript;base64,${Buffer.from(modeTransitionsCompiled.code).toString('base64')}`);
 const pool = Array.from({ length: 14 }, (_, i) => ({
@@ -95,7 +96,7 @@ test('Create Match keeps Date, Players and Teams as distinct stages', () => {
   assert.match(createMatchSource, /data-testid="button-auto-balance"/);
   assert.match(createMatchSource, /data-testid="button-fill"/);
   assert.match(createMatchSource, /{stepVisibility\.teams && !showTeamModeSelection && mode === 'auto' && <div className="pool-actions">/);
-  assert.match(createMatchSource, /{stepVisibility\.teams && !showTeamModeSelection && mode === 'manual' && <>/);
+  assert.match(createMatchSource, /{stepVisibility\.teams && !showTeamModeSelection && mode === 'manual' && !roleFree && <>/);
   assert.match(createMatchSource, /{mode !== null && !modeChoiceVisible && <div className="team-columns">/);
   assert.match(createMatchSource, /balanceMatchTeams\(selectedPlayers, new Map/);
   assert.match(createMatchSource, /await getPositionRotationHistory\(\)/);
@@ -112,12 +113,14 @@ function teamModeFixture(overrides = {}) {
     balanceResult: { teamAIds: [1, 2], teamBIds: [3, 4] }, balancedProfiles: 'profiles',
     swapSelectionId: 1, createError: 'previous error', savedRolesInvalidated: false,
     mode: 'auto', showTeamModeSelection: false, pendingMode: null,
+    manualMode: null, showManualChoice: false, pendingManualMode: null,
     selectedPlayerIds: Array.from({ length: 12 }, (_, index) => index + 1), matchDate: '2026-10-08',
     ...overrides,
   };
   const setters = Object.fromEntries([
     'TeamA', 'TeamB', 'Locks', 'BalanceResult', 'BalancedProfiles', 'SwapSelectionId',
     'CreateError', 'SavedRolesInvalidated', 'Mode', 'ShowTeamModeSelection', 'PendingMode',
+    'ManualMode', 'ShowManualChoice', 'PendingManualMode',
   ].map((name) => {
     const key = name[0].toLowerCase() + name.slice(1);
     return [`set${name}`, (value) => { state[key] = value; }];
@@ -128,6 +131,9 @@ function teamModeFixture(overrides = {}) {
 test('mode selection starts without team controls; choosing either mode opens only that mode’s builder', () => {
   const manual = teamModeFixture({ mode: null, showTeamModeSelection: true, teamA: [], teamB: [], locks: [] });
   manual.actions().changeMode('manual');
+  assert.equal(manual.state.showManualChoice, true);
+  assert.equal(manual.state.mode, null);
+  manual.actions().chooseManualMode('roles_lock');
   assert.equal(manual.state.mode, 'manual');
   assert.equal(manual.state.showTeamModeSelection, false);
   assert.deepEqual(manual.state.selectedPlayerIds, Array.from({ length: 12 }, (_, index) => index + 1));
@@ -139,12 +145,57 @@ test('mode selection starts without team controls; choosing either mode opens on
   assert.equal(automatic.state.showTeamModeSelection, false);
 });
 
+test('role-free manual choice and back preserve roster/date; replacing an existing mode requires confirmation', () => {
+  const f = teamModeFixture({ mode: null, teamA: [], teamB: [], locks: [], showTeamModeSelection: true });
+  f.actions().changeMode('manual');
+  f.actions().chooseManualMode('no_roles_lock');
+  assert.equal(f.state.mode, 'manual');
+  assert.equal(f.state.manualMode, 'no_roles_lock');
+  f.state.teamA = [1, 2];
+  const before = structuredClone(f.state);
+  f.actions().backToTeamSelection();
+  f.actions().changeMode('manual');
+  f.actions().chooseManualMode('no_roles_lock');
+  assert.deepEqual(f.state.teamA, before.teamA);
+  f.actions().chooseManualMode('roles_lock');
+  assert.equal(f.state.pendingManualMode, 'roles_lock');
+  assert.deepEqual(f.state.teamA, before.teamA);
+  f.actions().confirmManualModeSwitch();
+  assert.equal(f.state.manualMode, 'roles_lock');
+  assert.deepEqual(f.state.teamA, []);
+  assert.deepEqual(f.state.selectedPlayerIds, before.selectedPlayerIds);
+  assert.equal(f.state.matchDate, before.matchDate);
+});
+
+test('No Roles Lock guards role controls, metrics, available-player positions and legacy role inference', () => {
+  assert.match(createMatchSource, /showManualChoice \? <section[^>]+data-testid="manual-mode-selection"/);
+  assert.match(createMatchSource, /data-testid="button-roles-lock"/);
+  assert.match(createMatchSource, /data-testid="button-no-roles-lock"/);
+  assert.equal((createMatchSource.match(/roleFree=\{roleFree\}/g) ?? []).length, 2);
+  assert.match(createMatchSource, /if \(mode === null \|\| roleFree\) return null/);
+  assert.match(createMatchSource, /if \(!query\.data \|\| query\.data\.manualMode === 'no_roles_lock'\)/);
+  assert.match(createMatchSource, /if \(match\.manualMode === 'no_roles_lock'\) return <p key=\{player\.id\}>\{player\.name\}/);
+  const roleFreeMarkup = assignedPlayerSource.slice(assignedPlayerSource.indexOf('if (roleFree) return'), assignedPlayerSource.indexOf('\n  return <div', assignedPlayerSource.indexOf('if (roleFree) return')));
+  assert.match(roleFreeMarkup, /player\.name/);
+  assert.match(roleFreeMarkup, /onRemove/);
+  assert.doesNotMatch(roleFreeMarkup, /RoleBadge|Profile|ELO|Pending|Lock|Swap|preferenceRank/);
+});
+
+test('role-free match history lists only names, without invented positions', () => {
+  const match = completed(12);
+  match.manualMode = 'no_roles_lock';
+  match.eloChanges = [];
+  const html = renderToStaticMarkup(createElement(MatchHistoryDetails, { match, initialOpen: { team: true } }));
+  assert.match(html, /Player 01/);
+  assert.doesNotMatch(html, /Position not recorded|Setter|Opposite|Outside Hitter/);
+});
+
 test('mode chooser and selected team mode have no saved-upcoming-roster interruption', () => {
-  assert.match(createMatchSource, /const modeChoiceVisible = stepVisibility\.teams && showTeamModeSelection/);
+  assert.match(createMatchSource, /const modeChoiceVisible = stepVisibility\.teams && \(showTeamModeSelection \|\| showManualChoice\)/);
   assert.match(createMatchSource, /\{!modeChoiceVisible && <div className="summary-strip match-session-summary">/);
   assert.doesNotMatch(createMatchSource, /SavedRosterSummary|Continue to Team Assignment|Reset Current Match|status-editing-target/);
   assert.match(createMatchSource, /createMatch\.mutate\(\{ data \}/);
-  assert.doesNotMatch(createMatchSource, /updateDraft\.mutate/);
+  assert.match(createMatchSource, /if \(draft\.editingMatchId !== null\) \{\s*updateDraft\.mutate/);
   assert.match(createMatchSource, /\{!modeChoiceVisible && <div className="panel-head">/);
   assert.match(createMatchSource, /\{mode !== null && !modeChoiceVisible && <div className="team-columns">/);
   assert.match(createMatchSource, /\{mode === 'manual' && !modeChoiceVisible && <div className="available-list">/);
@@ -186,18 +237,19 @@ test('back preserves assignments and switching mode requires confirmation before
   assert.deepEqual(f.state.teamA, previous.teamA);
   f.actions().backToTeamSelection();
   f.actions().changeMode('manual');
-  assert.equal(f.state.pendingMode, 'manual');
+  f.actions().chooseManualMode('roles_lock');
+  assert.equal(f.state.pendingManualMode, 'roles_lock');
   assert.deepEqual(f.state.teamA, previous.teamA);
   assert.deepEqual(f.state.teamB, previous.teamB);
   assert.deepEqual(f.state.locks, previous.locks);
   assert.match(createMatchSource, /pendingMode !== null && <ConfirmDialog[^>]+title="Switch team mode\?"/);
   assert.match(createMatchSource, /Switching modes will discard your current team assignments and role locks\. Continue\?/);
 
-  f.actions().cancelModeSwitch();
-  assert.equal(f.state.pendingMode, null);
+  f.state.pendingManualMode = null;
   assert.deepEqual(f.state.teamA, previous.teamA);
   f.actions().changeMode('manual');
-  f.actions().confirmModeSwitch();
+  f.actions().chooseManualMode('roles_lock');
+  f.actions().confirmManualModeSwitch();
   assert.equal(f.state.mode, 'manual');
   assert.equal(f.state.showTeamModeSelection, false);
   assert.deepEqual(f.state.teamA, []);

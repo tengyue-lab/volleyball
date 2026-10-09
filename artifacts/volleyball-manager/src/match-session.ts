@@ -6,6 +6,7 @@ export type CarriedPlayer = Pick<Player, 'id' | 'name' | 'positions'> & {
   preferencesConfirmed?: boolean;
 };
 export interface SavedRoster {
+  manualMode?: Match['manualMode'];
   teamAIds: number[];
   teamBIds: number[];
   teamA: MatchPositionAssignment[];
@@ -93,6 +94,12 @@ export function selectionCanContinue(players: Player[]): boolean {
     && players.some((player) => player.positions.includes('Setter'));
 }
 
+export function rosterCanContinue(players: Player[]): boolean {
+  return players.length >= 12 && players.length <= 14
+    && new Set(players.map((player) => player.id)).size === players.length
+    && players.every((player) => typeof player.elo === 'number');
+}
+
 export function visiblePool<T extends Player>(players: T[], search: string, position: string, sort: string): T[] {
   const filtered = players.filter((player) =>
     `${player.name} ${player.positions.join(' ')}`.toLowerCase().includes(search.trim().toLowerCase())
@@ -160,6 +167,6 @@ export function editSession(match: Match, generation: number, now = new Date()):
   return {
     ...freshSession(generation, now), step: 'teams', matchDate, editingMatchId: match.id, sourcePlayers,
     selectedPlayerIds: [...new Set(all.map((player) => player.id))],
-    savedRoster: { teamAIds: match.teamA.map((p) => p.id), teamBIds: match.teamB.map((p) => p.id), teamA: complete ? teamA : [], teamB: complete ? teamB : [] },
+    savedRoster: { manualMode: match.manualMode, teamAIds: match.teamA.map((p) => p.id), teamBIds: match.teamB.map((p) => p.id), teamA: complete ? teamA : [], teamB: complete ? teamB : [] },
   };
 }

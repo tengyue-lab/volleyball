@@ -189,6 +189,18 @@ export const MatchStatus = {
 } as const;
 
 /**
+ * Explicit manual workflow; null preserves legacy and automatic behavior.
+ * @nullable
+ */
+export type MatchManualMode = typeof MatchManualMode[keyof typeof MatchManualMode] | null;
+
+
+export const MatchManualMode = {
+  roles_lock: 'roles_lock',
+  no_roles_lock: 'no_roles_lock',
+} as const;
+
+/**
  * Actual-play history independent of reversible result status; null for unknown legacy data.
  * @nullable
  */
@@ -211,7 +223,10 @@ export const MatchWinner = {
   Team_B: 'Team B',
 } as const;
 
-export type MatchPlayerSnapshotAssignmentStatus = typeof MatchPlayerSnapshotAssignmentStatus[keyof typeof MatchPlayerSnapshotAssignmentStatus];
+/**
+ * @nullable
+ */
+export type MatchPlayerSnapshotAssignmentStatus = typeof MatchPlayerSnapshotAssignmentStatus[keyof typeof MatchPlayerSnapshotAssignmentStatus] | null;
 
 
 export const MatchPlayerSnapshotAssignmentStatus = {
@@ -240,7 +255,8 @@ export interface MatchPlayerSnapshot {
   preferredRolePriority?: boolean;
   /** @nullable */
   prioritySince?: string | null;
-  assignedPosition?: Position;
+  assignedPosition?: Position | null;
+  /** @nullable */
   assignmentStatus?: MatchPlayerSnapshotAssignmentStatus;
   /** @nullable */
   preferenceRank?: number | null;
@@ -320,6 +336,11 @@ export interface EloHistoryEntry {
 
 export interface Match {
   /**
+     * Explicit manual workflow; null preserves legacy and automatic behavior.
+     * @nullable
+     */
+  manualMode?: MatchManualMode;
+  /**
      * Actual-play history independent of reversible result status; null for unknown legacy data.
      * @nullable
      */
@@ -353,6 +374,17 @@ export interface Match {
   eloChanges: EloHistoryEntry[];
 }
 
+/**
+ * @nullable
+ */
+export type MatchInputManualMode = typeof MatchInputManualMode[keyof typeof MatchInputManualMode] | null;
+
+
+export const MatchInputManualMode = {
+  roles_lock: 'roles_lock',
+  no_roles_lock: 'no_roles_lock',
+} as const;
+
 export type MatchPlayerAssignmentAssignmentStatus = typeof MatchPlayerAssignmentAssignmentStatus[keyof typeof MatchPlayerAssignmentAssignmentStatus];
 
 
@@ -370,6 +402,8 @@ export interface MatchPlayerAssignment {
 }
 
 export interface MatchInput {
+  /** @nullable */
+  manualMode?: MatchInputManualMode;
   /** Optional for existing callers; the creation UI requires a date. */
   matchDate?: string;
   /**
@@ -383,12 +417,13 @@ export interface MatchInput {
      */
   teamBPlayerIds: number[];
   /**
-     * @minItems 6
+     * Empty for No Roles Lock; otherwise exactly one valid assignment per player.
+     * @minItems 0
      * @maxItems 7
      */
   teamAAssignments: MatchPlayerAssignment[];
   /**
-     * @minItems 6
+     * @minItems 0
      * @maxItems 7
      */
   teamBAssignments: MatchPlayerAssignment[];

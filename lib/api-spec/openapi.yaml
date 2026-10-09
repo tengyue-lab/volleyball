@@ -662,6 +662,10 @@ components:
       type: object
       required: [id, teamA, teamB, scoreA, scoreB, status, winner, completedAt, createdAt, eloChanges]
       properties:
+        manualMode:
+          type: ["string", "null"]
+          enum: [roles_lock, no_roles_lock, null]
+          description: Explicit manual workflow; null preserves legacy and automatic behavior.
         playDisposition:
           type: ["string", "null"]
           enum: ["played", "voided", null]
@@ -741,10 +745,12 @@ components:
           type: ["string", "null"]
           format: date-time
         assignedPosition:
-          $ref: "#/components/schemas/Position"
+          anyOf:
+            - $ref: "#/components/schemas/Position"
+            - type: "null"
         assignmentStatus:
-          type: string
-          enum: [preferred, filled]
+          type: ["string", "null"]
+          enum: [preferred, filled, null]
         preferenceRank:
           type: ["integer", "null"]
     MatchInput:
@@ -755,6 +761,9 @@ components:
         - teamAAssignments
         - teamBAssignments
       properties:
+        manualMode:
+          type: ["string", "null"]
+          enum: [roles_lock, no_roles_lock, null]
         matchDate:
           type: string
           format: date
@@ -775,13 +784,14 @@ components:
             type: integer
         teamAAssignments:
           type: array
-          minItems: 6
+          minItems: 0
           maxItems: 7
+          description: Empty for No Roles Lock; otherwise exactly one valid assignment per player.
           items:
             $ref: "#/components/schemas/MatchPlayerAssignment"
         teamBAssignments:
           type: array
-          minItems: 6
+          minItems: 0
           maxItems: 7
           items:
             $ref: "#/components/schemas/MatchPlayerAssignment"

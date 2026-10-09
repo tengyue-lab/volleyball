@@ -5,9 +5,12 @@
  * Volleyball player and match management API
  * OpenAPI spec version: 0.1.0
  */
+import type { MatchInputManualMode } from './matchInputManualMode';
 import type { MatchPlayerAssignment } from './matchPlayerAssignment';
 
 export interface MatchInput {
+  /** @nullable */
+  manualMode?: MatchInputManualMode;
   /** Optional for existing callers; the creation UI requires a date. */
   matchDate?: Date;
   /**
@@ -21,12 +24,13 @@ export interface MatchInput {
      */
   teamBPlayerIds: number[];
   /**
-     * @minItems 6
+     * Empty for No Roles Lock; otherwise exactly one valid assignment per player.
+     * @minItems 0
      * @maxItems 7
      */
   teamAAssignments: MatchPlayerAssignment[];
   /**
-     * @minItems 6
+     * @minItems 0
      * @maxItems 7
      */
   teamBAssignments: MatchPlayerAssignment[];

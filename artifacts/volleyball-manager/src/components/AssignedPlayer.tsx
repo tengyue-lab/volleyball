@@ -33,6 +33,7 @@ interface Props {
   onDragStart: (event: ReactDragEvent<HTMLDivElement>, id: number) => void;
   onDrop: (event: ReactDragEvent<HTMLDivElement>, targetId: number) => void;
   manual?: boolean;
+  roleFree?: boolean;
   lockedPosition?: MatchPosition;
   canSwap?: boolean;
   onLock?: (position: MatchPosition) => boolean;
@@ -42,7 +43,7 @@ interface Props {
 export default function AssignedPlayer({
   player, roleAssignment, team, swapSelectionId, swapSelectionTeam,
   swapCandidate, onSelectSwap, onRemove, onDragStart, onDrop,
-  manual = false, lockedPosition, canSwap = true, onLock, onUnlock,
+  manual = false, roleFree = false, lockedPosition, canSwap = true, onLock, onUnlock,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [rejected, setRejected] = useState<MatchPosition | null>(null);
@@ -58,6 +59,14 @@ export default function AssignedPlayer({
     const ok = onLock ? onLock(position) : false;
     if (ok) { setOpen(false); setRejected(null); } else setRejected(position);
   };
+
+  if (roleFree) return <div className="assigned-player ap-wrap" data-testid={`assigned-player-${player.id}`}>
+    <div className="assigned-player-copy"><strong>{player.name}</strong></div>
+    <div className="assigned-player-actions">
+      <button className="remove-player touch-44" aria-label={`Remove ${player.name} from Team ${team}`}
+        onClick={() => onRemove(player.id)} data-testid={`button-unassign-${player.id}`}><X size={14} /></button>
+    </div>
+  </div>;
 
   return <div
     className={`assigned-player ap-wrap ${manual ? 'ap-manual' : ''} ${locked ? 'ap-locked' : ''}`}

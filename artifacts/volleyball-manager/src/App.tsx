@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/reac
 import {
   Position,
   useCreateMatch,
+  useUpdateMatchDraft,
   useDeleteMatchDraft,
   useGetAuthViewer,
   useGrantAdminAccess,
@@ -70,7 +71,7 @@ import VoidMatchButton from '@/components/VoidMatchButton';
 import LeaderboardTable from '@/components/LeaderboardTable';
 import CompetitiveRanksDialog from '@/components/CompetitiveRanksDialog';
 import { MatchSessionProvider, useMatchSession } from '@/match-session-context';
-import { clearDeletedMatchSession, restoreFailedDeletionSession, nextGameSession, reconcileSession, selectionCanContinue, updateMatchSessionStep, validMatchDate, visiblePool } from '@/match-session';
+import { clearDeletedMatchSession, restoreFailedDeletionSession, nextGameSession, reconcileSession, selectionCanContinue, rosterCanContinue, editSession, updateMatchSessionStep, validMatchDate, visiblePool } from '@/match-session';
 import { groupCompletedMatchesByGameDate } from '@/match-history';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchInterval: 5000, staleTime: 0, refetchIntervalInBackground: false, retry: 1 } } });
@@ -450,7 +451,7 @@ function MatchDetail({ matchId, onMatchCompleted }: { matchId: number; onMatchCo
   const [scoreB, setScoreB] = useState('');
   const [resultError, setResultError] = useState('');
   const legacyRoleAssignments = useMemo(() => {
-    if (!query.data) return new Map<number, MatchPositionAssignment>();
+    if (!query.data || query.data.manualMode === 'no_roles_lock') return new Map<number, MatchPositionAssignment>();
     const snapshot = [...query.data.teamA, ...query.data.teamB];
     if (snapshot.every((p) => p.assignedPosition)) return new Map<number, MatchPositionAssignment>();
     const rated = snapshot.filter((p): p is typeof p & { elo: number } => typeof p.elo === 'number');
@@ -523,6 +524,7 @@ function MatchDetail({ matchId, onMatchCompleted }: { matchId: number; onMatchCo
     });
   }
   const renderPlayer = (player: Match['teamA'][number]) => {
+    if (match.manualMode === 'no_roles_lock') return <p key={player.id}>{player.name}</p>;
     const assignedPosition = player.assignedPosition ?? legacyRoleAssignments.get(player.id)?.assignedPosition;
     if (!assignedPosition) return <p key={player.id}>{player.name} <span>· {player.positions.join(', ')}</span></p>;
     const position = assignedPosition as MatchPosition;
@@ -644,13 +646,15 @@ function DeleteMatchButton({ match, beforeDelete }: { match: Match; beforeDelete
 
 function MatchCard({ match, expanded, onToggle, beforeDelete, onMatchCompleted }: { match: Match; expanded: boolean; onToggle: () => void; beforeDelete: () => void; onMatchCompleted?: (match: Match) => void }) {
   const { isAdmin } = useAccess();
+  const { replaceSession } = useMatchSession();
+  const [, navigate] = useLocation();
   const completed = match.status === 'completed';
   return <article className="panel match-card" data-testid={`card-match-${match.id}`}>
     <div className="match-card-head"><span className="match-label">Roster / {String(match.id).padStart(3, '0')} · {new Date(match.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span><span className={`match-badge ${completed ? 'completed' : ''}`}>{completed ? 'Completed' : 'Upcoming'}</span></div>
     <div className="versus-row"><div className="versus-team">Team A<span>{match.teamA.length} players</span>{completed && <strong>{match.scoreA}</strong>}</div><span className="versus-word">{completed ? '–' : 'VS'}</span><div className="versus-team">Team B<span>{match.teamB.length} players</span>{completed && <strong>{match.scoreB}</strong>}</div></div>
     <div className="match-card-foot"><span>{completed ? `${match.winner} won` : 'Match roster saved'}</span>{!completed && <button className="text-button" onClick={onToggle} aria-expanded={expanded} data-testid={`button-view-match-${match.id}`}>{expanded ? 'Hide details' : completed ? 'View results' : isAdmin ? 'Enter score' : 'View roster'} <ChevronDown size={12} style={{ verticalAlign: 'middle', transform: expanded ? 'rotate(180deg)' : undefined }} /></button>}</div>
     {completed && <HistoryDetails match={match} />}
-    {isAdmin && <div className="history-actions">{completed && <EditResultButton matchId={match.id} />}<DeleteMatchButton match={match} beforeDelete={beforeDelete} /><VoidMatchButton match={match} beforeVoid={beforeDelete} /></div>}
+    {isAdmin && <div className="history-actions">{match.draftEditable && !completed && <button className="button button-secondary touch-44" data-testid={`button-edit-roster-${match.id}`} onClick={() => { replaceSession((generation) => editSession(match, generation)); navigate('/create-match'); }}><Pencil size={14} />Edit roster</button>}{completed && <EditResultButton matchId={match.id} />}<DeleteMatchButton match={match} beforeDelete={beforeDelete} /><VoidMatchButton match={match} beforeVoid={beforeDelete} /></div>}
     {!completed && expanded && <MatchDetail matchId={match.id} onMatchCompleted={onMatchCompleted} />}
   </article>;
 }
@@ -661,12 +665,23 @@ function AdminMatchesPage() {
   const playersQuery = useListPlayers();
   const matchesQuery = useListMatches();
   const createMatch = useCreateMatch();
+  const updateDraft = useUpdateMatchDraft();
   const [confirmStartOver, setConfirmStartOver] = useState(false);
   const queryClient = useQueryClient();
   const { notice } = useNotice();
   const [mode, setMode] = useState<'auto' | 'manual' | null>(null);
   const [showTeamModeSelection, setShowTeamModeSelection] = useState(true);
   const [pendingMode, setPendingMode] = useState<'auto' | 'manual' | null>(null);
+  const [manualMode, setManualMode] = useState<'roles_lock' | 'no_roles_lock' | null>(draft.savedRoster?.manualMode ?? null);
+  const [showManualChoice, setShowManualChoice] = useState(false);
+  const [pendingManualMode, setPendingManualMode] = useState<'roles_lock' | 'no_roles_lock' | null>(null);
+  const roleFree = mode === 'manual' && manualMode === 'no_roles_lock';
+  useEffect(() => {
+    if (draft.editingMatchId !== null) {
+      setMode(draft.savedRoster?.manualMode ? 'manual' : 'auto');
+      setShowTeamModeSelection(false);
+    }
+  }, [draft.editingMatchId, draft.savedRoster?.manualMode]);
   const selectedPlayerIds = draft.selectedPlayerIds;
   const setSelectedPlayerIds = (value: number[] | ((current: number[]) => number[])) => {
     setDraft((current) => ({ ...current, selectedPlayerIds: typeof value === 'function' ? value(current.selectedPlayerIds) : value }));
@@ -720,7 +735,7 @@ function AdminMatchesPage() {
   const roleAssignments = useMemo(() => {
     const selected = players.filter((player) => selectedPlayerIds.includes(player.id));
     if (![12, 13, 14].includes(selected.length)) return null;
-    if (mode === null) return null;
+    if (mode === null || roleFree) return null;
     try {
       validateMatchLocks(selected, locks);
       if (locks.some((lock) => !(lock.team === 'A' ? teamA : teamB).includes(lock.playerId))) return null;
@@ -751,7 +766,7 @@ function AdminMatchesPage() {
     } catch {
       return null;
     }
-  }, [players, selectedPlayerIds, teamA, teamB, balanceResult, balancedProfiles, profilesFingerprint, mode, locks, draft.savedRoster, savedPreferencesUnchanged, savedRolesInvalidated]);
+  }, [players, selectedPlayerIds, teamA, teamB, balanceResult, balancedProfiles, profilesFingerprint, mode, roleFree, locks, draft.savedRoster, savedPreferencesUnchanged, savedRolesInvalidated]);
   const roleAssignmentById = new Map(
     roleAssignments
       ? [...roleAssignments.teamAAssignments, ...roleAssignments.teamBAssignments]
@@ -772,7 +787,7 @@ function AdminMatchesPage() {
       : getSameRoleSwapCandidates(swapSelectionId, oppositeSwapTeam, assignedRoleById);
   const total = teamA.length + teamB.length;
   const poolCount = selectedPlayers.length;
-  const canContinue = selectionCanContinue(selectedPlayers) && validMatchDate(draft.matchDate);
+  const canContinue = (draft.step === 'players' || roleFree ? rosterCanContinue(selectedPlayers) : selectionCanContinue(selectedPlayers)) && validMatchDate(draft.matchDate);
   const allSelectedAssigned = poolCount === total && selectedPlayerIds.every((id) => assigned.has(id));
   const teamAElo = teamAPlayers.reduce((sum, player) => sum + player.elo, 0);
   const teamBElo = teamBPlayers.reduce((sum, player) => sum + player.elo, 0);
@@ -783,6 +798,9 @@ function AdminMatchesPage() {
   let isRosterValid = false;
   if (poolCount < 12 || poolCount > 14) {
     validation = `Select 12 to 14 players (${poolCount} selected).`;
+  } else if (roleFree) {
+    isRosterValid = allSelectedAssigned && teamSizesValid && new Set([...teamA, ...teamB]).size === total;
+    validation = isRosterValid ? `${poolCount}-player roster is ready.` : `Assign all ${poolCount} selected players to teams of six or seven.`;
   } else if (selectedPlayers.some((player) => !player.preferencesConfirmed)) {
     validation = 'Confirm ranked preferences for every selected player first.';
   } else if (!selectedPlayers.some((player) => player.positions.includes(Position.Setter))) {
@@ -1009,6 +1027,7 @@ function AdminMatchesPage() {
 
   function backToTeamSelection() {
     setShowTeamModeSelection(true);
+    setShowManualChoice(false);
     setSwapSelectionId(null);
     setCreateError('');
   }
@@ -1022,11 +1041,18 @@ function AdminMatchesPage() {
     clearTeamAssignments();
     setSavedRolesInvalidated(true);
     setMode(pendingMode);
+    setShowManualChoice(pendingMode === 'manual');
     setShowTeamModeSelection(false);
     setPendingMode(null);
   }
 
   function changeMode(next: 'auto' | 'manual') {
+    if (next === 'manual') {
+      setShowManualChoice(true);
+      setShowTeamModeSelection(false);
+      return;
+    }
+    setShowManualChoice(false);
     if (next === mode) {
       setShowTeamModeSelection(false);
       return;
@@ -1043,6 +1069,32 @@ function AdminMatchesPage() {
     setCreateError('');
   }
 
+  function chooseManualMode(next: 'roles_lock' | 'no_roles_lock') {
+    if ((teamA.length || teamB.length || locks.length) && mode !== null
+      && (mode !== 'manual' || manualMode !== next)) {
+      setPendingManualMode(next);
+      return;
+    }
+    openManualMode(next);
+  }
+
+  function openManualMode(next: 'roles_lock' | 'no_roles_lock') {
+    setMode('manual');
+    setManualMode(next);
+    setShowManualChoice(false);
+    setShowTeamModeSelection(false);
+    setSwapSelectionId(null);
+    setCreateError('');
+  }
+
+  function confirmManualModeSwitch() {
+    if (pendingManualMode === null) return;
+    clearTeamAssignments();
+    setSavedRolesInvalidated(true);
+    openManualMode(pendingManualMode);
+    setPendingManualMode(null);
+  }
+
   function fillManualTeams() {
     try {
       const result = fillMatchTeams(selectedPlayers, locks);
@@ -1051,7 +1103,7 @@ function AdminMatchesPage() {
     } catch (error) { setCreateError(messageFor(error)); }
   }
 
-  const busy = createMatch.isPending || createdMatchId !== null;
+  const busy = createMatch.isPending || updateDraft.isPending || createdMatchId !== null;
   const nextGame = matchesQuery.isSuccess && playersQuery.isSuccess ? nextGameSession(matchesQuery.data, playersQuery.data, 0) : null;
   const hasDraftState = selectedPlayerIds.length > 0 || teamA.length > 0 || teamB.length > 0 || draft.editingMatchId !== null || draft.step !== 'date';
   const stepVisibility = {
@@ -1059,7 +1111,7 @@ function AdminMatchesPage() {
     players: draft.step === 'players',
     teams: draft.step === 'teams',
   };
-  const modeChoiceVisible = stepVisibility.teams && showTeamModeSelection;
+  const modeChoiceVisible = stepVisibility.teams && (showTeamModeSelection || showManualChoice);
 
   function requestStartOver() {
     if (busy) return;
@@ -1084,6 +1136,8 @@ function AdminMatchesPage() {
     clearTeamAssignments();
     setSavedRolesInvalidated(true);
     setMode(null);
+    setManualMode(null);
+    setShowManualChoice(false);
     setShowTeamModeSelection(true);
     setDraft((current) => ({ ...current, step: 'teams', editingMatchId: null, savedRoster: null }));
     setCreatedMatchId(null);
@@ -1096,10 +1150,10 @@ function AdminMatchesPage() {
   }
 
   function saveMatch() {
-    if (!isRosterValid || !roleAssignments || !canContinue || draft.step !== 'teams' || busy || saveInFlight.current) return;
+    if (!isRosterValid || (!roleFree && !roleAssignments) || !canContinue || draft.step !== 'teams' || busy || saveInFlight.current) return;
     saveInFlight.current = true;
     setCreateError('');
-    const toApi = (list: typeof roleAssignments.teamAAssignments) => list.map((assignment) => ({
+    const toApi = (list: MatchPositionAssignment[]) => list.map((assignment) => ({
       playerId: assignment.playerId,
       assignedPosition: apiPositionByRole[assignment.assignedPosition],
       assignmentStatus: assignment.assignmentStatus,
@@ -1107,11 +1161,16 @@ function AdminMatchesPage() {
     }));
     const data = {
       matchDate: draft.matchDate,
+      manualMode: mode === 'manual' ? manualMode : null,
       teamAPlayerIds: teamA,
       teamBPlayerIds: teamB,
-      teamAAssignments: toApi(roleAssignments.teamAAssignments),
-      teamBAssignments: toApi(roleAssignments.teamBAssignments),
+      teamAAssignments: roleFree ? [] : toApi(roleAssignments!.teamAAssignments),
+      teamBAssignments: roleFree ? [] : toApi(roleAssignments!.teamBAssignments),
     };
+    if (draft.editingMatchId !== null) {
+      updateDraft.mutate({ matchId: draft.editingMatchId, data }, { onSuccess: matchSaved, onError: matchSaveFailed });
+      return;
+    }
     createMatch.mutate({ data }, {
       onSuccess: matchSaved,
       onError: matchSaveFailed,
@@ -1119,7 +1178,7 @@ function AdminMatchesPage() {
   }
 
   return <Shell><main className="content">
-    <PageHeader eyebrow="Match day / roster builder" title="Create Match" description="Choose 12–14 players, assign the exact court roles, then balance teams by ELO or build each side manually." />
+    <PageHeader eyebrow="Match day / roster builder" title="Create Match" description={roleFree ? "Choose 12–14 players and build each side manually." : "Choose 12–14 players, assign the exact court roles, then balance teams by ELO or build each side manually."} />
     <ol className="session-steps" aria-label="Match creation steps">
       {(['date', 'players', 'teams'] as const).map((step, index) => <li key={step} aria-current={draft.step === step ? 'step' : undefined}>{index + 1}. {step === 'date' ? 'Date' : step === 'players' ? 'Players' : 'Teams'}</li>)}
     </ol>
@@ -1138,7 +1197,7 @@ function AdminMatchesPage() {
       {!validMatchDate(draft.matchDate) && <p className="form-error" role="alert">Choose a valid match date before continuing.</p>}
     </section>
     {stepVisibility.players && playersQuery.isSuccess && carried.missing.length > 0 && <div className="position-warning" role="status" data-testid="warning-missing-players"><strong>Some previous players are no longer on the roster</strong><span>{carried.missing.map((player) => player.name).join(' · ')}</span><small>Select replacements to reach 12–14 players.</small></div>}
-    {stepVisibility.teams && !showTeamModeSelection && roleAssignments?.positionShortages.length ? <div className="position-warning" role="alert" data-testid="warning-position-shortage">
+    {stepVisibility.teams && !modeChoiceVisible && roleAssignments?.positionShortages.length ? <div className="position-warning" role="alert" data-testid="warning-position-shortage">
       <strong>Some positions were short in this pool</strong>
       <span>{roleAssignments.positionShortages.map((shortage) =>
         `${shortage.position}: ${shortage.filledCount} Filled player${shortage.filledCount === 1 ? '' : 's'}`,
@@ -1169,7 +1228,7 @@ function AdminMatchesPage() {
                       <input
                         type="checkbox"
                         checked={checked}
-                        disabled={(!checked && !player.preferencesConfirmed) || lockedIds.has(player.id) || (!checked && poolCount >= 14)}
+                        disabled={lockedIds.has(player.id) || (!checked && poolCount >= 14)}
                         onChange={(event) => togglePoolPlayer(player.id, event.currentTarget.checked)}
                         data-testid={`checkbox-pool-player-${player.id}`}
                       />
@@ -1182,7 +1241,7 @@ function AdminMatchesPage() {
               {stepVisibility.players && <div className="pool-actions">
                 <button className="button button-primary touch-44" disabled={!canContinue} onClick={() => setDraft((current) => updateMatchSessionStep(current, 'teams'))} data-testid="button-players-continue">Continue to teams</button>
                 <button className="button button-quiet" disabled={poolCount === 0 || locks.length > 0} onClick={clearPlayerSelection} data-testid="button-clear-pool">Clear selection</button>
-                {!canContinue && <small>Select 12–14 players with confirmed preferences, including at least one Setter, and a valid date.</small>}
+                {!canContinue && <small>Select 12–14 players and a valid date.</small>}
               </div>}
             </div>
             <div className="team-step" hidden={!stepVisibility.teams} data-testid="step-team-assignment">
@@ -1202,12 +1261,19 @@ function AdminMatchesPage() {
                   <span><strong>Manual Selection</strong><small>Build and assign teams yourself.</small></span>
                 </button>
               </div>
+            </section> : showManualChoice ? <section className="team-mode-selection" aria-label="Choose manual selection mode" data-testid="manual-mode-selection">
+              <h3>Manual Selection</h3>
+              <div className="team-mode-choice-grid">
+                <button type="button" className="team-mode-card" onClick={() => chooseManualMode('roles_lock')} data-testid="button-roles-lock"><span><strong>Roles Lock</strong><small>Assign teams with roles, locks and Fill.</small></span></button>
+                <button type="button" className="team-mode-card" onClick={() => chooseManualMode('no_roles_lock')} data-testid="button-no-roles-lock"><span><strong>No Roles Lock</strong><small>Assign teams without positions.</small></span></button>
+              </div>
             </section> : <>
+            {mode === 'manual' && <button type="button" className="button button-secondary touch-44" onClick={() => setShowManualChoice(true)} disabled={busy} data-testid="button-back-manual-choice">← Back to Manual Selection</button>}
             {stepVisibility.teams && !showTeamModeSelection && mode === 'auto' && <div className="pool-actions">
               <button className="button button-primary touch-44" onClick={autoBalance} disabled={balancing || poolCount < 12 || poolCount > 14} data-testid="button-auto-balance"><WandSparkles size={14} />{balancing ? 'Generating…' : 'Generate Balanced Teams'}</button>
               <button className="button button-quiet touch-44" onClick={clearTeamAssignments} disabled={teamA.length === 0 && teamB.length === 0 && locks.length === 0} data-testid="button-clear-teams">Clear Selection</button>
             </div>}
-            {stepVisibility.teams && !showTeamModeSelection && mode === 'manual' && <>
+            {stepVisibility.teams && !showTeamModeSelection && mode === 'manual' && !roleFree && <>
               <div className="manual-assign-head"><strong>Manual assignment</strong><span>Place players with + A / + B and lock preferred roles. Fill may move any unlocked player.</span></div>
               <div className="pool-actions">
                 <button className="button button-primary touch-44" onClick={fillManualTeams} data-testid="button-fill"><WandSparkles size={14} />Fill</button>
@@ -1220,12 +1286,13 @@ function AdminMatchesPage() {
             {mode !== null && !modeChoiceVisible && <div className="team-columns">
               <section className="team-column" aria-label="Team A">
                 <div className="team-header"><span className="team-label a">Team A</span><span className={`count-chip ${teamA.length >= 6 && teamA.length <= 7 ? 'ready' : ''}`}>{teamA.length} / 6–7</span></div>
-                <TeamMetrics team="A" players={teamAPlayers} total={teamAElo} />
+                {!roleFree && <TeamMetrics team="A" players={teamAPlayers} total={teamAElo} />}
                 <div className="assigned-list">{teamAPlayers.length ? teamAPlayers.map((player) => <AssignedPlayer
                   key={player.id}
                   player={player}
                   roleAssignment={roleAssignmentById.get(player.id)}
                   manual={mode === 'manual'}
+                  roleFree={roleFree}
                   lockedPosition={locks.find((lock) => lock.playerId === player.id)?.position}
                   canSwap={mode === 'auto' ? !!roleAssignments : teamA.length > 0 && teamB.length > 0}
                   onLock={(position) => lockPlayer(player.id, position)}
@@ -1242,12 +1309,13 @@ function AdminMatchesPage() {
               </section>
               <section className="team-column" aria-label="Team B">
                 <div className="team-header"><span className="team-label b">Team B</span><span className={`count-chip ${teamB.length >= 6 && teamB.length <= 7 ? 'ready' : ''}`}>{teamB.length} / 6–7</span></div>
-                <TeamMetrics team="B" players={teamBPlayers} total={teamBElo} />
+                {!roleFree && <TeamMetrics team="B" players={teamBPlayers} total={teamBElo} />}
                 <div className="assigned-list">{teamBPlayers.length ? teamBPlayers.map((player) => <AssignedPlayer
                   key={player.id}
                   player={player}
                   roleAssignment={roleAssignmentById.get(player.id)}
                   manual={mode === 'manual'}
+                  roleFree={roleFree}
                   lockedPosition={locks.find((lock) => lock.playerId === player.id)?.position}
                   canSwap={mode === 'auto' ? !!roleAssignments : teamA.length > 0 && teamB.length > 0}
                   onLock={(position) => lockPlayer(player.id, position)}
@@ -1264,7 +1332,7 @@ function AdminMatchesPage() {
               </section>
             </div>}
             {!modeChoiceVisible && swapSelectionId !== null && swapCandidates.length === 0 && <div className="field-hint" role="status" data-testid="status-no-swap-candidates">No valid players available to swap with.</div>}
-            {!modeChoiceVisible && <div className="balance-summary" data-testid="summary-elo-gap">
+            {!modeChoiceVisible && !roleFree && <div className="balance-summary" data-testid="summary-elo-gap">
               <span>Team ELO difference</span><strong>{eloGap.toLocaleString()}</strong>
               <small>Team A total {teamAElo.toLocaleString()} · Team B total {teamBElo.toLocaleString()}</small>
             </div>}
@@ -1277,7 +1345,7 @@ function AdminMatchesPage() {
             {mode === 'manual' && !modeChoiceVisible && <div className="available-list">
               <div className="available-head"><span>Selected, unassigned players</span><span>{unassignedSelected.length} unassigned</span></div>
               {unassignedSelected.length === 0 ? <div className="field-hint" style={{ padding: 12 }} data-testid="text-unassigned-state">{poolCount === 0 ? 'Choose a player pool above.' : 'All selected players are assigned to a side.'}</div> : unassignedSelected.map((player) => <div className="available-row" key={player.id} data-testid={`available-player-${player.id}`}>
-                <div className="available-info"><strong>{player.name}</strong><span>{player.positions.join(' · ')}{player.positions.includes(Position.Libero) ? ' · Libero eligible' : ''} · ELO {player.elo.toLocaleString()}</span></div>
+                <div className="available-info"><strong>{player.name}</strong>{!roleFree && <span>{player.positions.join(' · ')}{player.positions.includes(Position.Libero) ? ' · Libero eligible' : ''} · ELO {player.elo.toLocaleString()}</span>}</div>
                 <div className="assign-actions"><button className="assign-button" onClick={() => assign(player.id, 'A')} disabled={teamA.length >= 7} data-testid={`button-assign-a-${player.id}`}>+ A</button><button className="assign-button b" onClick={() => assign(player.id, 'B')} disabled={teamB.length >= 7} data-testid={`button-assign-b-${player.id}`}>+ B</button></div>
               </div>)}
             </div>}
@@ -1292,6 +1360,7 @@ function AdminMatchesPage() {
     {confirmStartOver && <ConfirmDialog testId="dialog-start-over" title="Start over?" tone="warning" confirmLabel="Start Over" onCancel={() => setConfirmStartOver(false)} onConfirm={() => { setConfirmStartOver(false); startOver(); }}><p>This clears the {poolCount} selected {poolCount === 1 ? 'player' : 'players'}, assignments and locks. No saved match is deleted.</p></ConfirmDialog>}
     {createdMatchId !== null && <ConfirmDialog testId="dialog-match-created" title="Match Created" tone="warning" confirmLabel="OK" hideCancel onCancel={dismissMatchCreated} onConfirm={dismissMatchCreated}><p>The match has been created successfully.</p></ConfirmDialog>}
     {pendingMode !== null && <ConfirmDialog testId="dialog-switch-team-mode" title="Switch team mode?" tone="warning" confirmLabel="Switch mode" onCancel={cancelModeSwitch} onConfirm={confirmModeSwitch}><p>Switching modes will discard your current team assignments and role locks. Continue?</p></ConfirmDialog>}
+    {pendingManualMode !== null && <ConfirmDialog testId="dialog-switch-manual-mode" title="Replace current team setup?" tone="warning" confirmLabel="Switch mode" onCancel={() => setPendingManualMode(null)} onConfirm={confirmManualModeSwitch}><p>This will replace the current team assignments and role locks. Your selected roster and date will remain unchanged.</p></ConfirmDialog>}
   </main></Shell>;
 }
 

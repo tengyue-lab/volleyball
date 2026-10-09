@@ -102,6 +102,9 @@ def initialize_database(database_path: str) -> None:
             connection.execute("ALTER TABLE matches ADD COLUMN completed_at TEXT")
         if "match_date" not in match_columns:
             connection.execute("ALTER TABLE matches ADD COLUMN match_date TEXT")
+        if "manual_mode" not in match_columns:
+            connection.execute("ALTER TABLE matches ADD COLUMN manual_mode TEXT "
+                "CHECK (manual_mode IN ('roles_lock', 'no_roles_lock'))")
         initialize_rotation_schema(connection)
         player_columns = {row[1] for row in connection.execute("PRAGMA table_info(players)")}
         if "matches_played" not in player_columns:
@@ -147,7 +150,7 @@ def initialize_database(database_path: str) -> None:
                 ), id)
             """)
         # Only recover assignments explicitly present in immutable old snapshots.
-        for row in connection.execute("SELECT id, team_a_json, team_b_json FROM matches").fetchall():
+        for row in connection.execute("SELECT id, team_a_json, team_b_json FROM matches WHERE manual_mode IS NULL OR manual_mode != 'no_roles_lock'").fetchall():
             for player in json.loads(row[1]) + json.loads(row[2]):
                 if player.get("assignedPosition") in POSITIONS:
                     position = player["assignedPosition"]
@@ -162,6 +165,7 @@ def initialize_database(database_path: str) -> None:
             SELECT m.id, m.completed_at, MIN(h.id) AS completion_order
             FROM matches m JOIN elo_history h ON h.match_id = m.id
             WHERE m.status = 'completed' AND m.completed_at IS NOT NULL
+                AND (m.manual_mode IS NULL OR m.manual_mode != 'no_roles_lock')
                 AND h.action = 'result'
                 AND h.id > COALESCE((SELECT MAX(r.id) FROM elo_history r
                     WHERE r.match_id = m.id AND r.action = 'reversal'), 0)
@@ -222,10 +226,12 @@ def completed_match_history(connection: sqlite3.Connection) -> tuple[Counter[int
     role_counts: dict[int, Counter[str]] = defaultdict(Counter)
     role_history_reliable: dict[int, bool] = {}
     rows = connection.execute(
-        "SELECT team_a_json, team_b_json FROM matches WHERE status = 'completed' ORDER BY id"
+        "SELECT team_a_json, team_b_json, manual_mode FROM matches WHERE status = 'completed' ORDER BY id"
     ).fetchall()
     match_counts: Counter[int] = Counter(completed_counts(connection, rows))
     for row in rows:
+        if row["manual_mode"] == "no_roles_lock":
+            continue
         match_roles: dict[int, list[Any]] = defaultdict(list)
         for team_json in (row["team_a_json"], row["team_b_json"]):
             for player in json.loads(team_json):
@@ -301,6 +307,7 @@ def serialize_match(
 ) -> dict[str, Any]:
     return {
         "draftEditable": draft_editable,
+        "manualMode": row["manual_mode"],
         "id": row["id"],
         "teamA": json.loads(row["team_a_json"]),
         "teamB": json.loads(row["team_b_json"]),
@@ -448,7 +455,8 @@ def reverse_match_result(
         (match_id,),
     )
     connection.execute("UPDATE priority_events SET active = 0 WHERE match_id = ?", (match_id,))
-    replay_priority(connection, player_ids)
+    if match["manual_mode"] != "no_roles_lock":
+        replay_priority(connection, player_ids)
     reopened = connection.execute(
         "SELECT * FROM matches WHERE id = ?", (match_id,)
     ).fetchone()
@@ -833,7 +841,7 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             "teamAAssignments",
             "teamBAssignments",
         }
-        if not required_fields <= set(body) or set(body) - required_fields - {"matchDate"}:
+        if not required_fields <= set(body) or set(body) - required_fields - {"matchDate", "manualMode"}:
             return jsonify(
                 {"error": "A match must include both team rosters and role assignments."}
             ), 400
@@ -870,29 +878,31 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             return jsonify(
                 {"error": "A match needs 12, 13, or 14 selected players."}
             ), 400
-        team_a_roles = validate_match_assignments(team_a_assignments, team_a_ids)
-        team_b_roles = validate_match_assignments(team_b_assignments, team_b_ids)
-        if team_a_roles is None or team_b_roles is None:
-            return jsonify(
-                {
-                    "error": (
-                        "Assign each player exactly one role: six-player teams need "
-                        "1 Setter, 2 Outside Hitters, 2 Middle Blockers, and 1 Opposite; "
-                        "seven-player teams also need 1 Libero."
-                    )
-                }
-            ), 400
-
         all_ids = team_a_ids + team_b_ids
         placeholders = ",".join("?" for _ in all_ids)
         with database() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            existing = None
             if match_id is not None:
                 existing = connection.execute("SELECT * FROM matches WHERE id = ?", (match_id,)).fetchone()
                 if existing is None:
                     return jsonify({"error": "Match not found."}), 404
                 if not draft_can_edit(connection, existing):
                     return jsonify({"error": "Only unplayed drafts can be edited. This match has result history."}), 409
+            manual_mode = body.get("manualMode", existing["manual_mode"] if existing is not None else None)
+            if manual_mode not in (None, "roles_lock", "no_roles_lock"):
+                return jsonify({"error": "Invalid manual mode."}), 400
+            role_free = manual_mode == "no_roles_lock"
+            if role_free:
+                if team_a_assignments != [] or team_b_assignments != []:
+                    return jsonify({"error": "No Roles Lock matches must not include role assignments."}), 400
+                team_a_roles = dict.fromkeys(team_a_ids)
+                team_b_roles = dict.fromkeys(team_b_ids)
+            else:
+                team_a_roles = validate_match_assignments(team_a_assignments, team_a_ids)
+                team_b_roles = validate_match_assignments(team_b_assignments, team_b_ids)
+                if team_a_roles is None or team_b_roles is None:
+                    return jsonify({"error": "Assign each player exactly one role with the required six- or seven-player formation."}), 400
             rows = connection.execute(
                 f"SELECT * FROM players WHERE id IN ({placeholders})", all_ids
             ).fetchall()
@@ -906,9 +916,9 @@ def create_app(database_path: str | Path | None = None) -> Flask:
                 return jsonify(
                     {"error": "One or more selected players no longer exist."}
                 ), 400
-            if any(not player["preferencesConfirmed"] for player in players_by_id.values()):
+            if not role_free and any(not player["preferencesConfirmed"] for player in players_by_id.values()):
                 return jsonify({"error": "Confirm ranked preferences for every selected player first."}), 400
-            if not any("Setter" in player["positions"] for player in players_by_id.values()):
+            if not role_free and not any("Setter" in player["positions"] for player in players_by_id.values()):
                 return jsonify({"error": "Select at least one Setter-capable player."}), 400
             for assignment in team_a_assignments + team_b_assignments:
                 player = players_by_id[assignment["playerId"]]
@@ -922,7 +932,7 @@ def create_app(database_path: str | Path | None = None) -> Flask:
                 {
                     **players_by_id[player_id],
                     "assignedPosition": team_a_roles[player_id],
-                    **assignment_metadata(players_by_id[player_id], team_a_roles[player_id]),
+                    **({"assignmentStatus": None, "preferenceRank": None} if role_free else assignment_metadata(players_by_id[player_id], team_a_roles[player_id])),
                 }
                 for player_id in team_a_ids
             ]
@@ -930,7 +940,7 @@ def create_app(database_path: str | Path | None = None) -> Flask:
                 {
                     **players_by_id[player_id],
                     "assignedPosition": team_b_roles[player_id],
-                    **assignment_metadata(players_by_id[player_id], team_b_roles[player_id]),
+                    **({"assignmentStatus": None, "preferenceRank": None} if role_free else assignment_metadata(players_by_id[player_id], team_b_roles[player_id])),
                 }
                 for player_id in team_b_ids
             ]
@@ -944,16 +954,16 @@ def create_app(database_path: str | Path | None = None) -> Flask:
                 cursor = connection.execute(
                     """
                     INSERT INTO matches (
-                        team_a_json, team_b_json, score_a, score_b, status, created_at, match_date
-                    ) VALUES (?, ?, NULL, NULL, 'upcoming', ?, ?)
+                        team_a_json, team_b_json, score_a, score_b, status, created_at, match_date, manual_mode
+                    ) VALUES (?, ?, NULL, NULL, 'upcoming', ?, ?, ?)
                     """,
-                    (json.dumps(team_a), json.dumps(team_b), created_at, match_date),
+                    (json.dumps(team_a), json.dumps(team_b), created_at, match_date, manual_mode),
                 )
                 match_id = cursor.lastrowid
             else:
                 connection.execute(
-                    "UPDATE matches SET team_a_json = ?, team_b_json = ?, match_date = ? WHERE id = ?",
-                    (json.dumps(team_a), json.dumps(team_b), match_date, match_id),
+                    "UPDATE matches SET team_a_json = ?, team_b_json = ?, match_date = ?, manual_mode = ? WHERE id = ?",
+                    (json.dumps(team_a), json.dumps(team_b), match_date, manual_mode, match_id),
                 )
                 # Only never-played draft metadata is synchronized. Result and
                 # reversal audits are never rewritten by this operation.
@@ -961,7 +971,7 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             match_row = connection.execute(
                 "SELECT * FROM matches WHERE id = ?", (match_id,)
             ).fetchone()
-            for player in team_a + team_b:
+            for player in ([] if role_free else team_a + team_b):
                 connection.execute("INSERT INTO assignment_audit VALUES (?, ?, ?, ?, ?)",
                     (match_id, player["id"], player["assignedPosition"], player["assignmentStatus"], player["preferenceRank"]))
 
@@ -1117,10 +1127,11 @@ def create_app(database_path: str | Path | None = None) -> Flask:
                         update["matchesPlayedAfter"],
                     ),
                 )
-            for assignment in connection.execute("SELECT * FROM assignment_audit WHERE match_id = ?", (match_id,)).fetchall():
+            for assignment in ([] if match["manual_mode"] == "no_roles_lock" else connection.execute("SELECT * FROM assignment_audit WHERE match_id = ?", (match_id,)).fetchall()):
                 connection.execute("INSERT INTO priority_events (match_id, player_id, status, created_at, completion_order) VALUES (?, ?, ?, ?, ?)",
                     (match_id, assignment["player_id"], assignment["status"], completed_at, completion_order))
-            replay_priority(connection, all_ids)
+            if match["manual_mode"] != "no_roles_lock":
+                replay_priority(connection, all_ids)
             connection.execute(
                 """
                 UPDATE matches

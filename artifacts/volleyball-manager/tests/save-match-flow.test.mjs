@@ -15,9 +15,9 @@ const compiled = await transformWithEsbuild(`
       setCreatedMatchId, setTeamA, setTeamB, setLocks,
       setBalanceResult, setBalancedProfiles, setSwapSelectionId,
       setCreateError, setSavedRolesInvalidated, setDraft, setMode,
-      setShowTeamModeSelection, saveInFlight,
+      setShowTeamModeSelection, setManualMode, setShowManualChoice, saveInFlight,
       messageFor, isRosterValid, roleAssignments, canContinue, draft,
-      busy, apiPositionByRole, teamA, teamB, createMatch } = env;
+      busy, apiPositionByRole, teamA, teamB, createMatch, updateDraft, roleFree, mode, manualMode } = env;
     ${clearTeams}
     ${saveHandlers}
     return { saveMatch, dismissMatchCreated };
@@ -37,11 +37,11 @@ function fixture(count = 12, editingMatchId = null) {
     balanceResult: { teamAAssignments: assignments.slice(0, 6), teamBAssignments: assignments.slice(6) },
     balancedProfiles: 'profile-fingerprint', swapSelectionId: 1,
     savedRolesInvalidated: false, createdMatchId: null, createError: '',
-    mode: 'auto', showTeamModeSelection: false,
+    mode: 'auto', manualMode: null, roleFree: false, showManualChoice: false, showTeamModeSelection: false,
   };
   const setters = Object.fromEntries(['TeamA', 'TeamB', 'Locks', 'BalanceResult', 'BalancedProfiles',
     'SwapSelectionId', 'CreateError', 'SavedRolesInvalidated', 'CreatedMatchId', 'Draft',
-    'Mode', 'ShowTeamModeSelection'].map((name) => {
+    'Mode', 'ShowTeamModeSelection', 'ManualMode', 'ShowManualChoice'].map((name) => {
     const key = name[0].toLowerCase() + name.slice(1);
     return [`set${name}`, (value) => { state[key] = typeof value === 'function' ? value(state[key]) : value; }];
   }));
@@ -49,7 +49,7 @@ function fixture(count = 12, editingMatchId = null) {
   const saveInFlight = { current: false };
   const mutation = (kind) => ({ mutate: (input, callbacks) => saves.push({ kind, input: structuredClone(input), callbacks }) });
   const env = () => ({
-    ...state, ...setters, saveInFlight, isRosterValid: !!state.balanceResult, canContinue: true,
+    ...state, ...setters, saveInFlight, isRosterValid: state.roleFree || !!state.balanceResult, canContinue: true,
     roleAssignments: state.balanceResult, busy: state.createdMatchId !== null,
     apiPositionByRole: { 'Outside Hitter': 'Outside Hitter' }, messageFor: (error) => error.message,
     getGetMatchQueryKey: (id) => ['match', id], getListMatchesQueryKey: () => ['matches'],
@@ -62,6 +62,7 @@ function fixture(count = 12, editingMatchId = null) {
       invalidateQueries: (key) => { invalidations.push(key); return Promise.resolve(); },
     },
     createMatch: mutation('create'),
+    updateDraft: mutation('update'),
   });
   return { state, saves, cache, invalidations, saveInFlight, actions: () => handlers(env()) };
 }
@@ -160,29 +161,29 @@ test('consecutive auto and manual saves create three independent upcoming matche
   assert.equal(f.saves.length, 3);
 });
 
-test('failed new-match save preserves all teams, locks, roles and session and allows retry', () => {
+test('failed new-match or explicit draft edit preserves all teams, locks, roles and session and allows retry', () => {
   for (const editingId of [null, 50]) {
     const f = fixture(12, editingId), before = structuredClone(f.state);
     f.actions().saveMatch();
-    assert.equal(f.saves[0].kind, 'create');
+    assert.equal(f.saves[0].kind, editingId === null ? 'create' : 'update');
     f.saves[0].callbacks.onError(new Error('Save failed'));
     assert.deepEqual(f.state, { ...before, createError: 'Save failed' });
     assert.equal(f.saveInFlight.current, false);
     assert.equal(f.invalidations.length, 0);
     f.actions().saveMatch();
     assert.equal(f.saves.length, 2);
-    assert.equal(f.saves[1].kind, 'create');
+    assert.equal(f.saves[1].kind, editingId === null ? 'create' : 'update');
     assert.equal(f.state.createError, '');
   }
 });
 
-test('a saved-roster edit marker cannot make Create Match overwrite an existing upcoming match', () => {
+test('explicit edit saves the same match id; subsequent save creates an independent match', () => {
   const f = fixture(14, 50);
   f.actions().saveMatch();
-  assert.equal(f.saves[0].kind, 'create');
-  assert.equal(f.saves[0].input.matchId, undefined);
-  f.saves[0].callbacks.onSuccess({ id: 101, status: 'upcoming', ...f.saves[0].input.data });
-  assert.deepEqual(f.cache.get('["matches"]').map((match) => match.id), [101, 50]);
+  assert.equal(f.saves[0].kind, 'update');
+  assert.equal(f.saves[0].input.matchId, 50);
+  f.saves[0].callbacks.onSuccess({ id: 50, status: 'upcoming', ...f.saves[0].input.data });
+  assert.deepEqual(f.cache.get('["matches"]').map((match) => match.id), [50]);
   f.actions().dismissMatchCreated();
   assert.equal(f.state.draft.editingMatchId, null);
   assert.equal(f.state.draft.savedRoster, null);
@@ -190,6 +191,33 @@ test('a saved-roster edit marker cannot make Create Match overwrite an existing 
   assert.equal(f.state.draft.step, 'teams');
   assert.equal(f.state.showTeamModeSelection, true);
   assert.equal(f.state.mode, null);
+  f.state.balanceResult = { teamAAssignments: [], teamBAssignments: [] };
+  f.actions().saveMatch();
+  assert.equal(f.saves[1].kind, 'create');
+});
+
+test('role-free save submits empty roles and explicit mode, retaining teams on failure', () => {
+  for (const count of [12, 13, 14]) {
+    const f = fixture(count);
+    Object.assign(f.state, { mode: 'manual', manualMode: 'no_roles_lock', roleFree: true, balanceResult: null, locks: [] });
+    const before = structuredClone(f.state);
+    f.actions().saveMatch();
+    assert.equal(f.saves.length, 1);
+    assert.equal(f.saves[0].input.data.manualMode, 'no_roles_lock');
+    assert.deepEqual(f.saves[0].input.data.teamAAssignments, []);
+    assert.deepEqual(f.saves[0].input.data.teamBAssignments, []);
+    f.saves[0].callbacks.onError(new Error('Retry'));
+    assert.deepEqual(f.state, { ...before, createError: 'Retry' });
+    f.actions().saveMatch();
+    f.saves[1].callbacks.onSuccess({ id: 103, status: 'upcoming', ...f.saves[1].input.data });
+    f.actions().dismissMatchCreated();
+    assert.deepEqual(f.state.draft.selectedPlayerIds, before.draft.selectedPlayerIds);
+    assert.deepEqual(f.state.teamA, []);
+    assert.deepEqual(f.state.teamB, []);
+    assert.equal(f.state.mode, null);
+    assert.equal(f.state.manualMode, null);
+    assert.equal(f.state.showTeamModeSelection, true);
+  }
 });
 
 test('Start Over remains the explicit full session reset and never runs on save success', async () => {

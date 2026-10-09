@@ -6,7 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type MatchPlayerSnapshotAssignmentStatus = typeof MatchPlayerSnapshotAssignmentStatus[keyof typeof MatchPlayerSnapshotAssignmentStatus];
+/**
+ * @nullable
+ */
+export type MatchPlayerSnapshotAssignmentStatus = typeof MatchPlayerSnapshotAssignmentStatus[keyof typeof MatchPlayerSnapshotAssignmentStatus] | null;
 
 
 export const MatchPlayerSnapshotAssignmentStatus = {

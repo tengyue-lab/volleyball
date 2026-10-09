@@ -22,12 +22,12 @@ test('draft actions use the guarded hooks and clean caches on reset success only
   assert.ok(app.indexOf('callbacks.beforeDelete?.()') < app.indexOf('mutation.mutateAsync'));
 });
 
-test('Create Match always creates a separate roster and no longer offers saved-roster targeting', () => {
+test('Create Match creates separate rosters unless explicitly editing an unplayed draft', () => {
   assert.ok(!app.includes('SavedRosterSummary'));
   assert.ok(!app.includes('button-continue-team-assignment'));
   assert.ok(!app.includes('button-reset-current-match'));
   assert.ok(app.includes('createMatch.mutate({ data }'));
-  assert.ok(!app.includes('updateDraft.mutate'));
+  assert.match(app, /if \(draft\.editingMatchId !== null\) \{\s*updateDraft\.mutate/);
 });
 
 test('Players navigation and route are admin guarded without guarding the normal Profile', () => {

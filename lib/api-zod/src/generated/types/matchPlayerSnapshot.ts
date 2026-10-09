@@ -30,7 +30,8 @@ export interface MatchPlayerSnapshot {
   preferredRolePriority?: boolean;
   /** @nullable */
   prioritySince?: Date | null;
-  assignedPosition?: Position;
+  assignedPosition?: Position | null;
+  /** @nullable */
   assignmentStatus?: MatchPlayerSnapshotAssignmentStatus;
   /** @nullable */
   preferenceRank?: number | null;

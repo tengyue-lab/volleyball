@@ -24,6 +24,7 @@ def position_rotation_history(
             WHERE h.match_id = m.id AND h.action = 'result') AS first_result_order
         FROM matches m
         WHERE m.play_disposition = 'played' AND m.first_played_at IS NOT NULL
+            AND (m.manual_mode IS NULL OR m.manual_mode != 'no_roles_lock')
         ORDER BY m.first_played_at DESC, first_result_order DESC, m.id DESC
     """).fetchall()
     for match in rows:

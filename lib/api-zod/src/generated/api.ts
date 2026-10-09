@@ -357,6 +357,7 @@ export const listMatchesResponseEloChangesItemMatchesPlayedAfterMin = 0;
 
 
 export const ListMatchesResponseItem = zod.object({
+  "manualMode": zod.union([zod.literal('roles_lock'),zod.literal('no_roles_lock'),zod.literal(null)]).nullish().describe('Explicit manual workflow; null preserves legacy and automatic behavior.'),
   "playDisposition": zod.union([zod.literal('played'),zod.literal('voided'),zod.literal(null)]).nullish().describe('Actual-play history independent of reversible result status; null for unknown legacy data.'),
   "firstPlayedAt": zod.coerce.date().nullish().describe('First successful completion timestamp, preserved through corrections.'),
   "draftEditable": zod.boolean().optional().describe('Upcoming roster has never had a result or completion event.'),
@@ -374,8 +375,8 @@ export const ListMatchesResponseItem = zod.object({
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
   "prioritySince": zod.coerce.date().nullish(),
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
-  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "assignedPosition": zod.union([zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),zod.null()]).optional(),
+  "assignmentStatus": zod.union([zod.literal('preferred'),zod.literal('filled'),zod.literal(null)]).nullish(),
   "preferenceRank": zod.number().int().nullish()
 }).describe('Immutable played roster. Non-admin responses redact elo and rank and omit rating progression metadata. Stored snapshots are never rewritten.')),
   "teamB": zod.array(zod.object({
@@ -390,8 +391,8 @@ export const ListMatchesResponseItem = zod.object({
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
   "prioritySince": zod.coerce.date().nullish(),
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
-  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "assignedPosition": zod.union([zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),zod.null()]).optional(),
+  "assignmentStatus": zod.union([zod.literal('preferred'),zod.literal('filled'),zod.literal(null)]).nullish(),
   "preferenceRank": zod.number().int().nullish()
 }).describe('Immutable played roster. Non-admin responses redact elo and rank and omit rating progression metadata. Stored snapshots are never rewritten.')),
   "scoreA": zod.number().int().nullable(),
@@ -430,15 +431,16 @@ export const createMatchBodyTeamAPlayerIdsMax = 7;
 export const createMatchBodyTeamBPlayerIdsMin = 6;
 export const createMatchBodyTeamBPlayerIdsMax = 7;
 
-export const createMatchBodyTeamAAssignmentsMin = 6;
+export const createMatchBodyTeamAAssignmentsMin = 0;
 export const createMatchBodyTeamAAssignmentsMax = 7;
 
-export const createMatchBodyTeamBAssignmentsMin = 6;
+export const createMatchBodyTeamBAssignmentsMin = 0;
 export const createMatchBodyTeamBAssignmentsMax = 7;
 
 
 
 export const CreateMatchBody = zod.object({
+  "manualMode": zod.union([zod.literal('roles_lock'),zod.literal('no_roles_lock'),zod.literal(null)]).nullish(),
   "matchDate": zod.coerce.date().optional().describe('Optional for existing callers; the creation UI requires a date.'),
   "teamAPlayerIds": zod.array(zod.number().int()).min(createMatchBodyTeamAPlayerIdsMin).max(createMatchBodyTeamAPlayerIdsMax),
   "teamBPlayerIds": zod.array(zod.number().int()).min(createMatchBodyTeamBPlayerIdsMin).max(createMatchBodyTeamBPlayerIdsMax),
@@ -447,7 +449,7 @@ export const CreateMatchBody = zod.object({
   "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),
   "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
   "preferenceRank": zod.number().int().nullish()
-})).min(createMatchBodyTeamAAssignmentsMin).max(createMatchBodyTeamAAssignmentsMax),
+})).min(createMatchBodyTeamAAssignmentsMin).max(createMatchBodyTeamAAssignmentsMax).describe('Empty for No Roles Lock; otherwise exactly one valid assignment per player.'),
   "teamBAssignments": zod.array(zod.object({
   "playerId": zod.number().int(),
   "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),
@@ -467,6 +469,7 @@ export const createMatchResponseEloChangesItemMatchesPlayedAfterMin = 0;
 
 
 export const CreateMatchResponse = zod.object({
+  "manualMode": zod.union([zod.literal('roles_lock'),zod.literal('no_roles_lock'),zod.literal(null)]).nullish().describe('Explicit manual workflow; null preserves legacy and automatic behavior.'),
   "playDisposition": zod.union([zod.literal('played'),zod.literal('voided'),zod.literal(null)]).nullish().describe('Actual-play history independent of reversible result status; null for unknown legacy data.'),
   "firstPlayedAt": zod.coerce.date().nullish().describe('First successful completion timestamp, preserved through corrections.'),
   "draftEditable": zod.boolean().optional().describe('Upcoming roster has never had a result or completion event.'),
@@ -484,8 +487,8 @@ export const CreateMatchResponse = zod.object({
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
   "prioritySince": zod.coerce.date().nullish(),
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
-  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "assignedPosition": zod.union([zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),zod.null()]).optional(),
+  "assignmentStatus": zod.union([zod.literal('preferred'),zod.literal('filled'),zod.literal(null)]).nullish(),
   "preferenceRank": zod.number().int().nullish()
 }).describe('Immutable played roster. Non-admin responses redact elo and rank and omit rating progression metadata. Stored snapshots are never rewritten.')),
   "teamB": zod.array(zod.object({
@@ -500,8 +503,8 @@ export const CreateMatchResponse = zod.object({
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
   "prioritySince": zod.coerce.date().nullish(),
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
-  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "assignedPosition": zod.union([zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),zod.null()]).optional(),
+  "assignmentStatus": zod.union([zod.literal('preferred'),zod.literal('filled'),zod.literal(null)]).nullish(),
   "preferenceRank": zod.number().int().nullish()
 }).describe('Immutable played roster. Non-admin responses redact elo and rank and omit rating progression metadata. Stored snapshots are never rewritten.')),
   "scoreA": zod.number().int().nullable(),
@@ -547,6 +550,7 @@ export const getMatchResponseEloChangesItemMatchesPlayedAfterMin = 0;
 
 
 export const GetMatchResponse = zod.object({
+  "manualMode": zod.union([zod.literal('roles_lock'),zod.literal('no_roles_lock'),zod.literal(null)]).nullish().describe('Explicit manual workflow; null preserves legacy and automatic behavior.'),
   "playDisposition": zod.union([zod.literal('played'),zod.literal('voided'),zod.literal(null)]).nullish().describe('Actual-play history independent of reversible result status; null for unknown legacy data.'),
   "firstPlayedAt": zod.coerce.date().nullish().describe('First successful completion timestamp, preserved through corrections.'),
   "draftEditable": zod.boolean().optional().describe('Upcoming roster has never had a result or completion event.'),
@@ -564,8 +568,8 @@ export const GetMatchResponse = zod.object({
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
   "prioritySince": zod.coerce.date().nullish(),
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
-  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "assignedPosition": zod.union([zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),zod.null()]).optional(),
+  "assignmentStatus": zod.union([zod.literal('preferred'),zod.literal('filled'),zod.literal(null)]).nullish(),
   "preferenceRank": zod.number().int().nullish()
 }).describe('Immutable played roster. Non-admin responses redact elo and rank and omit rating progression metadata. Stored snapshots are never rewritten.')),
   "teamB": zod.array(zod.object({
@@ -580,8 +584,8 @@ export const GetMatchResponse = zod.object({
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
   "prioritySince": zod.coerce.date().nullish(),
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
-  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "assignedPosition": zod.union([zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),zod.null()]).optional(),
+  "assignmentStatus": zod.union([zod.literal('preferred'),zod.literal('filled'),zod.literal(null)]).nullish(),
   "preferenceRank": zod.number().int().nullish()
 }).describe('Immutable played roster. Non-admin responses redact elo and rank and omit rating progression metadata. Stored snapshots are never rewritten.')),
   "scoreA": zod.number().int().nullable(),
@@ -622,15 +626,16 @@ export const updateMatchDraftBodyTeamAPlayerIdsMax = 7;
 export const updateMatchDraftBodyTeamBPlayerIdsMin = 6;
 export const updateMatchDraftBodyTeamBPlayerIdsMax = 7;
 
-export const updateMatchDraftBodyTeamAAssignmentsMin = 6;
+export const updateMatchDraftBodyTeamAAssignmentsMin = 0;
 export const updateMatchDraftBodyTeamAAssignmentsMax = 7;
 
-export const updateMatchDraftBodyTeamBAssignmentsMin = 6;
+export const updateMatchDraftBodyTeamBAssignmentsMin = 0;
 export const updateMatchDraftBodyTeamBAssignmentsMax = 7;
 
 
 
 export const UpdateMatchDraftBody = zod.object({
+  "manualMode": zod.union([zod.literal('roles_lock'),zod.literal('no_roles_lock'),zod.literal(null)]).nullish(),
   "matchDate": zod.coerce.date().optional().describe('Optional for existing callers; the creation UI requires a date.'),
   "teamAPlayerIds": zod.array(zod.number().int()).min(updateMatchDraftBodyTeamAPlayerIdsMin).max(updateMatchDraftBodyTeamAPlayerIdsMax),
   "teamBPlayerIds": zod.array(zod.number().int()).min(updateMatchDraftBodyTeamBPlayerIdsMin).max(updateMatchDraftBodyTeamBPlayerIdsMax),
@@ -639,7 +644,7 @@ export const UpdateMatchDraftBody = zod.object({
   "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),
   "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
   "preferenceRank": zod.number().int().nullish()
-})).min(updateMatchDraftBodyTeamAAssignmentsMin).max(updateMatchDraftBodyTeamAAssignmentsMax),
+})).min(updateMatchDraftBodyTeamAAssignmentsMin).max(updateMatchDraftBodyTeamAAssignmentsMax).describe('Empty for No Roles Lock; otherwise exactly one valid assignment per player.'),
   "teamBAssignments": zod.array(zod.object({
   "playerId": zod.number().int(),
   "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),
@@ -659,6 +664,7 @@ export const updateMatchDraftResponseEloChangesItemMatchesPlayedAfterMin = 0;
 
 
 export const UpdateMatchDraftResponse = zod.object({
+  "manualMode": zod.union([zod.literal('roles_lock'),zod.literal('no_roles_lock'),zod.literal(null)]).nullish().describe('Explicit manual workflow; null preserves legacy and automatic behavior.'),
   "playDisposition": zod.union([zod.literal('played'),zod.literal('voided'),zod.literal(null)]).nullish().describe('Actual-play history independent of reversible result status; null for unknown legacy data.'),
   "firstPlayedAt": zod.coerce.date().nullish().describe('First successful completion timestamp, preserved through corrections.'),
   "draftEditable": zod.boolean().optional().describe('Upcoming roster has never had a result or completion event.'),
@@ -676,8 +682,8 @@ export const UpdateMatchDraftResponse = zod.object({
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
   "prioritySince": zod.coerce.date().nullish(),
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
-  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "assignedPosition": zod.union([zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),zod.null()]).optional(),
+  "assignmentStatus": zod.union([zod.literal('preferred'),zod.literal('filled'),zod.literal(null)]).nullish(),
   "preferenceRank": zod.number().int().nullish()
 }).describe('Immutable played roster. Non-admin responses redact elo and rank and omit rating progression metadata. Stored snapshots are never rewritten.')),
   "teamB": zod.array(zod.object({
@@ -692,8 +698,8 @@ export const UpdateMatchDraftResponse = zod.object({
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
   "prioritySince": zod.coerce.date().nullish(),
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
-  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "assignedPosition": zod.union([zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),zod.null()]).optional(),
+  "assignmentStatus": zod.union([zod.literal('preferred'),zod.literal('filled'),zod.literal(null)]).nullish(),
   "preferenceRank": zod.number().int().nullish()
 }).describe('Immutable played roster. Non-admin responses redact elo and rank and omit rating progression metadata. Stored snapshots are never rewritten.')),
   "scoreA": zod.number().int().nullable(),
@@ -765,6 +771,7 @@ export const submitMatchResultResponseEloChangesItemMatchesPlayedAfterMin = 0;
 
 
 export const SubmitMatchResultResponse = zod.object({
+  "manualMode": zod.union([zod.literal('roles_lock'),zod.literal('no_roles_lock'),zod.literal(null)]).nullish().describe('Explicit manual workflow; null preserves legacy and automatic behavior.'),
   "playDisposition": zod.union([zod.literal('played'),zod.literal('voided'),zod.literal(null)]).nullish().describe('Actual-play history independent of reversible result status; null for unknown legacy data.'),
   "firstPlayedAt": zod.coerce.date().nullish().describe('First successful completion timestamp, preserved through corrections.'),
   "draftEditable": zod.boolean().optional().describe('Upcoming roster has never had a result or completion event.'),
@@ -782,8 +789,8 @@ export const SubmitMatchResultResponse = zod.object({
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
   "prioritySince": zod.coerce.date().nullish(),
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
-  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "assignedPosition": zod.union([zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),zod.null()]).optional(),
+  "assignmentStatus": zod.union([zod.literal('preferred'),zod.literal('filled'),zod.literal(null)]).nullish(),
   "preferenceRank": zod.number().int().nullish()
 }).describe('Immutable played roster. Non-admin responses redact elo and rank and omit rating progression metadata. Stored snapshots are never rewritten.')),
   "teamB": zod.array(zod.object({
@@ -798,8 +805,8 @@ export const SubmitMatchResultResponse = zod.object({
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
   "prioritySince": zod.coerce.date().nullish(),
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
-  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "assignedPosition": zod.union([zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),zod.null()]).optional(),
+  "assignmentStatus": zod.union([zod.literal('preferred'),zod.literal('filled'),zod.literal(null)]).nullish(),
   "preferenceRank": zod.number().int().nullish()
 }).describe('Immutable played roster. Non-admin responses redact elo and rank and omit rating progression metadata. Stored snapshots are never rewritten.')),
   "scoreA": zod.number().int().nullable(),
@@ -845,6 +852,7 @@ export const reopenMatchResultResponseEloChangesItemMatchesPlayedAfterMin = 0;
 
 
 export const ReopenMatchResultResponse = zod.object({
+  "manualMode": zod.union([zod.literal('roles_lock'),zod.literal('no_roles_lock'),zod.literal(null)]).nullish().describe('Explicit manual workflow; null preserves legacy and automatic behavior.'),
   "playDisposition": zod.union([zod.literal('played'),zod.literal('voided'),zod.literal(null)]).nullish().describe('Actual-play history independent of reversible result status; null for unknown legacy data.'),
   "firstPlayedAt": zod.coerce.date().nullish().describe('First successful completion timestamp, preserved through corrections.'),
   "draftEditable": zod.boolean().optional().describe('Upcoming roster has never had a result or completion event.'),
@@ -862,8 +870,8 @@ export const ReopenMatchResultResponse = zod.object({
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
   "prioritySince": zod.coerce.date().nullish(),
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
-  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "assignedPosition": zod.union([zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),zod.null()]).optional(),
+  "assignmentStatus": zod.union([zod.literal('preferred'),zod.literal('filled'),zod.literal(null)]).nullish(),
   "preferenceRank": zod.number().int().nullish()
 }).describe('Immutable played roster. Non-admin responses redact elo and rank and omit rating progression metadata. Stored snapshots are never rewritten.')),
   "teamB": zod.array(zod.object({
@@ -878,8 +886,8 @@ export const ReopenMatchResultResponse = zod.object({
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
   "prioritySince": zod.coerce.date().nullish(),
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
-  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "assignedPosition": zod.union([zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),zod.null()]).optional(),
+  "assignmentStatus": zod.union([zod.literal('preferred'),zod.literal('filled'),zod.literal(null)]).nullish(),
   "preferenceRank": zod.number().int().nullish()
 }).describe('Immutable played roster. Non-admin responses redact elo and rank and omit rating progression metadata. Stored snapshots are never rewritten.')),
   "scoreA": zod.number().int().nullable(),
@@ -941,6 +949,7 @@ export const voidMatchResponseEloChangesItemMatchesPlayedAfterMin = 0;
 
 
 export const VoidMatchResponse = zod.object({
+  "manualMode": zod.union([zod.literal('roles_lock'),zod.literal('no_roles_lock'),zod.literal(null)]).nullish().describe('Explicit manual workflow; null preserves legacy and automatic behavior.'),
   "playDisposition": zod.union([zod.literal('played'),zod.literal('voided'),zod.literal(null)]).nullish().describe('Actual-play history independent of reversible result status; null for unknown legacy data.'),
   "firstPlayedAt": zod.coerce.date().nullish().describe('First successful completion timestamp, preserved through corrections.'),
   "draftEditable": zod.boolean().optional().describe('Upcoming roster has never had a result or completion event.'),
@@ -958,8 +967,8 @@ export const VoidMatchResponse = zod.object({
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
   "prioritySince": zod.coerce.date().nullish(),
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
-  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "assignedPosition": zod.union([zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),zod.null()]).optional(),
+  "assignmentStatus": zod.union([zod.literal('preferred'),zod.literal('filled'),zod.literal(null)]).nullish(),
   "preferenceRank": zod.number().int().nullish()
 }).describe('Immutable played roster. Non-admin responses redact elo and rank and omit rating progression metadata. Stored snapshots are never rewritten.')),
   "teamB": zod.array(zod.object({
@@ -974,8 +983,8 @@ export const VoidMatchResponse = zod.object({
   "preferencesConfirmed": zod.boolean().optional(),
   "preferredRolePriority": zod.boolean().optional(),
   "prioritySince": zod.coerce.date().nullish(),
-  "assignedPosition": zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']).optional(),
-  "assignmentStatus": zod.enum(['preferred', 'filled']).optional(),
+  "assignedPosition": zod.union([zod.enum(['Setter', 'Outside Hitter', 'Middle Blocker', 'Opposite', 'Libero']),zod.null()]).optional(),
+  "assignmentStatus": zod.union([zod.literal('preferred'),zod.literal('filled'),zod.literal(null)]).nullish(),
   "preferenceRank": zod.number().int().nullish()
 }).describe('Immutable played roster. Non-admin responses redact elo and rank and omit rating progression metadata. Stored snapshots are never rewritten.')),
   "scoreA": zod.number().int().nullable(),

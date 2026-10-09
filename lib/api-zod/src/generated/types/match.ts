@@ -6,12 +6,18 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EloHistoryEntry } from './eloHistoryEntry';
+import type { MatchManualMode } from './matchManualMode';
 import type { MatchPlayDisposition } from './matchPlayDisposition';
 import type { MatchPlayerSnapshot } from './matchPlayerSnapshot';
 import type { MatchStatus } from './matchStatus';
 import type { MatchWinner } from './matchWinner';
 
 export interface Match {
+  /**
+     * Explicit manual workflow; null preserves legacy and automatic behavior.
+     * @nullable
+     */
+  manualMode?: MatchManualMode;
   /**
      * Actual-play history independent of reversible result status; null for unknown legacy data.
      * @nullable

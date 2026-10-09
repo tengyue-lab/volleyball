@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 type Snap = { id: number; name: string; assignedPosition?: string | null };
 type Change = { id?: number; playerId: number; changeAmount: number | null; action?: string };
-export interface HistoryMatch { id: number; teamA: Snap[]; teamB: Snap[]; eloChanges: Change[] }
+export interface HistoryMatch { id: number; manualMode?: string | null; teamA: Snap[]; teamB: Snap[]; eloChanges: Change[] }
 
 const byName = (a: { name: string; id: number }, b: { name: string; id: number }) => a.name.localeCompare(b.name) || a.id - b.id;
 
@@ -40,7 +40,7 @@ export default function MatchHistoryDetails({ match, showElo = false, initialOpe
   const [eloOpen, setEloOpen] = useState(initialOpen?.elo ?? false);
   const roster = (label: string, team: Snap[]) => <section className="history-team" aria-label={label}>
     <h4>{label}</h4>
-    <ul>{team.map((player) => <li key={player.id}><strong>{player.name}</strong><span>{player.assignedPosition || 'Position not recorded'}</span></li>)}</ul>
+    <ul>{team.map((player) => <li key={player.id}><strong>{player.name}</strong>{match.manualMode !== 'no_roles_lock' && <span>{player.assignedPosition || 'Position not recorded'}</span>}</li>)}</ul>
   </section>;
   return <div className="history-details">
     <Disclosure id="team-detail" matchId={match.id} label="Team Detail" open={teamOpen} onToggle={() => setTeamOpen((v) => !v)}>
