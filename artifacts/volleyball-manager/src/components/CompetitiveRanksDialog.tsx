@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { getGetRankTiersQueryKey, useGetRankTiers } from '@workspace/api-client-react';
 import { Info } from 'lucide-react';
+import { formatRankRange } from './rank-range-display';
 import {
   Dialog,
   DialogContent,
@@ -8,12 +9,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-
-function formatEloRange(minElo: number, maxElo: number | null) {
-  return maxElo === null
-    ? `${minElo.toLocaleString()}+`
-    : `${minElo.toLocaleString()}–${maxElo.toLocaleString()}`;
-}
 
 export default function CompetitiveRanksDialog({ testId }: { testId: string }) {
   const [open, setOpen] = useState(false);
@@ -46,7 +41,7 @@ export default function CompetitiveRanksDialog({ testId }: { testId: string }) {
               <thead><tr><th scope="col">Rank</th><th scope="col">ELO Range</th></tr></thead>
               <tbody>{(rangesQuery.data ?? []).map((range) => <tr key={range.tier}>
                 <th scope="row"><span className={`rank-range-tier rank-range-tier-${range.tier.toLowerCase()}`}>{range.tier}</span></th>
-                <td>{formatEloRange(range.minElo, range.maxElo)}</td>
+                <td>{formatRankRange(range.tier, range.minElo, range.maxElo)}</td>
               </tr>)}</tbody>
             </table>
           </div>}

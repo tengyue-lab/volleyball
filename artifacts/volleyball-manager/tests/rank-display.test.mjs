@@ -86,8 +86,9 @@ test('shared competitive-rank dialog uses server ranges and profile metrics have
   assert.ok(dialog.includes('<DialogTrigger asChild>'));
   assert.ok(dialog.includes('<DialogTitle>Competitive Ranks</DialogTitle>'));
   assert.ok(dialog.includes('<th scope="col">Rank</th><th scope="col">ELO Range</th>'));
-  assert.ok(dialog.includes('maxElo === null'));
-  assert.ok(dialog.includes('${minElo.toLocaleString()}+'));
+  const rangeFormatter = await readFile(new URL('../src/components/rank-range-display.ts', import.meta.url), 'utf8');
+  assert.ok(rangeFormatter.includes('maxElo === null'));
+  assert.ok(rangeFormatter.includes('${minElo.toLocaleString()}+'));
   assert.ok(dialog.includes('rank-info-trigger'));
 
   const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
@@ -102,6 +103,28 @@ test('shared competitive-rank dialog uses server ranges and profile metrics have
   assert.ok(css.includes('.profile-stat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))'));
   assert.ok(css.includes('.profile-stat-value{min-width:0;margin:0;color:hsl(var(--foreground));font-family:inherit;font-size:22px;font-weight:700'));
   assert.ok(css.includes('.rank-info-dialog>button{right:8px;top:8px;min-width:44px;min-height:44px'));
+});
+
+test('rank range display labels Iron below 850 and keeps all other ranges exact', async () => {
+  const dialog = await readFile(new URL('../src/components/CompetitiveRanksDialog.tsx', import.meta.url), 'utf8');
+  assert.ok(dialog.includes('formatRankRange(range.tier, range.minElo, range.maxElo)'));
+  assert.ok(dialog.includes('(rangesQuery.data ?? []).map((range)'));
+
+  const formatterSource = await readFile(new URL('../src/components/rank-range-display.ts', import.meta.url), 'utf8');
+  const transformed = await transformWithEsbuild(formatterSource, 'rank-range-display.ts', { loader: 'ts', format: 'esm' });
+  const { formatRankRange } = await import(`data:text/javascript;base64,${Buffer.from(transformed.code).toString('base64')}`);
+  const cases = [
+    ['Iron', 0, 849, 'Below 850'],
+    ['Bronze', 850, 999, '850–999'],
+    ['Silver', 1000, 1149, '1,000–1,149'],
+    ['Gold', 1150, 1299, '1,150–1,299'],
+    ['Platinum', 1300, 1449, '1,300–1,449'],
+    ['Diamond', 1450, 1599, '1,450–1,599'],
+    ['Masters', 1600, null, '1,600+'],
+  ];
+  for (const [tier, minimum, maximum, label] of cases) {
+    assert.equal(formatRankRange(tier, minimum, maximum), label);
+  }
 });
 
 test('Profile puts information, visibility and preferences in one continuous card', async () => {
