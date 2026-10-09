@@ -1,0 +1,130 @@
+# Wyndham Wombats VC — Gaming-Style Leaderboard Redesign
+
+Redesign the existing public Leaderboard to look like a modern competitive gaming leaderboard, inspired by the dark-themed leaderboard reference design.
+
+This is a **UI-only task**. Preserve all existing leaderboard functionality, ranking logic, ELO calculations, provisional status rules, privacy settings and player data.
+
+## 1. Overall design
+
+Replace the current widely spaced table appearance with a compact, polished, vertically stacked leaderboard.
+
+Use:
+- Dark-themed rounded player rows that fit the existing app's colour scheme.
+- Subtle borders and backgrounds to separate players.
+- Consistent spacing, typography and alignment.
+- A compact overall width rather than stretching the leaderboard across the entire desktop screen.
+- Responsive styling for mobile and desktop.
+
+The design should feel similar to a competitive game's ranked ladder, but remain clean and easy to read.
+
+Do not add unnecessary animations or complicated components.
+
+## 2. Player row layout
+
+Each row should follow this arrangement:
+
+**Rank → Player Name → Provisional Badge (if applicable) → Tier Icon and Name**
+
+### Left side
+- Show the player's rank in a small, fixed-width column.
+- Display the player's name prominently beside the rank.
+- Keep the rank and player name close together.
+- Use consistent font sizes and weights for all players.
+- Display a small Provisional badge next to the name when applicable.
+
+### Right side
+- Display the player's existing competitive tier with a small icon and tier name.
+- Use the app's existing tier colours and icons wherever available.
+- Make tier badges compact rather than excessively wide.
+- Keep them reasonably close to the player information by constraining the leaderboard's maximum width.
+
+Do not add profile avatars or initials unless they already exist in the app.
+
+## 3. Top-ranked players
+
+Give the first three ranked players subtle visual distinction:
+
+- Rank 1: restrained gold accent.
+- Rank 2: restrained silver accent.
+- Rank 3: restrained bronze accent.
+
+Use a small rank emblem, border or background accent.
+
+Do not create oversized podium cards or increase the row heights significantly.
+
+All other players should use consistent neutral styling.
+
+## 4. Typography
+
+Fix the inconsistent typography throughout the leaderboard.
+
+- Use the same font family as the rest of the application.
+- Use consistent player-name font sizes.
+- Use consistent rank-number sizing.
+- Keep tier labels smaller than player names.
+- Use a subtle, smaller font for Provisional badges.
+- Avoid excessive bold text, mismatched font weights and inconsistent line heights.
+
+## 5. Provisional players
+
+Preserve the existing provisional-player functionality.
+
+- Show a compact Provisional badge with a small clock icon next to eligible player names.
+- Do not alter the provisional-game threshold.
+- Do not alter ranking eligibility or ranking order.
+- Preserve the player's public leaderboard opt-in preference.
+- Do not expose numeric ELO ratings.
+
+## 6. Leaderboard header
+
+Use a clean header containing:
+
+**Leaderboard**
+
+Subtitle: **Saturday Social Leaderboard**
+
+Optionally include a small trophy icon.
+
+Keep the existing information/help button and its functionality.
+
+Do not add unnecessary player counts or statistics.
+
+## 7. Mobile layout
+
+Make sure the design works well on mobile phones.
+
+- Rank and player name should remain easy to read.
+- Tier badges must not extend beyond the screen.
+- Long player names should truncate gracefully when necessary.
+- Provisional badges should not cause horizontal scrolling.
+- Keep row heights compact and consistent.
+
+## 8. Preserve existing functionality
+
+Do not change:
+
+- ELO calculations or K factors.
+- Player ratings or competitive tier thresholds.
+- Leaderboard ranking and tie-breaking logic.
+- Public visibility/opt-in settings.
+- Provisional status logic.
+- Match history or player records.
+- Authentication and admin permissions.
+- Any unrelated pages.
+
+This is strictly a visual redesign of the existing leaderboard.
+
+## 9. Verification
+
+After implementation:
+
+1. Verify the leaderboard displays the correct existing players and ranks.
+2. Verify Provisional badges still work.
+3. Verify hidden players remain hidden.
+4. Verify tier icons and labels match existing data.
+5. Check desktop and mobile layouts.
+6. Run relevant frontend tests and build checks.
+
+Do not modify the database or deploy automatically.
+
+Provide a concise summary of the files changed and tests completed.
