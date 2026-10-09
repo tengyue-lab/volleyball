@@ -1,0 +1,44 @@
+# Wyndham Wombats VC — Show Provisional Players on Public Leaderboard
+
+Update the existing public leaderboard so players who are still completing placement games can appear in the rankings.
+
+## Requirements
+
+1. Include players who have enabled **Show on Public Leaderboard**, even if their rating is still provisional or they are completing placement games.
+
+2. Rank provisional and established players together using the existing ELO ranking and tie-breaking logic. Do not place provisional players automatically at the bottom or give them a separate ranking.
+
+3. Show a small, subtle **Provisional** badge with a clock or similar icon beside the player's name while they have not completed the existing placement-game requirement.
+
+4. Automatically remove the badge once the player satisfies the existing provisional/placement threshold. Reuse the current backend logic for this status; do not invent a new threshold.
+
+5. Preserve the existing leaderboard layout, Top 5 limit if applicable, tier displays, and mobile responsiveness.
+
+6. Do not expose numeric ELO ratings, rating changes, or other admin-only information to the public.
+
+7. Players who have disabled public leaderboard visibility must remain completely excluded, regardless of provisional status.
+
+8. Use the existing backend privacy-safe leaderboard response. Ensure the backend includes eligible provisional players rather than merely removing a frontend filter. Do not bypass the visibility preference.
+
+9. If a player has zero completed games but has opted into the public leaderboard, follow the existing eligibility rules for unplayed accounts; do not silently treat them as an established player. Explain any ambiguity before changing zero-game eligibility.
+
+## Testing
+
+Verify:
+- Provisional player opted in → appears with rank and Provisional badge.
+- Established player opted in → appears with rank and no badge.
+- Any player opted out → hidden.
+- Provisional player can appear in the Top 5.
+- Completing placement games automatically removes the badge.
+- Existing ranking order remains unchanged for the same ELO values.
+- No private ELO data is exposed.
+
+## Scope
+
+Keep this change focused on leaderboard eligibility and presentation.
+
+Do not change ELO formulas, K factors, placement-game thresholds, player ratings, tier thresholds, match history, or position-rotation fairness.
+
+Do not reset data, add database columns unless strictly necessary, or deploy automatically.
+
+After implementation, report the files changed and test results.
