@@ -1,0 +1,84 @@
+# Wyndham Wombats VC — Final Pre-Publishing Safety Check
+
+I am ready to publish Wyndham Wombats VC for the first time.
+
+Before publishing, perform a focused READ-ONLY inspection of the actual current project and deployment configuration.
+
+Do not modify code, migrate databases, delete data, deploy, or publish.
+
+## 1. Database inspection
+
+Identify:
+- The current database engine and exact development database location.
+- Whether the app still uses SQLite.
+- Whether the production deployment will have persistent database storage.
+- Whether database data survives application restarts, redeployments, and future UI updates.
+- Whether production and development databases will be completely separate.
+- Whether the app currently has any production deployment.
+
+If the current SQLite setup is unsafe for publishing, recommend the simplest reliable production database solution supported by Replit.
+
+Do not assume Replit's managed production database feature automatically protects a local SQLite file.
+
+## 2. Existing data
+
+Report the current counts of:
+- Players
+- User accounts
+- Completed matches
+- Upcoming matches
+- ELO history records
+- Relevant match and position audit records
+
+Identify whether development/test data would be copied into production.
+
+Do not delete or reset anything.
+
+## 3. Database backups
+
+Explain:
+- How to back up the actual production database.
+- How to restore it.
+- Whether backups can be automated.
+- How to verify a backup is usable.
+- How to protect production data during future code redeployments.
+
+## 4. Publishing configuration
+
+Inspect:
+- The appropriate Replit deployment type for this React + Flask application.
+- Frontend build command.
+- Backend start command.
+- Required environment variables and secrets.
+- Authentication and admin configuration.
+- Expected hosting costs or cost considerations.
+
+Prefer the simplest cost-effective reliable configuration for a small private volleyball club.
+
+## 5. Final launch checks
+
+Verify the implementation status and test coverage of:
+- Login and admin permissions.
+- Player creation and profiles.
+- Auto Balance and position rotation fairness.
+- Roles Lock / No Roles Lock manual selection.
+- Match saving and result recording.
+- ELO updates, corrections, and reversals.
+- Public leaderboard privacy and provisional status.
+- Match History.
+- Mobile layout.
+
+Run non-destructive tests where practical. Do not create or modify real match records during inspection.
+
+## 6. Final report
+
+Give me a concise report containing:
+
+1. **SAFE TO PUBLISH / NOT SAFE TO PUBLISH YET**
+2. Current database and production persistence findings.
+3. Any critical blockers.
+4. Recommended hosting/database configuration.
+5. Estimated deployment cost considerations.
+6. Exact next steps to publish safely.
+
+Do not implement fixes yet. Wait for my approval.
