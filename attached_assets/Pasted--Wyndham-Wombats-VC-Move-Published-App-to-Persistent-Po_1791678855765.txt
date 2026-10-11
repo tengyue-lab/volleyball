@@ -1,0 +1,56 @@
+# Wyndham Wombats VC — Move Published App to Persistent PostgreSQL
+
+## Objective
+
+Fix the production data-loss problem by moving Wyndham Wombats VC from temporary SQLite storage to persistent Replit-managed PostgreSQL.
+
+The existing No Roles Lock workflow has successfully saved and completed matches 56–58, including 12 ELO-history records per match.
+
+Therefore, do not redesign or rewrite No Roles Lock unless testing reveals a separate reproducible bug.
+
+## Approved migration source
+
+I approve using the verified recovery backup `wombats-recovery-backup.zip` as the starting data source for the new production database.
+
+I understand and accept that:
+- It is a development snapshot, not a fully verified production backup.
+- Some missing matches, including match 62, may not be recoverable.
+- Some private ELO values and historical audits may differ from the previous production database.
+
+Preserve all available records in the backup without inventing missing games or recalculating historical ELO.
+
+## Implementation
+
+1. Confirm my backup ZIP is securely preserved outside Replit.
+2. Finish PostgreSQL compatibility for the Flask backend.
+3. Use the existing successful development PostgreSQL migration rehearsal as the starting reference.
+4. Validate PostgreSQL functionality with isolated test data, including match creation, completion, ELO, Match History, corrections and reversals.
+5. Verify No Roles Lock matches update ELO and completed-game counters but never affect position-rotation fairness.
+6. Prepare a production PostgreSQL database through Replit's supported deployment workflow.
+7. Import the approved backup while preserving player IDs, match IDs, account-to-Clerk mappings, admin grants, ELO history and all available audits.
+8. Validate imported counts, relationships, current ratings and ID sequences.
+9. Configure the published Flask API to use PostgreSQL as its authoritative persistent database.
+10. Verify the app remains connected to PostgreSQL after a restart or redeployment.
+
+## Essential safeguards
+
+- Never replace the new PostgreSQL database with the development SQLite file during future deployments.
+- Never fall back silently to local SQLite if PostgreSQL is unavailable.
+- Never initialize an empty production database over the approved imported records.
+- Do not create duplicate players, accounts or match records.
+- Do not replay historical ELO or reconstruct missing games.
+- Do not change ELO formulas, K factors, rank tiers or matchmaking algorithms.
+- Keep development and production database connections separate.
+- Preserve the existing published website address.
+
+## Deployment approval
+
+First finish compatibility and isolated PostgreSQL tests, then provide:
+
+- Test results
+- Expected database costs
+- Production import and cutover steps
+- Backup and rollback plan
+- Any remaining risks
+
+**Stop before making production changes or republishing. Wait for my explicit approval of the final cutover.**
