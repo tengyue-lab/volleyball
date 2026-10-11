@@ -1,0 +1,120 @@
+# Wyndham Wombats VC — Fresh PostgreSQL Production Reset
+
+## My decision
+
+I want a fresh start using persistent PostgreSQL.
+
+I explicitly approve abandoning the existing production SQLite volleyball data rather than migrating it.
+
+I understand this means losing the existing player records, ELO ratings, completed-match history, position-rotation history and other SQLite-only application data from the new live app.
+
+Keep my existing published website, frontend, matchmaking features, Clerk authentication and app functionality.
+
+Do not spend more time trying to recover missing matches or reconcile historical ELO.
+
+## 1. New persistent database
+
+Set up Replit-managed production PostgreSQL using the supported Replit workflow.
+
+- Use PostgreSQL as the single authoritative application database.
+- Do not use local SQLite for published application data.
+- Do not silently fall back to SQLite if PostgreSQL is unavailable.
+- Create the full application schema, including players, matches, ELO history, account mappings, admin permissions and rating/rotation audit tables.
+- Follow Replit's supported production schema publishing process.
+- Ensure all application tables are created in the intended production database, not the existing migration rehearsal schema.
+- Keep development and production database connections separate.
+- Do not import the old SQLite backup.
+
+## 2. Preserve login functionality
+
+Keep Clerk authentication working with the existing published website.
+
+Ensure the existing administrator can sign in and obtain admin permissions in the new database through a secure, explicitly configured bootstrap process.
+
+Do not make all users administrators or create an unauthenticated admin setup endpoint.
+
+Do not require recreating Clerk accounts unless technically unavoidable.
+
+## 3. Preserve app functionality
+
+Keep the existing interface and gameplay rules:
+
+- Ranked position preferences
+- Auto Balance
+- Manual Selection → Roles Lock
+- Manual Selection → No Roles Lock
+- ELO and K-factor progression
+- Leaderboard and rank tiers
+- Match History
+- Result corrections and reversals
+- Position-rotation fairness
+- Existing player privacy rules
+
+Do not redesign unrelated features.
+
+## 4. No Roles Lock behavior
+
+No Roles Lock games must:
+
+- Save successfully to PostgreSQL.
+- Preserve Team A and Team B.
+- Allow results without assigned positions.
+- Appear in Match History when completed.
+- Allocate ELO exactly once.
+- Advance completed-game counters and K-factor progression.
+- Produce normal ELO-history records.
+- Support corrections and reversals.
+
+No Roles Lock games must NOT affect position-rotation fairness or the last-three-eligible-role-assigned-match calculation.
+
+## 5. Verify before opening to club members
+
+Before declaring the reset successful:
+
+- Run PostgreSQL-specific application tests.
+- Verify administrator sign-in and permissions.
+- Create and complete test matches.
+- Confirm correct ELO changes and Match History.
+- Confirm No Roles Lock does not affect position priorities.
+- Verify data survives an application restart.
+- Confirm the published app is actually connected to persistent PostgreSQL.
+- Verify backups are enabled and identify their retention period.
+- Explain ongoing database costs.
+
+Do not treat passing SQLite tests as proof PostgreSQL works.
+
+## 6. Safe deployment sequence
+
+I approve preparing the fresh PostgreSQL production database and replacing the old SQLite-backed application data.
+
+However, do not publish an untested implementation.
+
+First report:
+1. Whether PostgreSQL compatibility is complete.
+2. Whether the production database and schema are ready.
+3. Whether the required tests passed.
+4. How admin access will be preserved.
+5. Any remaining blockers or costs.
+
+If Replit's Publish workflow requires an explicit action from me, tell me exactly what to click.
+
+Once these checks pass, request my final confirmation before switching the existing public website to PostgreSQL.
+
+## 7. Preserve the old backup
+
+Leave `wombats-recovery-backup.zip` unchanged and excluded from GitHub and deployment.
+
+Do not delete the recovery files.
+
+The backup is archival only and must not be imported into the fresh database.
+
+## Main objective
+
+I want a fresh, reliable Wyndham Wombats VC website where:
+
+- Games do not disappear after restarts.
+- No Roles Lock games save and allocate ELO normally.
+- Match History remains persistent.
+- Future UI updates do not erase player or match records.
+
+Prioritise reliability and simplicity over preserving old SQLite data.
