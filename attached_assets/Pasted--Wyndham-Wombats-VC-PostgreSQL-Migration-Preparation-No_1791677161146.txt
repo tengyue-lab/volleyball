@@ -1,0 +1,204 @@
+# Wyndham Wombats VC — PostgreSQL Migration Preparation + No Roles Lock Fix
+
+## Objective
+
+Prepare Wyndham Wombats VC for reliable, persistent PostgreSQL storage and fix the Manual Selection → No Roles Lock workflow.
+
+**The website is already published and contains real club data. Do not modify, restart, redeploy or replace the published application during this task.**
+
+The existing production Autoscale deployment uses non-persistent SQLite, so preserving current records is the highest priority.
+
+I have already downloaded and tested a recovery ZIP:
+
+`wombats-recovery-backup.zip`
+
+It contains:
+- 17 players
+- 3 completed matches (IDs 56–58)
+- 36 ELO-history records
+- 3 account mappings
+- 1 admin grant
+
+The backup passed SQLite integrity, foreign-key and ELO-history consistency checks.
+
+However, this is a development snapshot, not a verified complete production backup. Live private ELO verification was skipped intentionally.
+
+## Part 1 — Protect existing data
+
+Before implementing changes:
+
+1. Confirm the recovery ZIP is still available and passes its recorded checksum.
+2. Preserve the original ZIP unchanged.
+3. Keep backup files excluded from GitHub and deployment.
+4. Do not use the backup as the live application's database.
+5. Do not modify the published SQLite database.
+6. Do not attempt to recover or recreate missing historical games.
+7. Do not reset or adjust any existing ELO ratings.
+
+The backup may be used as an isolated migration-test fixture, but not as an automatically approved production migration source.
+
+## Part 2 — Prepare PostgreSQL in development
+
+Convert the existing Flask backend to support Replit-managed PostgreSQL.
+
+Requirements:
+
+- Use a separate development PostgreSQL database.
+- Do not create or connect a production database yet.
+- Preserve existing API endpoints and response formats.
+- Preserve player IDs, ranked position preferences and privacy settings.
+- Preserve match IDs, team rosters, scores and match statuses.
+- Preserve ELO history, rating audits and completed-match counters.
+- Preserve Clerk user mappings, admin grants and permissions.
+- Preserve assignment audits, position-priority events and archived ownership records.
+- Preserve all existing ELO calculations, K factors and tier thresholds.
+- Ensure SQLite-specific SQL, DDL, connection handling and transactions are correctly adapted for PostgreSQL.
+- Maintain a single authoritative database for the Flask application.
+- Do not introduce a second competing database through Node/Drizzle.
+- Do not run production schema migrations automatically at startup or deployment.
+
+Follow Replit's supported managed-database schema and publishing workflow.
+
+## Part 3 — Test backup migration in isolation
+
+Using a separate test database:
+
+1. Import a copy of the verified SQLite backup into an isolated PostgreSQL test database.
+2. Preserve original IDs, timestamps, null values and historical records.
+3. Validate all table counts and foreign-key relationships.
+4. Confirm that the 17 players, three matches, 36 ELO-history records, three account mappings and one admin grant transfer correctly.
+5. Confirm historical ELO ratings and completed-match counters remain unchanged.
+6. Verify that database sequences are correctly advanced after importing explicit IDs.
+7. Do not invent missing audit rows or reconstruct missing matches.
+
+This is a migration rehearsal only.
+
+Do not use this test database as production.
+
+## Part 4 — Fix No Roles Lock
+
+Manual Selection → No Roles Lock must behave like every other normal rated match, except it has no assigned player positions.
+
+### Match creation
+
+- Allow valid 12-, 13- and 14-player rosters.
+- Save Team A and Team B.
+- Save match date and normal match metadata.
+- Store `manual_mode = no_roles_lock`.
+- Leave player positions and preference ranks unassigned.
+- Do not invoke Fill or role-assignment logic.
+- Do not show a successful save message until the backend confirms persistence.
+
+### Match completion
+
+When an admin records a result:
+
+- Save the score and winner.
+- Mark the match completed.
+- Show it in Match History.
+- Allocate ELO to every participating player.
+- Update completed-match counters and K-factor progression.
+- Create the normal ELO-history and rating-audit records.
+- Support result corrections and reversals.
+- Prevent duplicate ELO awards.
+- Use the same authoritative ELO calculation as Auto Balance and Roles Lock.
+
+Ensure completion, ELO changes and required audit writes are transactionally consistent.
+
+### Position-rotation fairness
+
+**No Roles Lock must never change future position priorities.**
+
+- Do not generate position-assignment or priority-compensation events.
+- Do not invent positions or preference ranks.
+- Do not count No Roles Lock appearances in the last-three-eligible-role-assigned-match window.
+- Do not reset or dilute existing rotation history.
+- Preserve the existing position-rotation fairness algorithm.
+
+No Roles Lock matches must still count normally for ELO and completed-match progression.
+
+## Part 5 — Full regression testing
+
+Use isolated development/test data only.
+
+Test these three workflows:
+
+1. Auto Balance
+2. Manual Selection → Roles Lock
+3. Manual Selection → No Roles Lock
+
+Verify for each:
+
+- Match creation and persistence
+- Reloading saved matches
+- Recording a result
+- Match History visibility
+- Correct ELO allocation
+- Correct K-factor progression
+- Audit history creation
+- Result corrections and reversals
+- Duplicate-result protection
+- Database transaction rollback on failure
+
+Additional No Roles Lock tests:
+
+- Null positions do not block completion.
+- 12-, 13- and 14-player matches work.
+- No position-priority events are generated.
+- Rotation fairness remains unchanged.
+- A player who participates in several No Roles Lock matches retains their previous three eligible role-assigned appearances for future balancing.
+
+## Part 6 — Persistence verification
+
+Using development PostgreSQL only:
+
+1. Create a test match.
+2. Complete it.
+3. Verify ELO changes and Match History.
+4. Restart the development backend.
+5. Confirm the match, ratings and audits remain intact.
+6. Repeat with a No Roles Lock match.
+
+Do not restart the published production deployment.
+
+## Part 7 — Production migration plan
+
+After development implementation and testing, provide a proposed production migration plan covering:
+
+- How the production PostgreSQL database will be created.
+- How existing player accounts, ratings, matches and audits will be preserved.
+- How the verified backup could be used if I explicitly accept its unverified private production records.
+- How to avoid overwriting newer production records.
+- How to verify the migration before allowing real matches.
+- How to roll back application code without reverting newer database writes.
+- Expected Replit database costs.
+- Any necessary production schema changes and approvals.
+
+Do not assume the recovery backup is complete or authoritative.
+
+## Final safety rules
+
+- Do not change production records.
+- Do not restart or redeploy production.
+- Do not create or connect production PostgreSQL.
+- Do not overwrite existing databases.
+- Do not restore the backup into the published app.
+- Do not adjust historical ELO.
+- Do not recreate missing matches.
+- Do not publish automatically.
+
+## Completion report
+
+Report:
+
+1. PostgreSQL development implementation status.
+2. Exact files changed.
+3. Backup migration rehearsal results.
+4. Root cause of the No Roles Lock bug.
+5. No Roles Lock end-to-end test results.
+6. Position-rotation fairness regression results.
+7. PostgreSQL restart persistence test results.
+8. Any remaining production migration blockers.
+9. Estimated production database costs.
+
+**STOP after development and testing. Wait for my explicit approval before any production migration or republishing.**
