@@ -11,3 +11,4 @@
 - [Workflow restart ordering](workflow-restart-order.md) — finish heavy verification before sequential managed-service restarts to avoid rebuild/startup timeouts.
 - [Position rotation policy](position-rotation-fairness.md) — last three actual appearances survive absences and score corrections; fairness stays below formation, specialists and ELO.
 - [Manual role-free match policy](manual-role-mode-policy.md) — No Roles Lock counts normally for ELO but never contributes to or displaces position-rotation history.
+- [Database environment safety](database-environment-safety.md) — never use a shell DATABASE_URL for development migration unless the runtime is confirmed as development.

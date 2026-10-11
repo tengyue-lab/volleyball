@@ -11,11 +11,13 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import sqlite3
 from typing import Any, Iterator
 
 from flask import Flask, current_app, g, jsonify, request
 from privacy_auth import initialize_auth_schema, install_privacy
+from postgres_compat import Connection as PostgresConnection
 from rating_progression import PLACEMENT_MATCHES, STARTING_ELO, is_provisional, k_for_matches, rank_for_elo, rank_movement, tier_elo_ranges, tier_for_elo
 from rating_accounting import AccountingConflict, completed_counts, initialize_accounting, require_aligned_counts, record_adjustment, reversal_rating
 from position_rotation import initialize_rotation_schema, position_rotation_history
@@ -39,7 +41,12 @@ SIX_PLAYER_ROLE_COUNTS = Counter(
 )
 SEVEN_PLAYER_ROLE_COUNTS = SIX_PLAYER_ROLE_COUNTS.copy()
 SEVEN_PLAYER_ROLE_COUNTS["Libero"] = 1
-DEFAULT_DATABASE = Path(__file__).resolve().parent / "data" / "volleyball.sqlite3"
+DEFAULT_DATABASE = Path(
+    os.environ.get(
+        "DATABASE_PATH",
+        str(Path(__file__).resolve().parent / "data" / "volleyball.sqlite3"),
+    )
+)
 
 
 def utc_now() -> str:
@@ -185,8 +192,14 @@ def initialize_database(database_path: str) -> None:
 
 @contextmanager
 def database() -> Iterator[sqlite3.Connection]:
-    connection = sqlite3.connect(current_app.config["DATABASE_PATH"])
-    connection.row_factory = sqlite3.Row
+    if current_app.config["DATABASE_BACKEND"] == "postgres":
+        connection = PostgresConnection(
+            current_app.config["DATABASE_URL"],
+            current_app.config["DATABASE_SCHEMA"],
+        )
+    else:
+        connection = sqlite3.connect(current_app.config["DATABASE_PATH"])
+        connection.row_factory = sqlite3.Row
     try:
         yield connection
         connection.commit()
@@ -607,8 +620,26 @@ def validate_player_fields(
 
 def create_app(database_path: str | Path | None = None) -> Flask:
     app = Flask(__name__)
-    app.config["DATABASE_PATH"] = str(database_path or DEFAULT_DATABASE)
-    initialize_database(app.config["DATABASE_PATH"])
+    database_url = (
+        os.environ.get("DATABASE_URL")
+        if database_path is None and os.environ.get("DATABASE_BACKEND") == "postgres"
+        else None
+    )
+    if database_url:
+        schema = os.environ.get("DATABASE_SCHEMA", "public")
+        if not re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_]*", schema):
+            raise ValueError("DATABASE_SCHEMA must be a simple PostgreSQL schema name.")
+        app.config.update(
+            DATABASE_BACKEND="postgres",
+            DATABASE_URL=database_url,
+            DATABASE_SCHEMA=schema,
+        )
+    else:
+        app.config.update(
+            DATABASE_BACKEND="sqlite",
+            DATABASE_PATH=str(database_path or DEFAULT_DATABASE),
+        )
+        initialize_database(app.config["DATABASE_PATH"])
     install_privacy(app, database)
 
     @app.get("/api/healthz")
@@ -646,7 +677,7 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             cursor = connection.execute(
                 """
                 INSERT INTO players (name, positions_json, elo, created_at, elo_public, preferences_confirmed)
-                VALUES (?, ?, ?, ?, ?, 1)
+                VALUES (?, ?, ?, ?, ?, 1) RETURNING id
                 """,
                 (
                     player["name"],
@@ -657,7 +688,7 @@ def create_app(database_path: str | Path | None = None) -> Flask:
                 ),
             )
             row = connection.execute(
-                "SELECT * FROM players WHERE id = ?", (cursor.lastrowid,)
+                "SELECT * FROM players WHERE id = ?", (cursor.fetchone()["id"],)
             ).fetchone()
         return jsonify(serialize_player(row, completed_matches=0)), 201
 
@@ -755,8 +786,10 @@ def create_app(database_path: str | Path | None = None) -> Flask:
         with database() as connection:
             connection.execute("BEGIN IMMEDIATE")
             connection.execute(
-                "INSERT OR REPLACE INTO archived_player_owners (player_id,account_id) "
-                "SELECT player_id,id FROM app_accounts WHERE player_id=?", (player_id,)
+                "INSERT INTO archived_player_owners (player_id,account_id) "
+                "SELECT player_id,id FROM app_accounts WHERE player_id=? "
+                "ON CONFLICT(player_id) DO UPDATE SET account_id=excluded.account_id",
+                (player_id,),
             )
             connection.execute("UPDATE app_accounts SET player_id=NULL WHERE player_id=?", (player_id,))
             cursor = connection.execute(
@@ -775,7 +808,7 @@ def create_app(database_path: str | Path | None = None) -> Flask:
         with database() as connection:
             completed_counts, most_played_positions = completed_match_history(connection)
             rows = connection.execute(
-                "SELECT * FROM players WHERE elo_public=1 ORDER BY elo DESC, name COLLATE NOCASE, id"
+                "SELECT * FROM players WHERE elo_public=1 ORDER BY elo DESC, LOWER(name), id"
             ).fetchall()
         eligible_players = [
             row for row in rows
@@ -956,11 +989,11 @@ def create_app(database_path: str | Path | None = None) -> Flask:
                     """
                     INSERT INTO matches (
                         team_a_json, team_b_json, score_a, score_b, status, created_at, match_date, manual_mode
-                    ) VALUES (?, ?, NULL, NULL, 'upcoming', ?, ?, ?)
+                    ) VALUES (?, ?, NULL, NULL, 'upcoming', ?, ?, ?) RETURNING id
                     """,
                     (json.dumps(team_a), json.dumps(team_b), created_at, match_date, manual_mode),
                 )
-                match_id = cursor.lastrowid
+                match_id = cursor.fetchone()["id"]
             else:
                 connection.execute(
                     "UPDATE matches SET team_a_json = ?, team_b_json = ?, match_date = ?, manual_mode = ? WHERE id = ?",
